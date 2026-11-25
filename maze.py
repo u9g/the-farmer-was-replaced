@@ -1,103 +1,288 @@
 DIRS = [North, East, South, West]
 DELTA = {North: (0, 1), South: (0, -1), East: (1, 0), West: (-1, 0)}
 OPP = {North: South, South: North, East: West, West: East}
-REUSES = 300
+OX = 1
+OY = 1
+LAYOUT = 1  # 0: 8x4 grid, 1: diamond lattice
+SETTLE = 6
+EXCLUSIVE = True
+PRUNE = True
+GRAB = False
+STALL = 0.5
+RESCAN = True
+park = None
+AIM = False
+border = {}  # moves the maker waits so every drone is home before the maze appears
 
-# Every drone has its own copy of these. A new drone starts with a copy of
-# its parent's values, which is how the map gets handed to the workers.
-links = {}  # (x, y) -> list of directions you can walk from that cell
-up = {}  # (x, y) -> direction of the next cell toward homes[0]
-depth = {}  # (x, y) -> number of steps to homes[0]
-homes = []  # homes[i] is the cell where drone i waits
-dists = []  # dists[i][(x, y)] -> number of steps from homes[i]
+# Drones never die. Each one lives at a fixed home on the open field between mazes,
+# maps only the part of a new maze it can reach without crossing another home,
+# parks at the middle of that part, and races for any treasure inside it.
+
+homes = []
+is_home = {}
+me = 0
+amount = 0
+links = {}
+mine = {}  # cell -> list of dirs from my park cell
 x = 0
 y = 0
-me = 0  # which home this drone owns
-branch_dir = None
-amount = 0
-stop_level = 0  # harvest once the Weird Substance count is down to this
 
 
-def scan():
-	open_dirs = []
-	for d in DIRS:
-		if can_move(d):
-			open_dirs.append(d)
-	links[(x, y)] = open_dirs
+def make_homes():
+	n = get_world_size()
+	result = []
+	if LAYOUT == 0:
+		for i in range(max_drones()):
+			result.append(((i % 8) * 2 * n // 16 + n // 16, (i // 8) * 4 * n // 16 + n // 8))
+	else:
+		for b in range(8):
+			for a in range(4):
+				result.append(((4 * a + 2 * b + OX) % n, (2 * b + OY) % n))
+	return result
+
+
+def fly(tx, ty):
+	# open field, no walls; gives up if a maze appears around it
+	while get_pos_x() < tx:
+		if not move(East):
+			return
+	while get_pos_x() > tx:
+		if not move(West):
+			return
+	while get_pos_y() < ty:
+		if not move(North):
+			return
+	while get_pos_y() > ty:
+		if not move(South):
+			return
 
 
 def go(d):
 	global x
 	global y
-	moved = move(d)
-	x = get_pos_x()
-	y = get_pos_y()
-	return moved
+	move(d)
+	dx, dy = DELTA[d]
+	x += dx
+	y += dy
 
 
-# ---------- Phase 1: map the maze with every drone ----------
-
-
-def map_from_here(blocked):
-	# Depth-first walk of everything reachable without entering `blocked`.
-	# At every fork, side branches are handed to new drones while any are free.
-	global branch_dir
-	seen = set()
-	if blocked != None:
-		seen.add(blocked)
-	helpers = []
+def explore():
+	# Depth-first walk of my region. Never enters another drone's home, and
+	# skips any cell some already-found home is closer to (Voronoi pruning).
+	global links
+	global border
+	links = {}
+	border = {}
+	bl = []  # [home index, path from my home to the cell next to it, its length, common prefix with trail]
+	global dep
+	global par
+	global pd
+	global order
+	seen = {(x, y): 1}
+	dep = {(x, y): 0}
+	par = {(x, y): None}
+	pd = {}
+	order = [(x, y)]
 	trail = []
+	pend = []
 	while True:
 		here = (x, y)
+		L = len(trail)
+		if GRAB:
+			t = measure()
+			if t == here:
+				if use_item(Items.Weird_Substance, amount):
+					if RESCAN:
+						rescan()
+					while measure() == t:
+						pass
+				t = measure()
 		if not here in links:
-			scan()
-		seen.add(here)
+			open_dirs = []
+			for d in DIRS:
+				if can_move(d):
+					open_dirs.append(d)
+			links[here] = open_dirs
 		todo = []
 		for d in links[here]:
 			dx, dy = DELTA[d]
-			if not (x + dx, y + dy) in seen:
-				todo.append(d)
-		while len(todo) > 1:
-			d = todo[len(todo) - 1]
-			branch_dir = d
-			helper = spawn_drone(map_branch)
-			if helper == None:
-				break
-			todo.pop()
-			helpers.append(helper)
-			dx, dy = DELTA[d]
-			seen.add((x + dx, y + dy))
+			nxt = (x + dx, y + dy)
+			if not nxt in seen:
+				if nxt in is_home:
+					if not nxt in border:
+						border[nxt] = here
+						bl.append([is_home[nxt], list(trail), L, L])
+				elif PRUNE and pruned(bl, L, d):
+					pass
+				else:
+					todo.append(d)
+		nxt_d = None
+		if AIM and len(todo) > 1:
+			tx, ty = t
+			bi = 0
+			bv = 99
+			for i in range(len(todo)):
+				dx, dy = DELTA[todo[i]]
+				v = abs(x + dx - tx) + abs(y + dy - ty)
+				if v < bv:
+					bv = v
+					bi = i
+			d = todo[bi]
+			todo[bi] = todo[0]
+			todo[0] = d
 		if len(todo) > 0:
-			go(todo[0])
-			trail.append(todo[0])
-		elif len(trail) > 0:
-			go(OPP[trail.pop()])
+			for i in range(1, len(todo)):
+				pend.append((L, todo[i]))
+			nxt_d = todo[0]
 		else:
+			while len(pend) > 0:
+				pl, pdir2 = pend.pop()
+				while len(trail) > pl:
+					back(bl, trail)
+				dx, dy = DELTA[pdir2]
+				if not (x + dx, y + dy) in seen and not (PRUNE and pruned(bl, pl, pdir2)):
+					nxt_d = pdir2
+					break
+		if nxt_d == None:
 			break
-	for helper in helpers:
-		found = wait_for(helper)
-		for cell in found:
-			links[cell] = found[cell]
+		dx, dy = DELTA[nxt_d]
+		nc = (x + dx, y + dy)
+		seen[nc] = 1
+		L = len(trail)
+		dep[nc] = L + 1
+		par[nc] = (x, y)
+		pd[nc] = nxt_d
+		order.append(nc)
+		for e in bl:
+			if e[3] == L and e[2] > L and e[1][L] == nxt_d:
+				e[3] = L + 1
+		go(nxt_d)
+		trail.append(nxt_d)
 
 
-def map_branch():
-	global links
-	links = {}
-	origin = (x, y)
-	go(branch_dir)
-	map_from_here(origin)
-	return links
+def back(bl, trail):
+	L = len(trail)
+	d = trail.pop()
+	for e in bl:
+		if e[3] == L:
+			e[3] = L - 1
+	go(OPP[d])
 
 
-# ---------- Phase 2: distance tables, one drone per table ----------
+def pruned(bl, L, d):
+	for e in bl:
+		cp = e[3]
+		if cp == L and e[2] > L and e[1][L] == d:
+			cp += 1
+		dj = e[2] + L + 2 - 2 * cp
+		if dj < L + 1 or (dj == L + 1 and e[0] < me):
+			return True
+	return False
 
 
-def flood(src):
-	# Breadth-first search over the whole map.
-	# Returns (steps from src, direction toward src) for every cell.
-	dist = {src: 0}
-	toward = {}
+def bfs(src, d0):
+	dist = {src: d0}
 	queue = [src]
+	k = 0
+	while k < len(queue):
+		cell = queue[k]
+		k += 1
+		cx, cy = cell
+		dc = dist[cell] + 1
+		for d in links[cell]:
+			dx, dy = DELTA[d]
+			nxt = (cx + dx, cy + dy)
+			if nxt in links and not nxt in dist:
+				dist[nxt] = dc
+				queue.append(nxt)
+	return dist
+
+
+def claim():
+	# Voronoi cell of my home, ties to the lower index, by one layered
+	# multi-source search. Every drone gets the same split from its own map.
+	lab = {homes[me]: me}
+	layer = [homes[me]]
+	seeds = {}
+	for h in border:
+		b = border[h]
+		j = is_home[h]
+		if not b in seeds or j < seeds[b]:
+			seeds[b] = j
+	first = True
+	while len(layer) > 0:
+		cand = {}
+		for cell in layer:
+			lc = lab[cell]
+			cx, cy = cell
+			for d in links[cell]:
+				dx, dy = DELTA[d]
+				nxt = (cx + dx, cy + dy)
+				if nxt in links and not nxt in lab:
+					if not nxt in cand or lc < cand[nxt]:
+						cand[nxt] = lc
+		if first:
+			first = False
+			for b in seeds:
+				if not b in lab:
+					if not b in cand or seeds[b] < cand[b]:
+						cand[b] = seeds[b]
+		layer = []
+		for cell in cand:
+			lab[cell] = cand[cell]
+			layer.append(cell)
+	region = {}
+	for cell in lab:
+		if lab[cell] == me:
+			region[cell] = 1
+	return region
+
+
+def route(a, b):
+	# dirs from a to b along the exploring tree
+	up = []
+	down = []
+	while a != b:
+		if dep[a] >= dep[b]:
+			up.append(OPP[pd[a]])
+			a = par[a]
+		else:
+			down.append(pd[b])
+			b = par[b]
+	k = len(down) - 1
+	while k >= 0:
+		up.append(down[k])
+		k -= 1
+	return up
+
+
+def settle():
+	# Pick the 1-median of my cells, walk there, build paths to every cell.
+	global mine
+	global park
+	region = claim()
+	n = len(region)
+	size = {}
+	for cell in region:
+		size[cell] = 1
+	k = len(order) - 1
+	while k > 0:
+		cell = order[k]
+		if cell in region:
+			p = par[cell]
+			if p in region:
+				size[p] = size[p] + size[cell]
+		k -= 1
+	best = homes[me]
+	for cell in order:
+		if cell in region and size[cell] * 2 > n:
+			best = cell
+	# walk to best along the exploring tree
+	for d in route((x, y), best):
+		go(d)
+	park = best
+	mine = {best: []}
+	queue = [best]
 	k = 0
 	while k < len(queue):
 		cell = queue[k]
@@ -106,145 +291,156 @@ def flood(src):
 		for d in links[cell]:
 			dx, dy = DELTA[d]
 			nxt = (cx + dx, cy + dy)
-			if not nxt in dist:
-				dist[nxt] = dist[cell] + 1
-				toward[nxt] = OPP[d]
+			if nxt in region and not nxt in mine:
+				q = list(mine[cell])
+				q.append(d)
+				mine[nxt] = q
 				queue.append(nxt)
-	return dist, toward
 
 
-def flood_task():
-	dist, toward = flood(homes[me])
-	return dist
-
-
-def pick_homes(count):
-	# Spread the homes over the field in a grid.
-	n = get_world_size()
-	cols = 1
-	while cols * cols < count:
-		cols += 1
-	rows = (count + cols - 1) // cols
-	result = []
-	for i in range(count):
-		hx = ((i % cols) * 2 + 1) * n // (cols * 2)
-		hy = ((i // cols) * 2 + 1) * n // (rows * 2)
-		result.append((hx, hy))
-	return result
-
-
-# ---------- Phase 3: fetch treasures ----------
-
-
-def route(a, b):
-	# Moves from a to b along the tree rooted at homes[0].
-	head = []
-	tail = []
-	while a != b:
-		if depth[a] >= depth[b]:
-			d = up[a]
-			head.append(d)
+def rescan():
+	# Walls only ever open while a maze is reused. Look for new openings here.
+	here = (get_pos_x(), get_pos_y())
+	if not here in links:
+		return
+	old = links[here]
+	if len(old) == 4:
+		return
+	hx, hy = here
+	found = False
+	for d in DIRS:
+		if not d in old and can_move(d):
+			old.append(d)
 			dx, dy = DELTA[d]
-			a = (a[0] + dx, a[1] + dy)
-		else:
-			d = up[b]
-			tail.append(OPP[d])
-			dx, dy = DELTA[d]
-			b = (b[0] + dx, b[1] + dy)
-	k = len(tail) - 1
-	while k >= 0:
-		head.append(tail[k])
-		k -= 1
-	return head
+			n = (hx + dx, hy + dy)
+			if n in links:
+				links[n].append(OPP[d])
+			if here in mine and n in mine:
+				found = True
+	if found:
+		rebuild()
 
 
-def owner(cell):
-	# The drone whose home is closest to the cell. Every drone gets the same answer.
-	best = 0
-	for i in range(1, len(dists)):
-		if dists[i][cell] < dists[best][cell]:
-			best = i
-	return best
-
-
-def work():
-	goal = None
-	path = []
+def rebuild():
+	global mine
+	region = mine
+	mine = {park: []}
+	queue = [park]
 	k = 0
+	while k < len(queue):
+		cell = queue[k]
+		k += 1
+		cx, cy = cell
+		for d in links[cell]:
+			dx, dy = DELTA[d]
+			nxt = (cx + dx, cy + dy)
+			if nxt in region and not nxt in mine:
+				q = list(mine[cell])
+				q.append(d)
+				mine[nxt] = q
+				queue.append(nxt)
+
+
+def serve():
+	cur = []  # dirs from park cell to where I stand
+	k = 0  # I stand at cur[:k]
+	last = None
+	since = 0
 	while True:
-		kind = get_entity_type()
-		if kind != Entities.Hedge and kind != Entities.Treasure:
-			return  # the maze was harvested
-		treasure = measure()
-		if treasure == None:
+		t = measure()
+		if t == None:
 			return
-		if owner(treasure) == me:
-			target = treasure
-		else:
-			target = homes[me]
-		here = (x, y)
-		if kind == Entities.Treasure:
-			# Any drone standing on the treasure uses it, owner or not.
-			left = num_items(Items.Weird_Substance)
-			if left < amount or left <= stop_level:
+		p = None
+		if t in mine:
+			p = mine[t]
+		elif t != last:
+			last = t
+			since = get_time()
+		elif k == 0 and t in links and get_time() - since > STALL:
+			# nobody came: fetch it even though it is not mine
+			p = route(park, t)
+		if p != None:
+			lp = len(p)
+			c = 0
+			while c < k and c < lp and cur[c] == p[c]:
+				c += 1
+			while k > c:
+				k -= 1
+				move(OPP[cur[k]])
+			while c < lp:
+				move(p[c])
+				c += 1
+			cur = p
+			k = lp
+			if num_items(Items.Weird_Substance) < amount:
 				harvest()
 				return
-			if not use_item(Items.Weird_Substance, amount):
-				if get_entity_type() == Entities.Treasure:
-					quick_print(
-						"reuse refused, substance left:", left, "amount:", amount
-					)
+			if get_entity_type() == Entities.Treasure:
+				tk = get_tick_count()
+				if use_item(Items.Weird_Substance, amount):
+					if RESCAN:
+						rescan()
+					while measure() == t:
+						pass
+				elif get_tick_count() - tk < 50 and get_entity_type() == Entities.Treasure:
+					# refused at once on a real treasure: it is spent
 					harvest()
 					return
-			continue
-		if here == target:
-			continue
-		if target != goal:
-			path = route(here, target)
-			goal = target
-			k = 0
-		if go(path[k]):
-			k += 1
-		else:
-			goal = None  # blocked: plan again from the real position
+		elif k > 0:
+			k -= 1
+			move(OPP[cur[k]])
+			if RESCAN:
+				rescan()
 
 
-def spawn_worker():
-	return spawn_drone(work)
+def life():
+	global x
+	global y
+	while True:
+		hx, hy = homes[me]
+		fly(hx, hy)
+		while measure() == None:
+			pass
+		x = get_pos_x()
+		y = get_pos_y()
+		explore()
+		settle()
+		serve()
 
 
-# ---------- Main loop ----------
+def worker():
+	life()
+
 
 clear()
-
+amount = get_world_size() * 2 ** (num_unlocked(Unlocks.Mazes) - 1)
+homes = make_homes()
+for i in range(len(homes)):
+	is_home[homes[i]] = i
+for i in range(1, len(homes)):
+	me = i
+	spawn_drone(worker)
+me = 0
+first = True
 while True:
-	amount = get_world_size() * 2 ** (num_unlocked(Unlocks.Mazes) - 1)
+	hx, hy = homes[0]
+	fly(hx, hy)
+	if get_entity_type() != None:
+		harvest()
 	plant(Entities.Bush)
+	if first:
+		k = 40
+		first = False
+	else:
+		k = SETTLE
+	while k > 1:
+		move(East)
+		move(West)
+		k -= 2
 	use_item(Items.Weird_Substance, amount)
-	stop_level = num_items(Items.Weird_Substance) - REUSES * amount
-	x = get_pos_x()
-	y = get_pos_y()
-
-	links = {}
-	map_from_here(None)
-
-	homes = pick_homes(max_drones())
-	tasks = []
-	for i in range(1, len(homes)):
-		me = i
-		tasks.append(spawn_drone(flood_task))
-	me = 0
-	depth, up = flood(homes[0])
-	dists = [depth]
-	for task in tasks:
-		dists.append(wait_for(task))
-
-	crew = []
-	for i in range(1, len(homes)):
-		me = i
-		crew.append(spawn_worker())
-	me = 0
-	work()
-	for drone in crew:
-		if drone != None:
-			wait_for(drone)
+	quick_print("maze", get_time())
+	x = hx
+	y = hy
+	explore()
+	settle()
+	serve()
