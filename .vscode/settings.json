@@ -1,0 +1,21 @@
+{
+  // The game replaces save.json every 30s. If VS Code has it open at that moment,
+  // Windows refuses the replace and the game's whole save fails (code included).
+  "files.exclude": {
+    "save.json": true,
+    ".*.tmp": true,
+    "*~RF*.TMP": true,
+    ".ruff_cache": true
+  },
+  "files.watcherExclude": {
+    "**/save.json": true,
+    "**/.*.tmp": true,
+    "**/*~RF*.TMP": true
+  },
+  "search.exclude": {
+    "save.json": true
+  },
+  "json.validate.enable": false,
+  // tfwr_sim.rs is a cargo script (no Cargo.toml), so rust-analyzer ignores it unless linked here.
+  "rust-analyzer.linkedProjects": [".claude/skills/tfwr-sim/tfwr_sim.rs"]
+}

@@ -1,0 +1,6 @@
+.ruff_cache/
+__pycache__/
+*.tmp
+*~RF*.TMP
+save.json
+__builtins__.py
