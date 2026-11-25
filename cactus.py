@@ -8,6 +8,13 @@
 # harvests from the south-west corner. The few cacti still unsorted then are left standing and
 # are sorted along with the next field.
 #
+# Walls: the harvest treats a missing cactus as sorted, so an empty column and row through the
+# middle split the field into four regions of about 8x8 that only have to sort themselves. Values
+# travel half as far, so a field sorts in about 54 slots instead of 100. Each wall has gates where
+# a cactus stands in the wall line and an empty "pocket" sits two tiles away; the gates let the
+# harvest spread from one region to the next. 225 of the 256 tiles hold a cactus, so each harvest
+# is about 77% the size, but the cycle is about 36% shorter.
+#
 # Power: drones run twice as fast while there is power, so whenever power runs low the whole
 # field grows one batch of sunflowers, cut biggest first for the 8x bonus.
 #
@@ -19,6 +26,42 @@
 clear()
 
 N = get_world_size()
+
+# Wall tiles are left empty. XS are wall columns and YS wall rows.
+XS = [N // 2]
+YS = [N // 2]
+WALL = []
+for wx in range(N):
+	col = []
+	for wy in range(N):
+		col.append(False)
+	WALL.append(col)
+for w in XS:
+	for wy in range(N):
+		WALL[w][wy] = True
+for h in YS:
+	for wx in range(N):
+		WALL[wx][h] = True
+# Gates: at the bottom of each band of rows a wall column gets a cactus, with a pocket two tiles
+# west of it; the wall rows get the same at x = 0, with the pocket two tiles south.
+BANDS = [0]
+for h in YS:
+	BANDS.append(h + 1)
+for y0 in BANDS:
+	for w in XS:
+		WALL[w][y0] = False
+		WALL[w - 2][y0] = True
+for h in YS:
+	WALL[0][h] = False
+	WALL[0][h - 2] = True
+
+
+def is_wall(x, y):
+	if x < 0 or y < 0 or x >= N or y >= N:
+		return True
+	return WALL[x][y]
+
+
 S = 4
 M = 2 * S
 DRONES = (N // 2) * (N // S)
@@ -30,7 +73,7 @@ while DRONES > max_drones() or N % S != 0:
 
 # Slots of one cactus field: planting the block, then sorting until the deadline.
 PLANT_SLOTS = 15
-SORT_SLOTS = 100
+SORT_SLOTS = 54
 SLOT_TICKS = 205
 WALK_MARGIN = 2
 HARVEST_LAG_TICKS = 40
@@ -193,6 +236,7 @@ def worker(bx, by, t0, role, goal):
 	DW = []
 	DS = []
 	WALK = []
+	ISW = []
 	for i in range(8):
 		x = bx + RX[i]
 		y = by + RY[i]
@@ -200,13 +244,14 @@ def worker(bx, by, t0, role, goal):
 		DN.append(None)
 		DW.append(None)
 		DS.append(None)
-		if x < N - 1:
+		ISW.append(is_wall(x, y))
+		if not is_wall(x + 1, y):
 			DE[i] = East
-		if y < N - 1:
+		if not is_wall(x, y + 1):
 			DN[i] = North
-		if x > 0:
+		if not is_wall(x - 1, y):
 			DW[i] = West
-		if y > 0:
+		if not is_wall(x, y - 1):
 			DS[i] = South
 		if role == 1:
 			WALK.append(SLOT * (RX[i] + RY[i] + WALK_MARGIN))
@@ -214,7 +259,11 @@ def worker(bx, by, t0, role, goal):
 			WALK.append(SLOT * (1 - RX[i] + 3 - RY[i] + WALK_MARGIN))
 		else:
 			WALK.append(0)
-	inner = bx > 0 and by > 0 and bx + 2 < N and by + 4 < N
+	inner = True
+	for ix in range(bx - 1, bx + 3):
+		for iy in range(by - 1, by + 5):
+			if is_wall(ix, iy):
+				inner = False
 	# Two drones at the ends of one inverted pair can both swap it, back and forth forever. A drone
 	# that swaps the same way twice in a row waits a few ticks of its own, which breaks the tie.
 	delay = TICK * (3 + 7 * ((bx // 2 + by) % 5))
@@ -251,11 +300,13 @@ def worker(bx, by, t0, role, goal):
 
 		# Plant the block (a leftover from the last harvest makes plant() fail cheaply).
 		wait_until(t0)
-		plant(Entities.Cactus)
+		if not ISW[i]:
+			plant(Entities.Cactus)
 		for _ in range(7):
 			move(RM[i])
 			i = NX[i]
-			plant(Entities.Cactus)
+			if not ISW[i]:
+				plant(Entities.Cactus)
 		end = t0 + SLOT * (PLANT_SLOTS + SORT_SLOTS)
 		wait_until(t0 + SLOT * PLANT_SLOTS + TICK * 60)
 		power = num_items(Items.Power)
@@ -305,6 +356,10 @@ def worker(bx, by, t0, role, goal):
 					ld = None
 		else:
 			while get_time() + WALK[i] < end:
+				if ISW[i]:
+					move(RM[i])
+					i = NX[i]
+					continue
 				h = measure()
 				e = measure(DE[i])
 				n = measure(DN[i])
