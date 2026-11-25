@@ -23,21 +23,14 @@ first. No branch and no PR.
 
 ## save.json
 
-The game rewrites `save.json` every 30 seconds with `File.Replace`. If anything holds the file
-open at that moment, the game's whole save fails, code included. `git add save.json`,
-`git diff save.json` and `git status` (when the file changed) all open it. So:
-
-- Do not commit `save.json` as part of ordinary changes. It shows as modified almost always; that
-  is the game, not you.
-- Commit it only when the user asks. Then stage it from a copy read with delete-sharing:
-
-  ```
-  python -I -c "import sys,importlib.util as u;s=u.spec_from_file_location('w',sys.argv[1]);m=u.module_from_spec(s);s.loader.exec_module(m);d=m.read_shared(sys.argv[2]);sys.stdout.buffer.write(d if isinstance(d,bytes) else d.encode())" .claude/skills/tfwr-sim/watch_save.py save.json > <scratchpad>/save.json
-  git update-index --add --cacheinfo 100644,$(git hash-object -w <scratchpad>/save.json),save.json
-  ```
+Never commit or push `save.json`; the user does not want it published. It is in `.gitignore`.
+Do not `git add -f` it, and do not run `git add`, `git diff` or `git show` on it: the game
+rewrites it every 30 seconds with `File.Replace`, and if anything holds the file open at that
+moment the game's whole save fails, code included.
 
 ## Other files
 
 - Scratch variants of scripts belong in the scratchpad, not here: the game deletes `.py` files it
   does not know from the save folder, and they would end up committed.
-- `.ruff_cache/`, `__pycache__/` and the game's temporary save files are in `.gitignore`.
+- `save.json`, `.ruff_cache/`, `__pycache__/` and the game's temporary save files are in
+  `.gitignore`.
