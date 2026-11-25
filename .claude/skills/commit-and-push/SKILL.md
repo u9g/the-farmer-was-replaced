@@ -28,6 +28,13 @@ Do not `git add -f` it, and do not run `git add`, `git diff` or `git show` on it
 rewrites it every 30 seconds with `File.Replace`, and if anything holds the file open at that
 moment the game's whole save fails, code included.
 
+## Git data lives outside the save folder
+
+`.git` here is a one-line file pointing at `%USERPROFILE%\.gitdirs\the-farmer-was-replaced.git`.
+Keep it that way: every game save copies the whole save folder into `..\..\Backup\`, and a real
+`.git` directory there made saves fail (git deleting a temp dir mid-copy) and left backups the game
+could not prune (git's object files are read-only). Never re-clone or `git init` into this folder.
+
 ## Other files
 
 - Scratch variants of scripts belong in the scratchpad, not here: the game deletes `.py` files it
