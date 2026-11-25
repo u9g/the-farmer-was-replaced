@@ -32,5 +32,6 @@ moment the game's whole save fails, code included.
 
 - Scratch variants of scripts belong in the scratchpad, not here: the game deletes `.py` files it
   does not know from the save folder, and they would end up committed.
-- `save.json`, `.ruff_cache/`, `__pycache__/` and the game's temporary save files are in
-  `.gitignore`.
+- `save.json`, `__builtins__.py`, `.ruff_cache/`, `__pycache__/` and the game's temporary save
+  files are in `.gitignore`. Never commit or push `save.json` or `__builtins__.py`; the user does
+  not want them published.
