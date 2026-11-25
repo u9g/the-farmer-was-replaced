@@ -12,6 +12,9 @@
 # field grows one batch of sunflowers, cut biggest first for the 8x bonus.
 #
 # Needs one drone per block: get_world_size() squared / 8 (32 drones on a 16x16 field).
+#
+# Run as the main file it farms forever. Imported, it waits for run(goal), which stops every drone
+# once the shared inventory holds goal cacti (cactus_lb_entry.py uses that for the leaderboard).
 
 clear()
 
@@ -181,7 +184,8 @@ def sunflower_batch(t, slot):
 
 
 # role: 0 sorter, 1 harvests the south-west corner, 2 harvests the north-east corner if 1 failed.
-def worker(bx, by, t0, role):
+# goal: stop once this many cacti are in the inventory (None runs forever).
+def worker(bx, by, t0, role, goal):
 	# Per ring tile, the neighbour directions that exist (None measures the own tile, which can
 	# never look inverted) and, for the two harvesters, how early to stop to reach the corner.
 	DE = []
@@ -228,6 +232,11 @@ def worker(bx, by, t0, role):
 	wait_until(t0)
 	power = num_items(Items.Power)
 	while True:
+		# Every drone checks at the same instant, after the last harvest has landed, so that they
+		# all stop together.
+		wait_until(t0)
+		if goal != None and num_items(Items.Cactus) >= goal:
+			return
 		if USE_POWER and power < POWER_LOW:
 			while i != 0:
 				move(RM[i])
@@ -357,12 +366,19 @@ def worker(bx, by, t0, role):
 SMALL_HARVEST = num_unlocked(Unlocks.Cactus)
 SMALL_HARVEST = N * N * N * N * 2 ** (SMALL_HARVEST - 1) // 5
 
-start = get_time() + SLOT_NOW * 90
-for by in range(0, N, 4):
-	for bx in range(0, N, 2):
-		if bx + by > 0:
-			role = 0
-			if bx + 2 == N and by + 4 == N:
-				role = 2
-			spawn_drone(worker, bx, by, start, role)
-worker(0, 0, start, 1)
+
+def run(goal):
+	start = get_time() + SLOT_NOW * 90
+	for by in range(0, N, 4):
+		for bx in range(0, N, 2):
+			if bx + by > 0:
+				role = 0
+				if bx + 2 == N and by + 4 == N:
+					role = 2
+				spawn_drone(worker, bx, by, start, role, goal)
+	# The other drones stop on the same check, and the program ends once all of them have.
+	worker(0, 0, start, 1, goal)
+
+
+if __name__ == "__main__":
+	run(None)
