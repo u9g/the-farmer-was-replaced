@@ -24,6 +24,14 @@ cargo +nightly -Zscript <skill folder>/tfwr_sim.rs cactus.py --seed 1 --seeds 32
 Every run simulates one game minute. There is no duration option: a script too slow to harvest
 the reported item three times in that minute keeps running until it has, up to ten minutes.
 
+Every run is also capped at 10 seconds of real time (`WALL_LIMIT_SECONDS` in `tfwr_sim.rs`). A run
+that goes over stops with the error "something in this run is taking too long, make an
+optimization that keeps this run under 10s for whatever code you are running and push it". When
+you see it, make the script cheaper to simulate (write busy waits as `while get_time() < x: pass`,
+stop drones from spinning on sensors, cut runaway loops) rather than raising the limit, then commit
+and push the fix. Runs share the CPU, so many agents running the simulator at once each with every
+core (`--jobs` default) can push an ordinary run past 10 s: split the cores with `--jobs`.
+
 Give several scripts to compare them. Every script gets the same seeds, all the runs go in
 parallel, and a line per script is printed at the end:
 

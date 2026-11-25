@@ -7316,6 +7316,9 @@ fn parse_json(text: &str) -> R<Json> {
 const RUN_SECONDS: f64 = 60.0;
 const MIN_HARVESTS: usize = 3;
 const MAX_RUN_SECONDS: f64 = 600.0;
+/// Real (wall-clock) seconds one run may take before it is stopped with an error. Slow runs make
+/// a variant search crawl, so the script being run has to be made cheaper to simulate.
+const WALL_LIMIT_SECONDS: f64 = 10.0;
 
 struct Config {
     script: std::path::PathBuf,
@@ -7370,8 +7373,18 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     let max_limit = dur_from_seconds(MAX_RUN_SECONDS);
     // MainSim.Update: goalTime = sim.CurrentTime + min(deltaTime, 0.2) * TimeFactor, once per frame
     let frame = dur_from_seconds((1.0 / cfg.fps).min(0.2));
+    let wall_start = std::time::Instant::now();
     loop {
         while sim.current_time < limit && sim.error.is_none() && !sim.finished {
+            if wall_start.elapsed().as_secs_f64() > WALL_LIMIT_SECONDS {
+                sim.error = Some(format!(
+                    "something in this run is taking too long, make an optimization that keeps this run under {}s for whatever code you are running and push it (stopped after {:.1}s of real time at {:.1}s game time)",
+                    WALL_LIMIT_SECONDS,
+                    wall_start.elapsed().as_secs_f64(),
+                    dur_seconds(sim.current_time)
+                ));
+                break;
+            }
             let goal_time = (sim.current_time + frame).min(limit);
             while !sim.run_next_step(goal_time) {
                 if sim.error.is_some() || sim.finished {
