@@ -1390,7 +1390,7 @@ def roomy(start, low, need):
 
 def safe(c, ch, low, need):
 	for g in NB[c]:
-		if g != ch and (g < 0 or occ[g] >= low):
+		if g != ch and g >= 0 and occ[g] >= low:
 			return roomy(c, low, need)
 	return True
 
