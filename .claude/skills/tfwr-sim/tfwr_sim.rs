@@ -1514,9 +1514,24 @@ struct Copies {
     filled: HashSet<usize, FxBuild>,
 }
 
+thread_local! {
+    /// the sizes the last copy's tables grew to: the next copy (usually of the same things) starts there
+    static COPY_SIZES: Cell<(usize, usize)> = const { Cell::new((0, 0)) };
+}
 impl Copies {
     fn new() -> Copies {
-        Copies { values: FxMap::default(), scopes: FxMap::default(), filled: HashSet::default() }
+        let (v, sc) = COPY_SIZES.with(|c| c.get());
+        Copies {
+            values: FxMap::with_capacity_and_hasher(v, Default::default()),
+            scopes: FxMap::with_capacity_and_hasher(sc, Default::default()),
+            filled: HashSet::with_capacity_and_hasher(sc, Default::default()),
+        }
+    }
+}
+impl Drop for Copies {
+    fn drop(&mut self) {
+        let sizes = (self.values.len(), self.scopes.len());
+        COPY_SIZES.with(|c| c.set(sizes));
     }
 }
 
@@ -1601,11 +1616,15 @@ fn deep_copy(v: &V, copies: &mut Copies) -> V {
                 fully_initialized: Cell::new(m.fully_initialized.get()),
             });
             copies.values.insert(p, V::Module(nm.clone()));
-            let entries = m.scope.borrow().vars.entries();
+            let (map, bloom, entries) = {
+                let b = m.scope.borrow();
+                (b.vars.map.clone(), b.vars.bloom, b.vars.entries())
+            };
+            let mut items = Vec::with_capacity(entries.len());
             for (k, val, st) in entries.iter() {
-                let c = deep_copy(val, copies);
-                scope.borrow_mut().vars.set(k, c, *st);
+                items.push((k.clone(), deep_copy(val, copies), *st));
             }
+            scope.borrow_mut().vars = Vars { map, bloom, items };
             V::Module(nm)
         }
         _ => v.clone(),
@@ -1782,6 +1801,7 @@ type ScopeRef = Rc<RefCell<Scope>>;
 #[inline(never)]
 fn new_scope(function_node: Option<Rc<Node>>, parent: Option<ScopeRef>, variable_names: &[Rc<str>]) -> ScopeRef {
     let mut vars = Vars::new();
+    vars.items.reserve(variable_names.len());
     for n in variable_names {
         vars.set_interned(n, V::Unassigned, false);
     }
@@ -2004,11 +2024,17 @@ fn scope_deep_copy(s: &ScopeRef, copies: &mut Copies) -> ScopeRef {
         let np = scope_deep_copy(&p, copies);
         ns.borrow_mut().parent_scope = Some(np);
     }
-    let entries = s.borrow().vars.entries();
+    // Setting every name in order into the empty copy gives the same slots, name index and
+    // bloom bits as the original's: copy those, and deep-copy the values.
+    let (map, bloom, entries) = {
+        let b = s.borrow();
+        (b.vars.map.clone(), b.vars.bloom, b.vars.entries())
+    };
+    let mut items = Vec::with_capacity(entries.len());
     for (k, v, st) in entries.iter() {
-        let c = deep_copy(v, copies);
-        ns.borrow_mut().vars.set(k, c, *st);
+        items.push((k.clone(), deep_copy(v, copies), *st));
     }
+    ns.borrow_mut().vars = Vars { map, bloom, items };
     ns
 }
 
@@ -8079,6 +8105,10 @@ impl Sim {
         *self.unlocks.get(unlock).unwrap_or(&0)
     }
     fn is_unlocked(&self, s: &str) -> bool {
+        if s.bytes().all(|b| b.is_ascii() && !b.is_ascii_uppercase()) {
+            // already lower case (the names in the game's data all are)
+            return self.num_unlocked(s) > 0;
+        }
         self.num_unlocked(&s.to_lowercase()) > 0
     }
 
