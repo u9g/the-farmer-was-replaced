@@ -613,10 +613,14 @@ def wsub_job(i, d, goal, b):
 						while not can_harvest():
 							pass
 						harvest()
+						if get_water() < 0.25 and num_items(Items.Water) >= 1:
+							use_item(Items.Water)
 						plant(Entities.Tree)
 					else:
 						if e != None:
 							harvest()
+						if get_water() < 0.25 and num_items(Items.Water) >= 1:
+							use_item(Items.Water)
 						plant(Entities.Tree)
 				elif get_ground_type() == Grounds.Soil:
 					# back to grassland, so grass stands here and regrows by itself
@@ -752,7 +756,7 @@ def step_dir(x0, y0, x1, y1):
 # Water: a cell below PK_WLO gets one water whenever there is any. Water stays in the soil (it
 # loses about 1% a second), so it is spread thin over many cells rather than poured on a few.
 
-PK_WLO = 0.4
+PK_WLO = 0.25
 PK_FA = 2
 
 
@@ -765,8 +769,8 @@ def pk_wet2():
 	# a replanted cell is likely to be among the last to grow: water it more
 	w = get_water()
 	s = num_items(Items.Water)
-	if w < 0.75 and s >= 1:
-		use_item(Items.Water, min(s, (1 - w) // 0.25))
+	if w < 0.5 and s >= 1:
+		use_item(Items.Water, min(s, 3 - w // 0.25))
 
 
 def pk_job(i, d, a):
