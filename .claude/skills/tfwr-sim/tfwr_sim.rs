@@ -3158,8 +3158,8 @@ struct PState {
     module_state: ModuleState,
     current_execute_exception: Option<String>,
     random_random: SysRandom,
-    /// the program, on its own stack; None until the drone's state is set up
-    program: Option<stacks::Stack>,
+    /// the program; None until the drone's state is set up (and while it runs)
+    program: Option<Vm>,
     /// ProgramState's execution stack, as a count: 1 for the program, +1 per user function call
     /// still running; 0 once the program has ended
     frames: usize,
@@ -3353,7 +3353,7 @@ fn program_finished(st: &StRef, r: Res) {
 
 /// ProgramState.PerformExecutionStep
 fn perform_execution_step(st: &StRef, target_op_count: f64) {
-    let program: *const stacks::Stack = {
+    let mut vm = {
         let mut s = st.borrow_mut();
         s.target_op_count = target_op_count;
         if s.frames == 0 {
@@ -3366,13 +3366,13 @@ fn perform_execution_step(st: &StRef, target_op_count: f64) {
             return;
         }
         s.resumes = 0;
-        match &s.program {
-            Some(p) => p as *const stacks::Stack,
+        match s.program.take() {
+            Some(p) => p,
             None => return,
         }
     };
-    // The program borrows the state itself while it runs; no borrow is held across the switch.
-    unsafe { (*program).resume() };
+    vm_run(st, &mut vm);
+    stm(st).program = Some(vm);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -4261,6 +4261,1447 @@ fn assign(st: &StRef, depth: i32, lhs: &Rc<Node>, rhs: V, op: &Rc<str>) -> Res {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Bytecode: every syntax tree is compiled once into a flat list of instructions that perform the
+// game's Node.Execute effects in the same order (ErrorsAndBreakpoints, op counts, yields, the
+// static-expression flag, returnValue), and each drone's program is a small machine (Vm) that can
+// stop after any instruction and carry on later. PerformExecutionStep runs it until the game's
+// iterator would stop: past the target op count, a side effect, or 1000 resumes.
+// ---------------------------------------------------------------------------------------------
+
+#[derive(Clone, Copy)]
+enum Op {
+    /// ErrorsAndBreakpoints: the depth check and the error location
+    Eb(*const Node, u32),
+    SetNode(*const Node),
+    /// Value: Eb, look the name up, set the static flag
+    Load(*const Node, u32),
+    /// Literal: Eb, push constant k, static flag off
+    Lit(*const Node, u32, u32),
+    MakeSeq(u32),
+    Pop,
+    PushNone,
+    /// after the callee expression: it must be a function; push the static flag
+    CallFunc(*const Node),
+    /// pops args, static flag, function; a builtin is called here (then TakeRv, 3 on), a user
+    /// function charges its op and goes on to CallB
+    CallA(*const Node),
+    CallB,
+    CallC,
+    TakeRv,
+    Unary(*const Node),
+    /// and / or: short-circuits to the jump target with the left value
+    AndOr(*const Node, bool, u32),
+    AndOrRhs,
+    /// `.` on a module or a constant bag: check_inc then CallDotFinish at the target
+    DotMod(*const Node, u32),
+    DotModFinish(*const Node),
+    Bin(*const Node),
+    Cmp(*const Node),
+    MkList,
+    MkTuple,
+    MkDict(*const Node),
+    MkSet(*const Node),
+    Jump(u32),
+    JumpIfFalse(u32),
+    /// a literal condition: push its truth (no Eb, no ops)
+    CondLit(u32),
+    /// after a condition: clear the busy-wait markers, push its truth
+    CondTest(bool),
+    /// the first pass of a branch or loop costs one op
+    ChargeFirst,
+    /// before a later pass of `while get_time() < x` / `while num_items(...)`: set the markers
+    WaitPre(*const Node, bool),
+    Yp,
+    /// pops the iterable, starts the iterator, one op
+    ForInit(*const Node),
+    /// next item, or pop the iterator and jump
+    ForNext(u32),
+    IterPop,
+    /// assignment targets: each pops the value (and what it evaluated)
+    StoreName(*const Node, u32),
+    StoreAttr(*const Node, u32),
+    IndexTarget(*const Node),
+    StoreIndex(u32),
+    Unpack(*const Node),
+    Fail(u32),
+    FailAt(*const Node, u32),
+    Def(*const Node, u32),
+    Pass(*const Node, u32),
+    /// Break / Continue: Eb, check_inc(0), then go to the target
+    BrkCont(*const Node, u32, u32),
+    /// Return: store the value (popped), check_inc(0)
+    RetA,
+    RetB(*const Node),
+    ImportStart(*const Node, u32),
+    ImportLoad(*const Node, u32),
+    ImportBind(*const Node, u32),
+    /// function prologue
+    ArgCheck(*const Node),
+    Defaults(*const Node, u32),
+    PushArg,
+    BindParams(*const Node),
+    FuncEnd,
+    ModuleEnd,
+}
+
+struct Code {
+    ops: Vec<Op>,
+    consts: Vec<V>,
+    strs: Vec<Rc<str>>,
+    /// the tree this was compiled from (kept alive: instructions point into it)
+    root: Rc<Node>,
+}
+
+/// error message ids used by Fail / FailAt
+const FAIL_MSGS: &[&str] = &[
+    "error_no_loop_to_break",
+    "error_no_loop_to_continue",
+    "error_assign_type_mismatch",
+    "error_invalid_const2",
+    "a function body cannot be executed without a call",
+];
+
+struct Compiler {
+    ops: Vec<Op>,
+    consts: Vec<V>,
+    strs: Vec<Rc<str>>,
+    /// innermost loop last: (break target fixups, continue target fixups)
+    loops: Vec<(Vec<usize>, Vec<usize>)>,
+}
+
+impl Compiler {
+    fn here(&self) -> u32 {
+        self.ops.len() as u32
+    }
+    fn emit(&mut self, op: Op) -> usize {
+        self.ops.push(op);
+        self.ops.len() - 1
+    }
+    fn patch(&mut self, at: usize, target: u32) {
+        match &mut self.ops[at] {
+            Op::Jump(t) | Op::JumpIfFalse(t) | Op::ForNext(t) | Op::AndOr(_, _, t) | Op::DotMod(_, t) | Op::BrkCont(_, _, t) => *t = target,
+            _ => panic!("patch of a non-jump"),
+        }
+    }
+    fn s(&mut self, v: &Rc<str>) -> u32 {
+        self.strs.push(v.clone());
+        (self.strs.len() - 1) as u32
+    }
+
+    /// statements: leave nothing on the stack
+    fn block(&mut self, node: &Rc<Node>, depth: u32) {
+        if let NK::Seq = &node.kind {
+            for slot in node.slots.iter() {
+                self.stmt(slot, depth + 1);
+            }
+        } else {
+            self.stmt(node, depth);
+        }
+    }
+
+    fn stmt(&mut self, node: &Rc<Node>, depth: u32) {
+        let np = Rc::as_ptr(node);
+        match &node.kind {
+            NK::Seq => {
+                for slot in node.slots.iter() {
+                    self.stmt(slot, depth + 1);
+                }
+            }
+            NK::Branch(looping) => self.branch(node, *looping, depth),
+            NK::For => {
+                self.emit(Op::Eb(np, depth));
+                self.expr(&node.slots[0], depth + 1);
+                self.emit(Op::ForInit(np));
+                let next = self.here();
+                let fnext = self.emit(Op::ForNext(0));
+                self.target(&node.slots[2], depth);
+                self.loops.push((Vec::new(), Vec::new()));
+                self.block(&node.slots[1], depth + 1);
+                let (brks, conts) = self.loops.pop().unwrap();
+                let tail = self.here();
+                for c in conts {
+                    self.patch(c, tail);
+                }
+                self.emit(Op::Eb(np, depth));
+                self.emit(Op::Jump(next));
+                let brk = self.here();
+                for b in brks {
+                    self.patch(b, brk);
+                }
+                self.emit(Op::IterPop);
+                let end = self.here();
+                self.patch(fnext, end);
+            }
+            NK::Assignment(op) => {
+                self.emit(Op::Eb(np, depth));
+                self.expr(&node.slots[1], depth + 1);
+                self.emit(Op::SetNode(np));
+                let k = self.s(op);
+                self.assign(&node.slots[0], depth, k);
+            }
+            NK::Def(..) => {
+                self.emit(Op::Def(np, depth));
+            }
+            NK::Return => {
+                self.emit(Op::Eb(np, depth));
+                if !node.slots.is_empty() {
+                    self.expr(&node.slots[0], depth + 1);
+                } else {
+                    self.emit(Op::PushNone);
+                }
+                self.emit(Op::RetA);
+                self.emit(Op::RetB(np));
+            }
+            NK::Pass => {
+                self.emit(Op::Pass(np, depth));
+            }
+            NK::Break | NK::Continue => {
+                let is_break = matches!(&node.kind, NK::Break);
+                if self.loops.is_empty() {
+                    // no loop around it: Eb and check_inc(0) as usual, then the game's error
+                    let at = self.emit(Op::BrkCont(np, depth, 0));
+                    let t = self.here();
+                    self.patch(at, t);
+                    self.emit(Op::Fail(if is_break { 0 } else { 1 }));
+                } else {
+                    let at = self.emit(Op::BrkCont(np, depth, 0));
+                    let l = self.loops.last_mut().unwrap();
+                    if is_break {
+                        l.0.push(at);
+                    } else {
+                        l.1.push(at);
+                    }
+                }
+            }
+            NK::Global => {
+                self.emit(Op::Eb(np, depth));
+                self.emit(Op::Yp);
+            }
+            NK::Import { module_names, .. } => {
+                self.emit(Op::ImportStart(np, depth));
+                for i in 0..module_names.len() {
+                    self.emit(Op::ImportLoad(np, i as u32));
+                    self.emit(Op::ImportBind(np, i as u32));
+                }
+            }
+            NK::Function { .. } => {
+                self.emit(Op::Fail(4));
+            }
+            _ => {
+                self.expr(node, depth);
+                self.emit(Op::Pop);
+            }
+        }
+    }
+
+    fn branch(&mut self, node: &Rc<Node>, looping: bool, depth: u32) {
+        let np = Rc::as_ptr(node);
+        self.emit(Op::Eb(np, depth));
+        let wait_name = if looping { busy_wait_name(node) } else { None };
+        let items_spin = looping && wait_name.is_none() && is_items_spin(node);
+        let lit = is_literal_node(&node.slots[0]);
+        let lit_k = lit.map(|v| {
+            self.consts.push(v);
+            (self.consts.len() - 1) as u32
+        });
+        let cond = |c: &mut Compiler| match lit_k {
+            Some(k) => {
+                c.emit(Op::CondLit(k));
+            }
+            None => {
+                c.expr(&node.slots[0], depth + 1);
+                c.emit(Op::CondTest(items_spin));
+            }
+        };
+        // first pass
+        cond(self);
+        self.emit(Op::ChargeFirst);
+        let jf_first = self.emit(Op::JumpIfFalse(0));
+        let body = self.here();
+        if looping {
+            self.loops.push((Vec::new(), Vec::new()));
+        }
+        self.block(&node.slots[1], depth + 1);
+        let mut jf_later = None;
+        let mut to_end = Vec::new();
+        if looping {
+            let (brks, conts) = self.loops.pop().unwrap();
+            let tail = self.here();
+            for c in conts {
+                self.patch(c, tail);
+            }
+            self.emit(Op::Eb(np, depth));
+            self.emit(Op::Yp);
+            // later passes
+            if lit_k.is_none() && (wait_name.is_some() || items_spin) {
+                self.emit(Op::WaitPre(np, items_spin));
+            }
+            cond(self);
+            jf_later = Some(self.emit(Op::JumpIfFalse(0)));
+            self.emit(Op::Jump(body));
+            to_end = brks;
+        } else {
+            to_end.push(self.emit(Op::Jump(0)));
+        }
+        let else_at = self.here();
+        self.patch(jf_first, else_at);
+        if let Some(j) = jf_later {
+            self.patch(j, else_at);
+        }
+        if node.slots.len() > 2 {
+            self.block(&node.slots[2], depth + 1);
+        }
+        let end = self.here();
+        for j in to_end {
+            self.patch(j, end);
+        }
+    }
+
+    /// an assignment target; the value to store is on the stack
+    fn target(&mut self, lhs: &Rc<Node>, depth: u32) {
+        let k = {
+            let eq: Rc<str> = Rc::from("=");
+            self.s(&eq)
+        };
+        self.assign(lhs, depth, k);
+    }
+
+    fn assign(&mut self, lhs: &Rc<Node>, depth: u32, op: u32) {
+        let lp = Rc::as_ptr(lhs);
+        match &lhs.kind {
+            NK::Value(_) => {
+                self.emit(Op::StoreName(lp, op));
+            }
+            NK::Binary(bop, _, _) => {
+                self.expr(&lhs.slots[0], depth + 1);
+                if bop.as_ref() == "." {
+                    self.emit(Op::StoreAttr(lp, op));
+                } else if bop.as_ref() == "[]" {
+                    self.emit(Op::IndexTarget(lp));
+                    self.expr(&lhs.slots[1], depth + 1);
+                    self.emit(Op::StoreIndex(op));
+                } else {
+                    self.emit(Op::FailAt(lp, 2));
+                }
+            }
+            NK::List | NK::Tuple => {
+                self.emit(Op::Unpack(lp));
+                for el in lhs.slots[0].slots.iter() {
+                    self.assign(el, depth, op);
+                }
+            }
+            NK::Bracket => self.assign(&lhs.slots[0], depth, op),
+            _ => {
+                self.emit(Op::Fail(2));
+            }
+        }
+    }
+
+    /// expressions: leave exactly one value on the stack
+    fn expr(&mut self, node: &Rc<Node>, depth: u32) {
+        let np = Rc::as_ptr(node);
+        match &node.kind {
+            NK::Seq => {
+                for slot in node.slots.iter() {
+                    self.expr(slot, depth + 1);
+                }
+                self.emit(Op::MakeSeq(node.slots.len() as u32));
+            }
+            NK::Value(_) => {
+                self.emit(Op::Load(np, depth));
+            }
+            NK::Literal(v) => {
+                self.consts.push(v.clone());
+                let k = (self.consts.len() - 1) as u32;
+                self.emit(Op::Lit(np, depth, k));
+            }
+            NK::Bracket => self.expr(&node.slots[0], depth + 1),
+            NK::Call => {
+                self.emit(Op::Eb(np, depth));
+                self.expr(&node.slots[0], depth + 1);
+                self.emit(Op::CallFunc(np));
+                self.expr(&node.slots[1], depth + 1);
+                self.emit(Op::CallA(np));
+                self.emit(Op::CallB);
+                self.emit(Op::CallC);
+                self.emit(Op::TakeRv);
+            }
+            NK::Unary(_) => {
+                self.emit(Op::Eb(np, depth));
+                self.expr(&node.slots[0], depth + 1);
+                self.emit(Op::SetNode(np));
+                self.emit(Op::Unary(np));
+            }
+            NK::Binary(_, _, bop) => {
+                self.emit(Op::Eb(np, depth));
+                self.expr(&node.slots[0], depth + 1);
+                match bop {
+                    BOp::And | BOp::Or => {
+                        let at = self.emit(Op::AndOr(np, *bop == BOp::And, 0));
+                        self.expr(&node.slots[1], depth + 1);
+                        self.emit(Op::SetNode(np));
+                        self.emit(Op::AndOrRhs);
+                        let end = self.here();
+                        self.patch(at, end);
+                    }
+                    BOp::Dot => {
+                        let at = self.emit(Op::DotMod(np, 0));
+                        self.expr(&node.slots[1], depth + 1);
+                        self.emit(Op::SetNode(np));
+                        self.emit(Op::Bin(np));
+                        let j = self.emit(Op::Jump(0));
+                        let fin = self.here();
+                        self.patch(at, fin);
+                        self.emit(Op::DotModFinish(np));
+                        let end = self.here();
+                        self.patch(j, end);
+                    }
+                    _ => {
+                        self.expr(&node.slots[1], depth + 1);
+                        self.emit(Op::SetNode(np));
+                        self.emit(Op::Bin(np));
+                    }
+                }
+            }
+            NK::Comparison(..) => {
+                self.emit(Op::Eb(np, depth));
+                for slot in node.slots.iter() {
+                    self.expr(slot, depth + 1);
+                }
+                self.emit(Op::SetNode(np));
+                self.emit(Op::Cmp(np));
+            }
+            NK::List | NK::Tuple | NK::Dict | NK::Set => {
+                self.emit(Op::Eb(np, depth));
+                self.expr(&node.slots[0], depth + 1);
+                self.emit(match &node.kind {
+                    NK::List => Op::MkList,
+                    NK::Tuple => Op::MkTuple,
+                    NK::Dict => Op::MkDict(np),
+                    _ => Op::MkSet(np),
+                });
+            }
+            NK::Function { .. } => {
+                self.emit(Op::Fail(4));
+                self.emit(Op::PushNone);
+            }
+            // a statement where a value is wanted: run it, its value is None
+            _ => {
+                self.stmt(node, depth);
+                self.emit(Op::PushNone);
+            }
+        }
+    }
+}
+
+thread_local! {
+    static CODES: RefCell<FxMap<usize, Rc<Code>>> = RefCell::new(FxMap::default());
+}
+
+/// The code of a module (its tree's statements) or of a function (its FunctionNode), compiled once
+/// per thread. Trees live for the whole thread (parse_source keeps them), so a node's address names
+/// it for good.
+fn code_of(node: &Rc<Node>) -> Rc<Code> {
+    let key = Rc::as_ptr(node) as usize;
+    if let Some(c) = CODES.with(|c| c.borrow().get(&key).cloned()) {
+        return c;
+    }
+    let mut c = Compiler { ops: Vec::new(), consts: Vec::new(), strs: Vec::new(), loops: Vec::new() };
+    match &node.kind {
+        NK::Function { .. } => {
+            let np = Rc::as_ptr(node);
+            c.emit(Op::ArgCheck(np));
+            c.emit(Op::Eb(np, 0));
+            // default values: Defaults jumps to the first one still missing
+            let ndef = node.slots.len() - 1;
+            let d = c.emit(Op::Defaults(np, 0));
+            let first = c.here();
+            for i in 0..ndef {
+                c.expr(&node.slots[i + 1], 1);
+                c.emit(Op::PushArg);
+            }
+            let _ = (d, first);
+            c.emit(Op::BindParams(np));
+            c.block(&node.slots[0], 1);
+            c.emit(Op::FuncEnd);
+        }
+        _ => {
+            c.block(node, 0);
+            c.emit(Op::ModuleEnd);
+        }
+    }
+    let code = Rc::new(Code { ops: c.ops, consts: c.consts, strs: c.strs, root: node.clone() });
+    CODES.with(|cs| cs.borrow_mut().insert(key, code.clone()));
+    code
+}
+
+enum FrameKind {
+    Main,
+    Function,
+    SpawnRoot,
+    Module { module: Rc<PyModule>, old: ModuleState },
+}
+
+struct Frame {
+    code: Rc<Code>,
+    pc: usize,
+    stack_base: usize,
+    iter_base: usize,
+    depth_off: u32,
+    kind: FrameKind,
+    args: Vec<V>,
+}
+
+struct Vm {
+    frames: Vec<Frame>,
+    stack: Vec<V>,
+    iters: Vec<PyIter>,
+    /// a user function call between CallA and CallC
+    pending: Option<(Rc<PyFunc>, Vec<V>)>,
+}
+
+impl Vm {
+    fn main(tree: &Rc<Node>) -> Vm {
+        let code = code_of(tree);
+        Vm {
+            frames: vec![Frame { code, pc: 0, stack_base: 0, iter_base: 0, depth_off: 0, kind: FrameKind::Main, args: Vec::new() }],
+            stack: Vec::new(),
+            iters: Vec::new(),
+            pending: None,
+        }
+    }
+    fn spawned(fnode: &Rc<Node>, args: Vec<V>) -> Vm {
+        let code = code_of(fnode);
+        Vm {
+            frames: vec![Frame { code, pc: 0, stack_base: 0, iter_base: 0, depth_off: 0, kind: FrameKind::SpawnRoot, args }],
+            stack: Vec::new(),
+            iters: Vec::new(),
+            pending: None,
+        }
+    }
+}
+
+/// check_inc, then a yield point if it asks for one: true when the drone must stop here
+#[inline(always)]
+fn charge(st: &StRef, ops: f64) -> bool {
+    check_inc(st, ops) && yield_stops(st)
+}
+/// a yield point: true when PerformExecutionStep stops here
+#[inline(always)]
+fn yield_stops(st: &StRef) -> bool {
+    let s = stm(st);
+    s.resumes += 1;
+    !(s.op_count <= s.target_op_count) || s.has_side_effect() || s.resumes >= 1000
+}
+
+fn node_ref<'a>(p: *const Node) -> &'a Node {
+    unsafe { &*p }
+}
+
+/// Runs the drone's program until it must stop (see yield_stops) or ends.
+fn vm_run(st: &StRef, vm: &mut Vm) {
+    let r = vm_loop(st, vm);
+    match r {
+        Ok(()) => {}
+        Err(c) => {
+            vm.frames.clear();
+            program_finished(st, Err(c));
+        }
+    }
+}
+
+macro_rules! cur_scope {
+    ($st:expr) => {{
+        let s = stm($st);
+        match s.module_state.call_stack.last() {
+            Some(sc) => sc.clone(),
+            None => s.module_state.global_scope.clone(),
+        }
+    }};
+}
+
+fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
+    'frames: loop {
+        let fi = vm.frames.len() - 1;
+        let code = vm.frames[fi].code.clone();
+        let depth_off = vm.frames[fi].depth_off;
+        let mut pc = vm.frames[fi].pc;
+        let ops = &code.ops;
+        macro_rules! stop {
+            ($next:expr) => {{
+                vm.frames[fi].pc = $next;
+                return Ok(());
+            }};
+        }
+        macro_rules! eb {
+            ($n:expr, $d:expr) => {{
+                if $d + depth_off > 1100 {
+                    return Err(Ctrl::Err("error_max_stack_size_reached".into()));
+                }
+                stm(st).current_executing_node = $n;
+            }};
+        }
+        loop {
+            let op = ops[pc];
+            pc += 1;
+            match op {
+                Op::Eb(n, d) => eb!(n, d),
+                Op::SetNode(n) => stm(st).current_executing_node = n,
+                Op::Load(n, d) => {
+                    eb!(n, d);
+                    let node = node_ref(n);
+                    let name = match &node.kind {
+                        NK::Value(name) => name,
+                        _ => unreachable!(),
+                    };
+                    let s = stm(st);
+                    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+                    let (v, is_static) = scope_lookup(scope, name, Some(&node.lookup))?;
+                    s.module_state.is_expression_static = is_static;
+                    vm.stack.push(v);
+                }
+                Op::Lit(n, d, k) => {
+                    eb!(n, d);
+                    stm(st).module_state.is_expression_static = false;
+                    vm.stack.push(code.consts[k as usize].clone());
+                }
+                Op::MakeSeq(n) => {
+                    let at = vm.stack.len() - n as usize;
+                    let v: Vec<V> = vm.stack.drain(at..).collect();
+                    vm.stack.push(V::Seq(Rc::new(v)));
+                }
+                Op::Pop => {
+                    vm.stack.pop();
+                }
+                Op::PushNone => vm.stack.push(V::None),
+                Op::CallFunc(n) => {
+                    if !matches!(vm.stack.last(), Some(V::Func(_))) {
+                        stm(st).current_executing_node = n;
+                        return Err(Ctrl::Err("error_not_a_function".into()));
+                    }
+                    let is_static = stm(st).module_state.is_expression_static;
+                    vm.stack.push(V::Bool(is_static));
+                }
+                Op::CallA(n) => {
+                    let args = vm.stack.pop().unwrap();
+                    let is_static = matches!(vm.stack.pop(), Some(V::Bool(true)));
+                    let func = match vm.stack.pop() {
+                        Some(V::Func(f)) => f,
+                        _ => unreachable!(),
+                    };
+                    let mut parameters: Vec<V> = match &args {
+                        V::Seq(s) => s.to_vec(),
+                        _ => Vec::new(),
+                    };
+                    if let Some(m) = &func.method_object {
+                        parameters.insert(0, m.clone());
+                    }
+                    stm(st).current_executing_node = n;
+                    if func.syntax_tree.is_some() {
+                        vm.pending = Some((func, parameters));
+                        if charge(st, if is_static { 0.0 } else { OPERATION_OPS }) {
+                            stop!(pc);
+                        }
+                    } else {
+                        // A builtin's result arrives in returnValue: set by the builtin itself, or by
+                        // the scheduler when it applies the side effect. One that sets none leaves the
+                        // argument list there, as in the game.
+                        stm(st).module_state.return_value = args;
+                        let mut num = call_builtin(func.binding.unwrap(), parameters, st)?;
+                        if func.is_free && !is_static {
+                            num = num.max(OPERATION_OPS);
+                        }
+                        pc += 2;
+                        if charge(st, num) {
+                            stop!(pc);
+                        }
+                    }
+                }
+                Op::CallB => {
+                    let (func, parameters) = vm.pending.take().unwrap();
+                    let tree = func.syntax_tree.clone().unwrap();
+                    let vars = match &tree.kind {
+                        NK::Function { vars, .. } => vars.clone(),
+                        _ => Vec::new(),
+                    };
+                    let scope = new_scope(Some(tree.clone()), func.parent_scope.clone(), &vars);
+                    stm(st).module_state.call_stack.push(scope);
+                    push_frame(st)?;
+                    vm.pending = Some((func, parameters));
+                    if yield_stops(st) {
+                        stop!(pc);
+                    }
+                }
+                Op::CallC => {
+                    let (func, parameters) = vm.pending.take().unwrap();
+                    let tree = func.syntax_tree.clone().unwrap();
+                    vm.frames[fi].pc = pc + 1; // after TakeRv
+                    let fcode = code_of(&tree);
+                    vm.frames.push(Frame {
+                        code: fcode,
+                        pc: 0,
+                        stack_base: vm.stack.len(),
+                        iter_base: vm.iters.len(),
+                        depth_off: 0,
+                        kind: FrameKind::Function,
+                        args: parameters,
+                    });
+                    continue 'frames;
+                }
+                Op::TakeRv => {
+                    let v = std::mem::replace(&mut stm(st).module_state.return_value, V::None);
+                    vm.stack.push(v);
+                }
+                Op::Unary(n) => {
+                    let value = vm.stack.pop().unwrap();
+                    let op = match &node_ref(n).kind {
+                        NK::Unary(op) => op,
+                        _ => unreachable!(),
+                    };
+                    if let V::Func(f) = &value {
+                        if op.as_ref() != "not" {
+                            return Err(Ctrl::Err(err("error_function_in_operator", &[f.name.to_string(), op.to_string()])));
+                        }
+                    }
+                    let r = match op.as_ref() {
+                        "+" => {
+                            if value.num().is_none() {
+                                return Err(Ctrl::Err(err("error_bad_unary_operator", &[op.to_string(), nice_el(&value)])));
+                            }
+                            value
+                        }
+                        "-" => match value.num() {
+                            Some(x) => V::Num(0.0 - x),
+                            None => return Err(Ctrl::Err(err("error_bad_unary_operator", &[op.to_string(), nice_el(&value)]))),
+                        },
+                        _ => V::Bool(!is_true_value(&value)?),
+                    };
+                    vm.stack.push(r);
+                }
+                Op::AndOr(_, is_and, end) => {
+                    let lhs = vm.stack.last().unwrap();
+                    let t = is_true_value(lhs)?;
+                    if (is_and && !t) || (!is_and && t) {
+                        pc = end as usize;
+                        if charge(st, OPERATION_OPS) {
+                            stop!(pc);
+                        }
+                    } else {
+                        vm.stack.pop();
+                    }
+                }
+                Op::AndOrRhs => {
+                    if charge(st, OPERATION_OPS) {
+                        stop!(pc);
+                    }
+                }
+                Op::DotMod(n, fin) => {
+                    if matches!(vm.stack.last(), Some(V::Module(_) | V::Bag(_))) {
+                        let node = node_ref(n);
+                        if !matches!(&node.slots[1].kind, NK::Value(_)) {
+                            return Err(Ctrl::Err("error_invalid_const2".into()));
+                        }
+                        let is_static = stm(st).module_state.is_expression_static;
+                        pc = fin as usize;
+                        if charge(st, if is_static { 0.0 } else { OPERATION_OPS }) {
+                            stop!(pc);
+                        }
+                    }
+                }
+                Op::DotModFinish(n) => {
+                    let lhs = vm.stack.pop().unwrap();
+                    let node = node_ref(n);
+                    let member = match &node.slots[1].kind {
+                        NK::Value(v) => v,
+                        _ => unreachable!(),
+                    };
+                    let (v, flag) = match &lhs {
+                        V::Module(m) => module_export(m, member)?,
+                        V::Bag(ns) => (bag_evaluate(*ns, member)?, true),
+                        _ => unreachable!(),
+                    };
+                    stm(st).module_state.is_expression_static &= flag;
+                    vm.stack.push(v);
+                }
+                Op::Bin(n) => {
+                    let rhs = vm.stack.pop().unwrap();
+                    let lhs = vm.stack.pop().unwrap();
+                    let (op, bop) = match &node_ref(n).kind {
+                        NK::Binary(op, _, bop) => (op.as_ref(), *bop),
+                        _ => unreachable!(),
+                    };
+                    let (result, steps) = binary_value(op, bop, lhs, rhs)?;
+                    vm.stack.push(result);
+                    if charge(st, OPERATION_OPS * steps as f64) {
+                        stop!(pc);
+                    }
+                }
+                Op::Cmp(n) => {
+                    let node = node_ref(n);
+                    let (ops_t, cops) = match &node.kind {
+                        NK::Comparison(o, c) => (o, c),
+                        _ => unreachable!(),
+                    };
+                    let at = vm.stack.len() - node.slots.len();
+                    let (flag, steps) = compare_values(ops_t, cops, &vm.stack[at..])?;
+                    vm.stack.truncate(at);
+                    vm.stack.push(V::Bool(flag));
+                    if charge(st, OPERATION_OPS * steps as f64) {
+                        stop!(pc);
+                    }
+                }
+                Op::MkList => {
+                    let elements = match vm.stack.pop().unwrap() {
+                        V::Seq(s) => Rc::try_unwrap(s).unwrap_or_else(|s| s.to_vec()),
+                        _ => Vec::new(),
+                    };
+                    let count = elements.len();
+                    vm.stack.push(new_list(elements));
+                    set_static(st, false);
+                    if charge(st, OPERATION_OPS * (count.max(1) as f64)) {
+                        stop!(pc);
+                    }
+                }
+                Op::MkTuple => {
+                    let elements = match vm.stack.pop().unwrap() {
+                        V::Seq(s) => Rc::try_unwrap(s).unwrap_or_else(|s| s.to_vec()),
+                        _ => Vec::new(),
+                    };
+                    vm.stack.push(V::Tuple(Rc::new(elements)));
+                    set_static(st, false);
+                    if charge(st, OPERATION_OPS) {
+                        stop!(pc);
+                    }
+                }
+                Op::MkDict(n) => {
+                    let elements = match vm.stack.pop().unwrap() {
+                        V::Seq(s) => s,
+                        _ => Rc::new(Vec::new()),
+                    };
+                    let mut dictionary = DMap::new(false);
+                    let mut i = 0;
+                    while i < elements.len() {
+                        let k = &elements[i];
+                        if k.is_unhashable() {
+                            stm(st).current_executing_node = n;
+                            return Err(Ctrl::Err(err("error_bad_key", &[nice_el(k)])));
+                        }
+                        dictionary.put(to_key(k)?, k.clone(), elements[i + 1].clone());
+                        i += 2;
+                    }
+                    let count = dictionary.len();
+                    vm.stack.push(V::Dict(Rc::new(RefCell::new(dictionary))));
+                    set_static(st, false);
+                    if charge(st, OPERATION_OPS * (1 + count) as f64) {
+                        stop!(pc);
+                    }
+                }
+                Op::MkSet(n) => {
+                    let elements = match vm.stack.pop().unwrap() {
+                        V::Seq(s) => s,
+                        _ => Rc::new(Vec::new()),
+                    };
+                    let mut hash_set = DMap::new(true);
+                    for k in elements.iter() {
+                        if k.is_unhashable() {
+                            stm(st).current_executing_node = n;
+                            return Err(Ctrl::Err(err("error_bad_key", &[nice_el(k)])));
+                        }
+                        let key = to_key(k)?;
+                        if !hash_set.contains(&key) {
+                            hash_set.insert_new(key, k.clone(), V::None);
+                        }
+                    }
+                    let value = V::Set(Rc::new(RefCell::new(hash_set)));
+                    let size = py_size(&value);
+                    vm.stack.push(value);
+                    set_static(st, false);
+                    if charge(st, OPERATION_OPS * size.max(1) as f64) {
+                        stop!(pc);
+                    }
+                }
+                Op::Jump(t) => pc = t as usize,
+                Op::JumpIfFalse(t) => {
+                    if matches!(vm.stack.pop(), Some(V::Bool(false))) {
+                        pc = t as usize;
+                    }
+                }
+                Op::CondLit(k) => {
+                    let c = is_true_value(&code.consts[k as usize])?;
+                    vm.stack.push(V::Bool(c));
+                }
+                Op::CondTest(items_spin) => {
+                    let cv = vm.stack.pop().unwrap();
+                    {
+                        let s = stm(st);
+                        s.wait_deadline = None;
+                        s.spin_loop = false;
+                    }
+                    let condition = is_true_value(&cv)?;
+                    if !condition && items_spin {
+                        let s = stm(st);
+                        s.spin_read = None;
+                        s.spin_period = None;
+                    }
+                    vm.stack.push(V::Bool(condition));
+                }
+                Op::ChargeFirst => {
+                    if charge(st, OPERATION_OPS) {
+                        stop!(pc);
+                    }
+                }
+                Op::WaitPre(n, items_spin) => {
+                    let node = node_ref(n);
+                    if !items_spin {
+                        if let Some(name) = busy_wait_name_ref(node) {
+                            let scope = cur_scope!(st);
+                            let deadline = match scope_evaluate(&scope, name) {
+                                Ok((V::Num(x), _)) => Some(x),
+                                _ => None,
+                            };
+                            stm(st).wait_deadline = deadline;
+                        }
+                    } else {
+                        stm(st).spin_loop = true;
+                    }
+                }
+                Op::Yp => {
+                    if yield_stops(st) {
+                        stop!(pc);
+                    }
+                }
+                Op::ForInit(n) => {
+                    let iterable = vm.stack.pop().unwrap();
+                    if !is_enumerable(&iterable) {
+                        stm(st).current_executing_node = n;
+                        return Err(Ctrl::Err(err("error_for_requires_iterable", &[nice_el(&iterable)])));
+                    }
+                    vm.iters.push(PyIter::new(&iterable));
+                    if charge(st, OPERATION_OPS) {
+                        stop!(pc);
+                    }
+                }
+                Op::ForNext(end) => match vm.iters.last_mut().unwrap().next()? {
+                    Some(c) => vm.stack.push(c),
+                    None => {
+                        vm.iters.pop();
+                        pc = end as usize;
+                    }
+                },
+                Op::IterPop => {
+                    vm.iters.pop();
+                }
+                Op::StoreName(n, k) => {
+                    let rhs = vm.stack.pop().unwrap();
+                    let value = match &node_ref(n).kind {
+                        NK::Value(v) => v,
+                        _ => unreachable!(),
+                    };
+                    let op = &code.strs[k as usize];
+                    let scope = cur_scope!(st);
+                    let before = if op.as_ref() == "=" { None } else { Some(scope_evaluate(&scope, value)?.0) };
+                    let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
+                    scope_set_var(&scope, value, v, false);
+                    if charge(st, OPERATION_OPS * exec_time) {
+                        stop!(pc);
+                    }
+                }
+                Op::StoreAttr(n, k) => {
+                    let target = vm.stack.pop().unwrap();
+                    let rhs = vm.stack.pop().unwrap();
+                    let lhs = node_ref(n);
+                    let op = &code.strs[k as usize];
+                    let module = match target {
+                        V::Module(m) => m,
+                        other => {
+                            stm(st).current_executing_node = n;
+                            return Err(Ctrl::Err(err("error_attribute_on_non_module", &[nice_el(&other)])));
+                        }
+                    };
+                    let value2 = match &lhs.slots[1].kind {
+                        NK::Value(v) => v.clone(),
+                        _ => return Err(Ctrl::Err("error_invalid_const2".into())),
+                    };
+                    let num = if !stm(st).module_state.is_expression_static { 1.0 } else { 0.0 };
+                    let before = if op.as_ref() == "=" { None } else { Some(module_export(&module, &value2)?.0) };
+                    let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
+                    module.scope.borrow_mut().vars.set(&value2, v, false);
+                    if charge(st, OPERATION_OPS * (exec_time + num)) {
+                        stop!(pc);
+                    }
+                }
+                Op::IndexTarget(n) => {
+                    let t = vm.stack.last().unwrap();
+                    if !(t.is_seq() || matches!(t, V::Dict(_))) {
+                        stm(st).current_executing_node = n;
+                        return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(t)])));
+                    }
+                }
+                Op::StoreIndex(k) => {
+                    let indices = match vm.stack.pop().unwrap() {
+                        V::Seq(s) => s,
+                        _ => Rc::new(Vec::new()),
+                    };
+                    let indexable = vm.stack.pop().unwrap();
+                    let rhs = vm.stack.pop().unwrap();
+                    let op = &code.strs[k as usize];
+                    let mut steps = 0;
+                    let before = if op.as_ref() == "=" { None } else { Some(index_at(&indexable, &indices, &mut steps, None)?) };
+                    steps = 0;
+                    let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
+                    index_at(&indexable, &indices, &mut steps, Some(v))?;
+                    if charge(st, OPERATION_OPS * (steps as f64 + exec_time)) {
+                        stop!(pc);
+                    }
+                }
+                Op::Unpack(n) => {
+                    let rhs = vm.stack.pop().unwrap();
+                    if !rhs.is_seq() {
+                        return Err(Ctrl::Err("error_assign_type_mismatch".into()));
+                    }
+                    let left = node_ref(n).slots[0].slots.len();
+                    let count = seq_len(&rhs);
+                    if left < count {
+                        return Err(Ctrl::Err("error_too_many_values_to_unpack".into()));
+                    }
+                    if left > count {
+                        return Err(Ctrl::Err("error_not_enough_values".into()));
+                    }
+                    let right_values = seq_items(&rhs);
+                    for v in right_values.into_iter().rev() {
+                        vm.stack.push(v);
+                    }
+                    if matches!(rhs, V::List(_)) && charge(st, OPERATION_OPS) {
+                        stop!(pc);
+                    }
+                }
+                Op::Fail(m) => return Err(Ctrl::Err(FAIL_MSGS[m as usize].into())),
+                Op::FailAt(n, m) => {
+                    stm(st).current_executing_node = n;
+                    return Err(Ctrl::Err(FAIL_MSGS[m as usize].into()));
+                }
+                Op::Def(n, d) => {
+                    eb!(n, d);
+                    let node = node_ref(n);
+                    let (func_name, is_static) = match &node.kind {
+                        NK::Def(f, s) => (f, *s),
+                        _ => unreachable!(),
+                    };
+                    let scope = cur_scope!(st);
+                    let f = Rc::new(PyFunc {
+                        name: func_name.clone(),
+                        syntax_tree: Some(node.slots[0].clone()),
+                        parent_scope: Some(scope.clone()),
+                        binding: None,
+                        method_object: None,
+                        is_free: false,
+                    });
+                    scope_set_var(&scope, func_name, V::Func(f), is_static);
+                    if charge(st, OPERATION_OPS) {
+                        stop!(pc);
+                    }
+                }
+                Op::Pass(n, d) => {
+                    eb!(n, d);
+                    if charge(st, OPERATION_OPS) {
+                        stop!(pc);
+                    }
+                }
+                Op::BrkCont(n, d, t) => {
+                    eb!(n, d);
+                    pc = t as usize;
+                    if charge(st, 0.0) {
+                        stop!(pc);
+                    }
+                }
+                Op::RetA => {
+                    let v = vm.stack.pop().unwrap();
+                    stm(st).module_state.return_value = v;
+                    if charge(st, 0.0) {
+                        stop!(pc);
+                    }
+                }
+                Op::RetB(n) => {
+                    stm(st).current_executing_node = n;
+                    // return from the innermost function frame
+                    loop {
+                        let f = vm.frames.last().unwrap();
+                        match f.kind {
+                            FrameKind::Function | FrameKind::SpawnRoot => break,
+                            FrameKind::Main => return Err(Ctrl::Return),
+                            FrameKind::Module { .. } => return Err(Ctrl::Return),
+                        }
+                    }
+                    let f = vm.frames.pop().unwrap();
+                    vm.stack.truncate(f.stack_base);
+                    vm.iters.truncate(f.iter_base);
+                    let s = stm(st);
+                    s.module_state.call_stack.pop();
+                    let v = std::mem::replace(&mut s.module_state.return_value, V::None);
+                    match f.kind {
+                        FrameKind::SpawnRoot => {
+                            s.module_state.return_value = v;
+                            program_finished(st, Ok(()));
+                            return Ok(());
+                        }
+                        _ => {
+                            s.frames -= 1;
+                            vm.stack.push(v);
+                            continue 'frames;
+                        }
+                    }
+                }
+                Op::ImportStart(n, d) => {
+                    eb!(n, d);
+                    if charge(st, 0.0) {
+                        stop!(pc);
+                    }
+                }
+                Op::ImportLoad(n, i) => {
+                    let node = node_ref(n);
+                    let name: &str = match &node.kind {
+                        NK::Import { module_names, .. } => module_names[i as usize].as_ref(),
+                        _ => unreachable!(),
+                    };
+                    if name == "__builtins__" || name == "builtins" {
+                        continue;
+                    }
+                    let cached = stm(st).module_cache.contains_key(name);
+                    if !cached {
+                        let path = stm(st).sh.dir.join(format!("{}.py", name));
+                        let code_text = match std::fs::read_to_string(&path) {
+                            Ok(c) => c,
+                            Err(_) => return Err(Ctrl::Err("error_module_not_found".into())),
+                        };
+                        let tree = match parse_source(name, &code_text) {
+                            Ok(t) => t,
+                            Err(e) => return Err(Ctrl::Err(format!("error_syntax_error_in_import: {}", e))),
+                        };
+                        let sh = stm(st).sh.clone();
+                        sh.trees.borrow_mut().push(tree.clone());
+                        if let Err(e) = register_leaderboard_code(&sh, name, &tree) {
+                            return Err(Ctrl::Err(e));
+                        }
+                        let scope = new_scope(None, None, &[]);
+                        scope_import_var(&scope, &intern("__name__"), new_str(name), false);
+                        let module = Rc::new(PyModule { scope: scope.clone(), name: name.to_string(), fully_initialized: Cell::new(false) });
+                        stm(st).module_cache.insert(name.to_string(), module.clone());
+                        register_builtins(&scope);
+                        let module_state = ModuleState { global_scope: scope, call_stack: Vec::new(), return_value: V::None, is_expression_static: false };
+                        let old = std::mem::replace(&mut stm(st).module_state, module_state);
+                        // the module's statements run at the import's depth
+                        let d = depth_off + import_depth(&code.ops, pc - 1);
+                        vm.frames[fi].pc = pc;
+                        let mcode = code_of(&tree);
+                        vm.frames.push(Frame {
+                            code: mcode,
+                            pc: 0,
+                            stack_base: vm.stack.len(),
+                            iter_base: vm.iters.len(),
+                            depth_off: d,
+                            kind: FrameKind::Module { module, old },
+                            args: Vec::new(),
+                        });
+                        continue 'frames;
+                    }
+                }
+                Op::ImportBind(n, i) => {
+                    let node = node_ref(n);
+                    let (name, unpack, unpack_all, vars_to_unpack, is_static) = match &node.kind {
+                        NK::Import { module_names, unpack, unpack_all, vars_to_unpack, is_static } => {
+                            (module_names[i as usize].as_ref(), *unpack, *unpack_all, vars_to_unpack, *is_static)
+                        }
+                        _ => unreachable!(),
+                    };
+                    if name == "__builtins__" || name == "builtins" {
+                        continue;
+                    }
+                    let module = stm(st).module_cache[name].clone();
+                    let scope = cur_scope!(st);
+                    if unpack {
+                        if unpack_all {
+                            let entries = module.scope.borrow().vars.entries();
+                            for (k, v, s) in entries.iter() {
+                                if !k.starts_with('_') {
+                                    scope_import_var(&scope, k, v.clone(), *s);
+                                }
+                            }
+                            continue;
+                        }
+                        for item in vars_to_unpack.iter() {
+                            let (v, s) = module_export(&module, item)?;
+                            scope_import_var(&scope, item, v, s);
+                        }
+                    } else {
+                        scope_import_var(&scope, name, V::Module(module), is_static);
+                    }
+                }
+                Op::ArgCheck(n) => {
+                    let node = node_ref(n);
+                    let (param_names, func_name) = match &node.kind {
+                        NK::Function { params, name, .. } => (params, name),
+                        _ => unreachable!(),
+                    };
+                    let arguments = &vm.frames[fi].args;
+                    let num = param_names.len() as i32 - arguments.len() as i32;
+                    let num_default_values = node.slots.len() as i32 - 1;
+                    if num < 0 || num > num_default_values {
+                        return Err(Ctrl::Err(err(
+                            "error_wrong_number_args",
+                            &[func_name.to_string(), param_names.len().to_string(), nice_el(&V::Tuple(Rc::new(arguments.clone())))],
+                        )));
+                    }
+                }
+                Op::Defaults(n, _) => {
+                    // skip the default values the call gave arguments for
+                    let node = node_ref(n);
+                    let nparams = match &node.kind {
+                        NK::Function { params, .. } => params.len(),
+                        _ => unreachable!(),
+                    };
+                    let ndef = node.slots.len() - 1;
+                    let missing = nparams - vm.frames[fi].args.len();
+                    let skip = ndef - missing;
+                    // each default is its code followed by PushArg; walk past `skip` of them
+                    let mut k = 0;
+                    while k < skip {
+                        if let Op::PushArg = ops[pc] {
+                            k += 1;
+                        }
+                        pc += 1;
+                    }
+                }
+                Op::PushArg => {
+                    let v = vm.stack.pop().unwrap();
+                    vm.frames[fi].args.push(v);
+                }
+                Op::BindParams(n) => {
+                    let node = node_ref(n);
+                    let param_names = match &node.kind {
+                        NK::Function { params, .. } => params,
+                        _ => unreachable!(),
+                    };
+                    let scope = cur_scope!(st);
+                    let args = std::mem::take(&mut vm.frames[fi].args);
+                    for (j, a) in args.into_iter().enumerate().take(param_names.len()) {
+                        scope_set_var(&scope, &param_names[j], a, false);
+                    }
+                }
+                Op::FuncEnd => {
+                    let f = vm.frames.pop().unwrap();
+                    vm.stack.truncate(f.stack_base);
+                    vm.iters.truncate(f.iter_base);
+                    let s = stm(st);
+                    s.module_state.is_expression_static = false;
+                    s.module_state.call_stack.pop();
+                    match f.kind {
+                        FrameKind::SpawnRoot => {
+                            s.module_state.return_value = V::None;
+                            program_finished(st, Ok(()));
+                            return Ok(());
+                        }
+                        _ => {
+                            s.frames -= 1;
+                            vm.stack.push(V::None);
+                            continue 'frames;
+                        }
+                    }
+                }
+                Op::ModuleEnd => {
+                    let f = vm.frames.pop().unwrap();
+                    match f.kind {
+                        FrameKind::Module { module, old } => {
+                            stm(st).module_state = old;
+                            module.fully_initialized.set(true);
+                            continue 'frames;
+                        }
+                        _ => {
+                            program_finished(st, Ok(()));
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// the static depth of the ImportStart before an ImportLoad at `at`
+fn import_depth(ops: &[Op], at: usize) -> u32 {
+    let mut i = at;
+    loop {
+        if let Op::ImportStart(_, d) = ops[i] {
+            return d;
+        }
+        i -= 1;
+    }
+}
+
+fn busy_wait_name_ref(node: &Node) -> Option<&Rc<str>> {
+    let cond = &node.slots[0];
+    match &cond.slots.get(1).map(|n| &n.kind) {
+        Some(NK::Value(name)) => Some(name),
+        _ => None,
+    }
+}
+
+/// BinaryNode.Execute's operator part, for everything but and / or / module access: the value
+/// and the steps it costs.
+fn binary_value(op: &str, bop: BOp, lhs: V, rhs: V) -> R<(V, i32)> {
+    if !matches!(bop, BOp::And | BOp::Or | BOp::Dot) {
+        let f = match (&lhs, &rhs) {
+            (V::Func(f), _) => Some(f.clone()),
+            (_, V::Func(f)) => Some(f.clone()),
+            _ => None,
+        };
+        if let Some(f) = f {
+            return Err(err("error_function_in_operator", &[f.name.to_string(), op.to_string()]));
+        }
+    }
+    if let (BOp::Sub | BOp::Mul | BOp::Div | BOp::FloorDiv | BOp::Mod | BOp::Pow | BOp::Add, V::Num(a), V::Num(b)) = (bop, &lhs, &rhs) {
+        let (a, b) = (*a, *b);
+        if matches!(bop, BOp::Div | BOp::FloorDiv | BOp::Mod) && b == 0.0 {
+            return Err("error_division_by_zero".into());
+        }
+        return Ok((
+            V::Num(match bop {
+                BOp::Add => a + b,
+                BOp::Sub => a - b,
+                BOp::Mul => a * b,
+                BOp::Div => a / b,
+                BOp::FloorDiv => (a / b).floor(),
+                BOp::Mod => py_modulo(a, b),
+                _ => a.powf(b),
+            }),
+            1,
+        ));
+    }
+    let bad = || err("error_bad_bin_operator", &[op.to_string(), nice_el(&lhs), nice_el(&rhs)]);
+    let mut steps: i32 = 0;
+    let result: V = match bop {
+        BOp::And | BOp::Or => {
+            steps = 1;
+            rhs.clone()
+        }
+        BOp::Index => {
+            if !(lhs.is_seq() || matches!(lhs, V::Dict(_))) {
+                return Err(err("error_index_on_non_indexable", &[nice_el(&lhs)]));
+            }
+            let indices = match &rhs {
+                V::Seq(s) => s.clone(),
+                _ => Rc::new(Vec::new()),
+            };
+            index_at(&lhs, &indices, &mut steps, None)?
+        }
+        BOp::Add => {
+            if let (Some(a), Some(b)) = (lhs.num(), rhs.num()) {
+                steps = 1;
+                V::Num(a + b)
+            } else if let (V::List(a), true) = (&lhs, rhs.is_seq()) {
+                let mut out = a.borrow().clone();
+                out.extend(seq_items(&rhs));
+                steps = (out.len() as i32).max(1);
+                new_list(out)
+            } else if let (V::Tuple(a), V::Tuple(b)) = (&lhs, &rhs) {
+                let mut out = a.to_vec();
+                out.extend(b.iter().cloned());
+                steps = (out.len() as i32).max(1);
+                V::Tuple(Rc::new(out))
+            } else if let (V::Str(a), V::Str(b)) = (&lhs, &rhs) {
+                steps = ((a.chars().count() + b.chars().count()) as i32).max(1);
+                new_str(&format!("{}{}", a, b))
+            } else {
+                return Err(bad());
+            }
+        }
+        BOp::Dot => match &rhs {
+            V::Func(f) => {
+                steps = 0;
+                V::Func(Rc::new(PyFunc {
+                    name: f.name.clone(),
+                    syntax_tree: f.syntax_tree.clone(),
+                    parent_scope: f.parent_scope.clone(),
+                    binding: f.binding,
+                    method_object: Some(lhs.clone()),
+                    is_free: f.is_free,
+                }))
+            }
+            _ => return Err("error_unknown_method".into()),
+        },
+        _ => {
+            if matches!(bop, BOp::Div | BOp::FloorDiv | BOp::Mod) && rhs.num() == Some(0.0) {
+                return Err("error_division_by_zero".into());
+            }
+            let (a, b) = match (lhs.num(), rhs.num()) {
+                (Some(a), Some(b)) => (a, b),
+                _ => return Err(bad()),
+            };
+            steps = 1;
+            V::Num(match bop {
+                BOp::Sub => a - b,
+                BOp::Mul => a * b,
+                BOp::Div => a / b,
+                BOp::FloorDiv => (a / b).floor(),
+                BOp::Mod => py_modulo(a, b),
+                BOp::Pow => a.powf(b),
+                _ => return Err(bad()),
+            })
+        }
+    };
+    Ok((result, steps))
+}
+
+/// ComparisonNode.Execute's operator part: the result and the steps it costs.
+fn compare_values(ops: &[Rc<str>], cops: &[COp], operands: &[V]) -> R<(bool, i32)> {
+    let mut steps: i32 = 0;
+    let mut flag = true;
+    for i in 0..ops.len() {
+        let text: &str = ops[i].as_ref();
+        let cop = cops[i];
+        let a = &operands[i];
+        let b = &operands[i + 1];
+        let f = match (a, b) {
+            (V::Func(f), _) => Some(f.clone()),
+            (_, V::Func(f)) => Some(f.clone()),
+            _ => None,
+        };
+        if let Some(f) = f {
+            return Err(err("error_function_in_operator", &[f.name.to_string(), text.to_string()]));
+        }
+        let is_in = matches!(cop, COp::In | COp::NotIn);
+        if is_in && !(matches!(b, V::Dict(_) | V::Set(_)) || b.is_seq()) {
+            return Err(err("error_bad_unary_operator", &[text.to_string(), nice_el(b)]));
+        }
+        let flag2 = match cop {
+            COp::Eq => py_equals(a, b, &mut steps)?,
+            COp::Ne => !py_equals(a, b, &mut steps)?,
+            COp::Ge => deep_compare(a, b, text, &mut steps)? >= 0,
+            COp::Le => deep_compare(a, b, text, &mut steps)? <= 0,
+            COp::Gt => deep_compare(a, b, text, &mut steps)? > 0,
+            COp::Lt => deep_compare(a, b, text, &mut steps)? < 0,
+            COp::In | COp::NotIn => {
+                let found = match b {
+                    V::Dict(d) | V::Set(d) => {
+                        let key = to_key(a)?;
+                        let r = d.borrow().contains(&key);
+                        steps += py_size(a);
+                        r
+                    }
+                    _ => seq_contains(b, a, &mut steps)?,
+                };
+                if cop == COp::In { found } else { !found }
+            }
+            _ => true,
+        };
+        flag = flag && flag2;
+        if !flag {
+            break;
+        }
+    }
+    Ok((flag, steps))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -7033,18 +8474,10 @@ impl Sim {
     }
 
     // ---- Execution --------------------------------------------------------------------------
-    fn add_program_state(&mut self, drone_id: usize, program: Box<dyn FnOnce(&StRef) -> Res>, op_count: f64) -> StRef {
+    fn add_program_state(&mut self, drone_id: usize, program: Vm, op_count: f64) -> StRef {
         let st = Rc::new(RefCell::new(PState::new(op_count, &mut self.random_random, drone_id as i32, self.sh.clone())));
         register_builtins(&st.borrow().module_state.global_scope.clone());
-        // The stack holds the state weakly: the state owns the stack.
-        let weak = Rc::downgrade(&st);
-        let stack = stacks::Stack::new(Box::new(move || {
-            if let Some(st) = weak.upgrade() {
-                let r = program(&st);
-                program_finished(&st, r);
-            }
-        }));
-        st.borrow_mut().program = Some(stack);
+        st.borrow_mut().program = Some(program);
         let ex = self.execution.as_mut().unwrap();
         if drone_id >= ex.states.len() {
             ex.states.push(Some(st.clone()));
@@ -7063,7 +8496,7 @@ impl Sim {
             next_execution_time: self.current_time,
             stopped: false,
         });
-        let st = self.add_program_state(0, Box::new(move |st| exec_block(&tree, st, 0)), 0.0);
+        let st = self.add_program_state(0, Vm::main(&tree), 0.0);
         self.execution.as_mut().unwrap().main_state = Some(st);
         self.paused = false;
         self.finished = false;
@@ -7569,12 +9002,7 @@ impl Sim {
                     let g = self.execution.as_ref().unwrap().global_op_count;
                     let fnode = function_node.clone();
                     let new_state =
-                        self.add_program_state(
-                            num11,
-                            // the function's result is the drone's, for wait_for
-                            Box::new(move |s| exec_function(&fnode, s, list2, 0).map(|v| stm(s).module_state.return_value = v)),
-                            g + ACTION_OPS,
-                        );
+                        self.add_program_state(num11, Vm::spawned(&fnode, list2), g + ACTION_OPS);
                     let vars = match &function_node.kind {
                         NK::Function { vars, .. } => vars.clone(),
                         _ => Vec::new(),
