@@ -25,7 +25,8 @@ opt-level = 3
 //
 // Not ported (the script stops with an error if it reaches one): the mining DLC (dig, push, place,
 // hover, prospect_*, jump, bamboo, rice, dynamite, mushrooms, underground world generation),
-// simulate() / leaderboard_run(), the "feature not unlocked yet" checks on language keywords, and
+// simulate() and leaderboard_run() called from a script (a leaderboard attempt is run from the
+// command line instead: --leaderboard, or give the launcher script), the "feature not unlocked yet" checks on language keywords, and
 // anything that is only visual or audio. The farm starts as a freshly generated field.
 #![feature(coroutines, coroutine_trait)]
 #![allow(dead_code, unused_variables, unused_mut, unused_assignments, non_snake_case, non_upper_case_globals)]
@@ -2620,6 +2621,38 @@ struct Shared {
     dir: std::path::PathBuf,
     output: RefCell<Vec<String>>,
     warnings: RefCell<HashMap<String, u64>>,
+    /// Execution.leaderboardCodeNodeCount; None outside a leaderboard run, where nothing is counted
+    lb_nodes: Cell<Option<usize>>,
+    /// Execution.leaderboardCodeModules
+    lb_modules: RefCell<HashSet<String>>,
+}
+
+/// Execution.RegisterLeaderboardCode: a leaderboard run may hold at most 100,000 syntax nodes,
+/// counted over the main file and every module it imports (each module once).
+const LEADERBOARD_CODE_LIMIT: usize = 100000;
+fn register_leaderboard_code(sh: &Shared, module_name: &str, tree: &Rc<Node>) -> R<()> {
+    let mut count = match sh.lb_nodes.get() {
+        Some(c) => c,
+        None => return Ok(()),
+    };
+    if count <= LEADERBOARD_CODE_LIMIT && !sh.lb_modules.borrow_mut().insert(module_name.to_string()) {
+        return Ok(());
+    }
+    let mut stack: Vec<Rc<Node>> = vec![tree.clone()];
+    while let Some(node) = stack.pop() {
+        if count > LEADERBOARD_CODE_LIMIT {
+            break;
+        }
+        count += 1;
+        for slot in node.slots.iter() {
+            stack.push(slot.clone());
+        }
+    }
+    sh.lb_nodes.set(Some(count));
+    if count <= LEADERBOARD_CODE_LIMIT {
+        return Ok(());
+    }
+    Err("error_leaderboard_code_too_large".into())
 }
 
 impl Shared {
@@ -3432,6 +3465,10 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                                 Ok(t) => t,
                                 Err(e) => return Err(Ctrl::Err(format!("error_syntax_error_in_import: {}", e))),
                             };
+                            let sh = st.borrow().sh.clone();
+                            if let Err(e) = register_leaderboard_code(&sh, name, &tree) {
+                                return Err(Ctrl::Err(e));
+                            }
                             let scope = new_scope(None, None, &[]);
                             scope_import_var(&scope, "__name__", new_str(name), false);
                             let module = Rc::new(PyModule {
@@ -7320,6 +7357,138 @@ const MAX_RUN_SECONDS: f64 = 600.0;
 /// a variant search crawl, so the script being run has to be made cheaper to simulate.
 const WALL_LIMIT_SECONDS: f64 = 10.0;
 
+// ---- Leaderboards ------------------------------------------------------------------------------
+// From the game's LeaderboardSO assets (resources.assets) and BuiltinFunctions.LeaderboardRun /
+// MainSim.StartLeaderboard / MainSim.LeaderboardExecutionFinished in Core.dll.
+
+#[derive(Clone, Copy, PartialEq)]
+enum LbKind {
+    /// LeaderboardType.reset: start from nothing, succeed by unlocking the leaderboard again
+    Reset,
+    /// LeaderboardType.farm_resources: everything unlocked, succeed by holding the goal items
+    Farm,
+}
+
+struct Lb {
+    name: &'static str,
+    kind: LbKind,
+    single_drone: bool,
+    /// needs the mining DLC, which this simulator does not port
+    dlc: bool,
+    start: &'static [(&'static str, f64)],
+    goal: &'static [(&'static str, f64)],
+}
+
+static LEADERBOARDS: &[Lb] = &[
+    Lb { name: "bamboo", kind: LbKind::Farm, single_drone: false, dlc: true, start: &[("power", 1e9), ("rice", 1e9)], goal: &[("bamboo", 500000000.0)] },
+    Lb { name: "bamboo_single", kind: LbKind::Farm, single_drone: true, dlc: true, start: &[("power", 1e9), ("rice", 1e9)], goal: &[("bamboo", 25000000.0)] },
+    Lb { name: "cactus", kind: LbKind::Farm, single_drone: false, dlc: false, start: &[("pumpkin", 1e9), ("power", 1e9)], goal: &[("cactus", 33554432.0)] },
+    Lb { name: "cactus_single", kind: LbKind::Farm, single_drone: true, dlc: false, start: &[("pumpkin", 1e9), ("power", 1e9)], goal: &[("cactus", 131072.0)] },
+    Lb { name: "carrots", kind: LbKind::Farm, single_drone: false, dlc: false, start: &[("power", 1e9), ("hay", 1e9), ("wood", 1e9)], goal: &[("carrot", 2000000000.0)] },
+    Lb { name: "carrots_single", kind: LbKind::Farm, single_drone: true, dlc: false, start: &[("power", 1e9), ("hay", 1e9), ("wood", 1e9)], goal: &[("carrot", 100000000.0)] },
+    Lb { name: "dinosaur", kind: LbKind::Farm, single_drone: false, dlc: false, start: &[("cactus", 1e9), ("power", 1e9)], goal: &[("bone", 33488928.0)] },
+    Lb { name: "dynamite", kind: LbKind::Farm, single_drone: false, dlc: true, start: &[("power", 1e9)], goal: &[("dynamite", 10000000.0)] },
+    Lb { name: "dynamite_single", kind: LbKind::Farm, single_drone: true, dlc: true, start: &[("power", 1e9)], goal: &[("dynamite", 100000.0)] },
+    Lb { name: "fastest_reset", kind: LbKind::Reset, single_drone: false, dlc: false, start: &[], goal: &[] },
+    Lb { name: "fastest_underground_reset", kind: LbKind::Reset, single_drone: false, dlc: true, start: &[], goal: &[] },
+    Lb { name: "hay", kind: LbKind::Farm, single_drone: false, dlc: false, start: &[("power", 1e9)], goal: &[("hay", 2000000000.0)] },
+    Lb { name: "hay_single", kind: LbKind::Farm, single_drone: true, dlc: false, start: &[("power", 1e9)], goal: &[("hay", 100000000.0)] },
+    Lb { name: "maze", kind: LbKind::Farm, single_drone: false, dlc: false, start: &[("weird_substance", 1e9), ("power", 1e9)], goal: &[("gold", 9863168.0)] },
+    Lb { name: "maze_single", kind: LbKind::Farm, single_drone: true, dlc: false, start: &[("weird_substance", 1e9), ("power", 1e9)], goal: &[("gold", 616448.0)] },
+    Lb { name: "mushrooms", kind: LbKind::Farm, single_drone: false, dlc: true, start: &[("power", 1e9)], goal: &[("mushroom", 240000.0)] },
+    Lb { name: "mushrooms_single", kind: LbKind::Farm, single_drone: true, dlc: true, start: &[("power", 1e9)], goal: &[("mushroom", 30000.0)] },
+    Lb { name: "ores", kind: LbKind::Farm, single_drone: false, dlc: true, start: &[("power", 1e9)], goal: &[("quartz", 20000.0)] },
+    Lb { name: "ores_single", kind: LbKind::Farm, single_drone: true, dlc: true, start: &[("power", 1e9)], goal: &[("quartz", 4000.0)] },
+    Lb { name: "pumpkins", kind: LbKind::Farm, single_drone: false, dlc: false, start: &[("carrot", 1e9), ("power", 1e9)], goal: &[("pumpkin", 200000000.0)] },
+    Lb { name: "pumpkins_single", kind: LbKind::Farm, single_drone: true, dlc: false, start: &[("carrot", 1e9), ("power", 1e9)], goal: &[("pumpkin", 10000000.0)] },
+    Lb { name: "pyramids", kind: LbKind::Farm, single_drone: false, dlc: true, start: &[], goal: &[("power", 150000.0)] },
+    Lb { name: "pyramids_single", kind: LbKind::Farm, single_drone: true, dlc: true, start: &[], goal: &[("power", 30000.0)] },
+    Lb { name: "rice", kind: LbKind::Farm, single_drone: false, dlc: true, start: &[("power", 1e9)], goal: &[("rice", 2000000.0)] },
+    Lb { name: "rice_single", kind: LbKind::Farm, single_drone: true, dlc: true, start: &[("power", 1e9)], goal: &[("rice", 100000.0)] },
+    Lb { name: "sunflowers", kind: LbKind::Farm, single_drone: false, dlc: false, start: &[("carrot", 1e9)], goal: &[("power", 100000.0)] },
+    Lb { name: "sunflowers_single", kind: LbKind::Farm, single_drone: true, dlc: false, start: &[("carrot", 1e9)], goal: &[("power", 10000.0)] },
+    Lb { name: "treasure_map", kind: LbKind::Farm, single_drone: true, dlc: true, start: &[("power", 1e9)], goal: &[("gold", 115000.0)] },
+    Lb { name: "wood", kind: LbKind::Farm, single_drone: false, dlc: false, start: &[("power", 1e9)], goal: &[("wood", 10000000000.0)] },
+    Lb { name: "wood_single", kind: LbKind::Farm, single_drone: true, dlc: false, start: &[("power", 1e9)], goal: &[("wood", 500000000.0)] },
+];
+
+/// BuiltinFunctions.resetUnlocks: what every leaderboard run (and a fresh reset) starts with
+static RESET_UNLOCKS: &[&str] = &[
+    "loops", "for", "range", "if", "else", "elif", "debug", "debug_2", "timing", "lists", "dictionaries", "costs",
+    "auto_unlock", "operators", "variables", "Items", "clear", "senses", "utilities", "can_harvest", "Entities",
+    "get_world_size", "till", "use_item", "trade", "move", "multi_trade", "get_active_power", "North", "East",
+    "South", "West", "functions", "import", "simulation", "get_water", "measure", "max_drones", "num_drones",
+    "get_drone_id", "spawn_drone", "send", "receive", "underground_senses",
+];
+
+/// Every run of a leaderboard is repeated until the runs add up to this much game time, and the
+/// score is their mean (MainSim.MIN_LEADERBOARD_TIME, two hours).
+const LEADERBOARD_TOTAL_SECONDS: f64 = 7200.0;
+/// A leaderboard run lasts until the script ends; one that has not ended by now is stopped.
+const LEADERBOARD_MAX_RUN_SECONDS: f64 = 7200.0;
+/// Real seconds one leaderboard run may take (it simulates far more than the usual minute).
+const LEADERBOARD_WALL_LIMIT_SECONDS: f64 = 120.0;
+
+fn leaderboard(name: &str) -> Option<&'static Lb> {
+    let n = name.trim().to_lowercase();
+    let n = n.strip_prefix("leaderboards.").unwrap_or(&n);
+    LEADERBOARDS.iter().find(|l| l.name == n)
+}
+
+/// BuiltinFunctions.GetUnlockStrings(ResourceManager.GetAllUnlocks(), singleDrone): every unlock
+/// at its top level, except that a single-drone board gets no megafarm and expand only to level 5
+/// (an 8x8 farm). Fastest reset starts from the reset unlocks alone.
+fn leaderboard_unlocks(lb: &Lb) -> Vec<String> {
+    let mut list: Vec<String> = RESET_UNLOCKS.iter().map(|s| s.to_string()).collect();
+    if lb.kind == LbKind::Reset {
+        return list;
+    }
+    for u in UNLOCKS.iter() {
+        if u.name == "explosive_drill" {
+            continue;
+        }
+        if !lb.single_drone || u.name != "megafarm" {
+            list.push(u.name.to_string());
+        }
+        if u.max_level > 1 {
+            if lb.single_drone && u.name == "expand" {
+                list.push("expand_5".into());
+            } else if !lb.single_drone || u.name != "megafarm" {
+                list.push(format!("{}_{}", u.name, u.max_level));
+            }
+        }
+    }
+    list
+}
+
+fn leaderboard_items(lb: &Lb) -> Items {
+    let mut items = empty_items();
+    for (name, n) in lb.start.iter() {
+        items[item_id(name)] = *n;
+    }
+    items
+}
+
+/// The success condition MainSim.LeaderboardExecutionFinished checks once the program has ended.
+fn leaderboard_success(sim: &Sim, lb: &Lb) -> bool {
+    match lb.kind {
+        LbKind::Reset => sim.num_unlocked(if lb.name == "fastest_reset" { "leaderboard" } else { "underground_leaderboard" }) > 0,
+        LbKind::Farm => lb.goal.iter().all(|(name, n)| sim.items[item_id(name)] >= *n),
+    }
+}
+
+/// A script that only calls leaderboard_run(Leaderboards.X, "file", speedup) names the board and
+/// the file to run; returns them.
+fn leaderboard_call(code: &str) -> Option<(&'static Lb, String)> {
+    let at = code.find("leaderboard_run(")?;
+    let args = &code[at + "leaderboard_run(".len()..];
+    let args = &args[..args.find(')')?];
+    let mut parts = args.split(',');
+    let lb = leaderboard(parts.next()?)?;
+    let file = parts.next()?.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+    Some((lb, file))
+}
+
 struct Config {
     script: std::path::PathBuf,
     item: Option<String>,
@@ -7329,6 +7498,7 @@ struct Config {
     max_drones: Option<i32>,
     fps: f64,
     echo: Echo,
+    leaderboard: Option<&'static Lb>,
 }
 
 struct RunResult {
@@ -7344,6 +7514,10 @@ struct RunResult {
     world: (i32, i32),
     max_drones: i32,
     ticks_per_second: f64,
+    /// leaderboard runs: whether the success condition held when the program ended
+    lb_success: bool,
+    /// leaderboard runs: game seconds at which the success condition first held
+    goal_at: Option<f64>,
 }
 
 fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
@@ -7357,6 +7531,8 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
         dir: cfg.script.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
         output: RefCell::new(Vec::new()),
         warnings: RefCell::new(HashMap::new()),
+        lb_nodes: Cell::new(cfg.leaderboard.map(|_| 0)),
+        lb_modules: RefCell::new(HashSet::new()),
     });
     let override_size = match cfg.world_size {
         Some(n) => (n, n),
@@ -7367,19 +7543,32 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     let world = (sim.wx, sim.wy);
     let max_drones = sim.max_drones();
     let ticks_per_second = 1e9 / sim.op_duration as f64;
+    // Execution's constructor registers the main file's code; too much of it stops the run.
+    let code_check = register_leaderboard_code(&sh, &name, &tree);
     sim.start_program_execution(tree);
+    if let Err(e) = code_check {
+        sim.error = Some(e);
+    }
+    let lb = cfg.leaderboard;
+    let mut goal_at: Option<f64> = None;
     let item_id = cfg.item.as_deref().map(item_id);
-    let mut limit = dur_from_seconds(RUN_SECONDS);
-    let max_limit = dur_from_seconds(MAX_RUN_SECONDS);
+    let (mut limit, max_limit, wall_limit) = match lb {
+        Some(_) => (
+            dur_from_seconds(LEADERBOARD_MAX_RUN_SECONDS),
+            dur_from_seconds(LEADERBOARD_MAX_RUN_SECONDS),
+            LEADERBOARD_WALL_LIMIT_SECONDS,
+        ),
+        None => (dur_from_seconds(RUN_SECONDS), dur_from_seconds(MAX_RUN_SECONDS), WALL_LIMIT_SECONDS),
+    };
     // MainSim.Update: goalTime = sim.CurrentTime + min(deltaTime, 0.2) * TimeFactor, once per frame
     let frame = dur_from_seconds((1.0 / cfg.fps).min(0.2));
     let wall_start = std::time::Instant::now();
     loop {
         while sim.current_time < limit && sim.error.is_none() && !sim.finished {
-            if wall_start.elapsed().as_secs_f64() > WALL_LIMIT_SECONDS {
+            if wall_start.elapsed().as_secs_f64() > wall_limit {
                 sim.error = Some(format!(
                     "something in this run is taking too long, make an optimization that keeps this run under {}s for whatever code you are running and push it (stopped after {:.1}s of real time at {:.1}s game time)",
-                    WALL_LIMIT_SECONDS,
+                    wall_limit,
                     wall_start.elapsed().as_secs_f64(),
                     dur_seconds(sim.current_time)
                 ));
@@ -7391,6 +7580,17 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
                     break;
                 }
             }
+            if let Some(lb) = lb {
+                if goal_at.is_none() && leaderboard_success(&sim, lb) {
+                    goal_at = Some(dur_seconds(sim.current_time));
+                }
+            }
+        }
+        if lb.is_some() {
+            if !sim.finished && sim.error.is_none() {
+                sim.error = Some(format!("the script had not ended after {:.0}s of game time; a leaderboard run only ends when every drone has returned", LEADERBOARD_MAX_RUN_SECONDS));
+            }
+            break;
         }
         let harvests = match item_id {
             Some(id) => sim.collected.iter().filter(|(_, b)| b[id] > 0.0).count(),
@@ -7404,6 +7604,10 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     let mut warnings: Vec<(String, u64)> = sh.warnings.borrow().iter().map(|(k, v)| (k.clone(), *v)).collect();
     warnings.sort();
     let output = std::mem::take(&mut *sh.output.borrow_mut());
+    let lb_success = match lb {
+        Some(lb) => sim.finished && sim.error.is_none() && leaderboard_success(&sim, lb),
+        None => false,
+    };
     Ok(RunResult {
         elapsed: dur_seconds(sim.current_time),
         start_items,
@@ -7417,6 +7621,8 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
         world,
         max_drones,
         ticks_per_second,
+        lb_success,
+        goal_at,
     })
 }
 
@@ -7545,9 +7751,160 @@ fn report(cfg: &Config, seed: i32, r: &RunResult) -> Option<(f64, f64)> {
     rate_out
 }
 
+/// Runs cfg once per seed on a pool of `workers` threads; results come back in seed order.
+fn run_parallel(cfg: &Config, seeds: &[i32], workers: usize) -> Vec<R<RunResult>> {
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let results: Vec<std::sync::Mutex<Option<R<RunResult>>>> = seeds.iter().map(|_| std::sync::Mutex::new(None)).collect();
+    std::thread::scope(|scope| {
+        for _ in 0..workers.min(seeds.len()).max(1) {
+            let spawned = std::thread::Builder::new().stack_size(256 << 20).spawn_scoped(scope, || loop {
+                let job = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if job >= seeds.len() {
+                    break;
+                }
+                let r = run_once(cfg, seeds[job]);
+                *results[job].lock().unwrap() = Some(r);
+            });
+            if let Err(e) = spawned {
+                eprintln!("error: cannot start a worker thread: {}", e);
+                std::process::exit(1);
+            }
+        }
+    });
+    results.into_iter().map(|m| m.into_inner().unwrap().unwrap_or_else(|| Err("the run did not finish".into()))).collect()
+}
+
+fn clock(seconds: f64) -> String {
+    let ms = (seconds * 1000.0) as i64;
+    let (h, m, s, ms) = (ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60, ms % 1000);
+    if h > 0 { format!("{}:{:02}:{:02}.{:03}", h, m, s, ms) } else { format!("{}:{:02}.{:03}", m, s, ms) }
+}
+
+/// MainSim.LeaderboardExecutionFinished: each run lasts until the script ends; the runs repeat
+/// (with fresh seeds) until they add up to two hours of game time, and the score is their mean time,
+/// uploaded in whole milliseconds. A run that ends without meeting the goal ends the attempt with
+/// no score. Returns false if any script failed.
+fn run_leaderboards(cfgs: &[Config], first_seed: i32, fixed_runs: Option<i32>, workers: usize, brief: bool) -> bool {
+    let mut all_ok = true;
+    let mut rows: Vec<(f64, String)> = Vec::new();
+    for (ci, cfg) in cfgs.iter().enumerate() {
+        let lb = cfg.leaderboard.unwrap();
+        if !brief && cfgs.len() > 1 {
+            println!("{}== {} ==", if ci > 0 { "\n" } else { "" }, cfg.script.display());
+        }
+        let mut runs: Vec<(i32, RunResult)> = Vec::new();
+        let mut total = 0.0;
+        let mut failure: Option<String> = None;
+        let mut next = 0i32;
+        'attempt: loop {
+            let batch = match fixed_runs {
+                Some(n) => n.max(1) - next,
+                None => workers as i32,
+            };
+            if batch <= 0 {
+                break;
+            }
+            let seeds: Vec<i32> = (next..next + batch).map(|i| first_seed.wrapping_add(i)).collect();
+            next += batch;
+            for (seed, r) in seeds.iter().zip(run_parallel(cfg, &seeds, workers)) {
+                let r = match r {
+                    Ok(r) => r,
+                    Err(e) => {
+                        failure = Some(format!("run {} (seed {}): {}", runs.len() + 1, seed, e));
+                        break 'attempt;
+                    }
+                };
+                total += r.elapsed;
+                let ok = r.lb_success;
+                runs.push((*seed, r));
+                if !ok {
+                    let (seed, r) = runs.last().unwrap();
+                    let why = match &r.error {
+                        Some(e) => e.clone(),
+                        None => format!(
+                            "the script ended at {:.3}s without meeting the goal ({})",
+                            r.elapsed,
+                            lb.goal.iter().map(|(n, g)| format!("{} {} of {}", n, group(r.end_items[item_id(n)]), group(*g))).collect::<Vec<_>>().join(", ")
+                        ),
+                    };
+                    failure = Some(format!("run {} (seed {}): {}", runs.len(), seed, why));
+                    break 'attempt;
+                }
+                if fixed_runs.is_none() && total >= LEADERBOARD_TOTAL_SECONDS {
+                    break 'attempt;
+                }
+            }
+        }
+        let n = runs.iter().filter(|(_, r)| r.lb_success).count();
+        let times: Vec<f64> = runs.iter().filter(|(_, r)| r.lb_success).map(|(_, r)| r.elapsed).collect();
+        let mean = if n > 0 { times.iter().sum::<f64>() / n as f64 } else { 0.0 };
+        let score = (mean * 1000.0).floor() / 1000.0;
+        let min = times.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = times.iter().cloned().fold(0.0, f64::max);
+        let lag: Vec<f64> = runs.iter().filter_map(|(_, r)| r.goal_at.map(|g| r.elapsed - g)).collect();
+        let mean_lag = if lag.is_empty() { 0.0 } else { lag.iter().sum::<f64>() / lag.len() as f64 };
+        if !brief {
+            // The first run in full, and the failed one if it is another.
+            if let Some((seed, r)) = runs.first() {
+                report(cfg, *seed, r);
+            }
+            if failure.is_some() && runs.len() > 1 {
+                let (seed, r) = runs.last().unwrap();
+                println!();
+                report(cfg, *seed, r);
+            }
+            println!();
+            println!("Leaderboards.{} with {}", lb.name, cfg.script.display());
+            if n > 1 {
+                let list: Vec<String> = times.iter().map(|t| format!("{:.3}", t)).collect();
+                if list.len() <= 20 {
+                    println!("  run times: {}", list.join(" "));
+                }
+            }
+        }
+        let line = match &failure {
+            Some(f) => {
+                all_ok = false;
+                format!("FAILED, no score: {}", f)
+            }
+            None => {
+                let covered = if fixed_runs.is_none() {
+                    format!("{} simulated", clock(total))
+                } else {
+                    format!("{} simulated, short of the game's {}h", clock(total), LEADERBOARD_TOTAL_SECONDS / 3600.0)
+                };
+                format!(
+                    "score {} ({:.3}s) = mean of {} run{} ({}); min {:.3}s, max {:.3}s; goal met {:.3}s before the end on average",
+                    clock(score),
+                    score,
+                    n,
+                    if n == 1 { "" } else { "s" },
+                    covered,
+                    min,
+                    max,
+                    mean_lag
+                )
+            }
+        };
+        if brief {
+            let key = if failure.is_some() { f64::INFINITY } else { score };
+            rows.push((key, format!("{:<18} {}  {}", lb.name, line, cfg.script.display())));
+        } else {
+            println!("  {}", line);
+        }
+    }
+    if brief {
+        rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        for (_, line) in rows.iter() {
+            println!("{}", line);
+        }
+    }
+    all_ok
+}
+
 const USAGE: &str = "usage: tfwr_sim <script.py>... [--seed N] [--seeds N] [--jobs N] [--item NAME]
                 [--save save.json] [--size N] [--drones N] [--set unlock=level] [--give item=n]
-                [--fps N] [--quiet] [--brief]
+                [--fps N] [--quiet] [--brief] [--leaderboard NAME]
 
 Runs each script on a fresh farm with the unlocks and items from save.json and reports what it
 produced. Every run simulates one game minute, or longer (up to ten) if the script needs it to
@@ -7555,13 +7912,21 @@ harvest the reported item three times. Several scripts and --seeds run in parall
 time (default: one per CPU core), and every script sees the same seeds.
 --brief prints one line per script, best first, instead of the per-run reports.
 --size / --drones override the world size and drone limit that the save's expand and megafarm
-levels give (16x16 and 32 for expand_7 and megafarm_5).";
+levels give (16x16 and 32 for expand_7 and megafarm_5).
+
+--leaderboard NAME (cactus, maze, hay_single, fastest_reset, ...) runs the script the way
+leaderboard_run() does: the board's fixed unlocks and items instead of save.json's, each run lasting
+until the script ends, repeated until the runs cover two hours of game time, and scored by their
+mean time. A script that calls leaderboard_run(Leaderboards.X, \"file\", speedup) is run that way
+without the option. --seeds N runs exactly N times instead of covering two hours.";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut scripts: Vec<String> = Vec::new();
     let mut seed: Option<i32> = None;
     let mut seeds = 1;
+    let mut seeds_given = false;
+    let mut lb_opt: Option<&'static Lb> = None;
     let mut jobs: Option<usize> = None;
     let mut item: Option<String> = None;
     let mut save: Option<String> = None;
@@ -7588,7 +7953,16 @@ fn main() {
         };
         match a {
             "--seed" => seed = Some(val().parse().unwrap_or_else(|_| fail("--seed needs an integer"))),
-            "--seeds" => seeds = val().parse().unwrap_or_else(|_| fail("--seeds needs an integer")),
+            "--seeds" => {
+                seeds = val().parse().unwrap_or_else(|_| fail("--seeds needs an integer"));
+                seeds_given = true;
+            }
+            "--leaderboard" => {
+                let v = val();
+                lb_opt = Some(leaderboard(&v).unwrap_or_else(|| {
+                    fail(&format!("unknown leaderboard {}; one of: {}", v, LEADERBOARDS.iter().map(|l| l.name).collect::<Vec<_>>().join(", ")))
+                }));
+            }
             "--jobs" => jobs = Some(val().parse().unwrap_or_else(|_| fail("--jobs needs an integer"))),
             "--item" => item = Some(val()),
             "--save" => save = Some(val()),
@@ -7662,16 +8036,19 @@ fn main() {
         },
         Err(_) => eprintln!("note: {} not found, starting with nothing unlocked", save_path.display()),
     }
-    for (k, level) in sets.iter() {
-        unlocks.retain(|u| u != k && !(u.starts_with(&format!("{}_", k)) && u[k.len() + 1..].parse::<i32>().is_ok()));
-        unlocks.push(if *level > 1 { format!("{}_{}", k, level) } else { k.clone() });
-    }
-    for (k, n) in gives.iter() {
-        match ITEM_NAMES.iter().position(|x| x == k) {
-            Some(id) => items[id] = *n,
-            None => fail(&format!("unknown item {}", k)),
+    let apply_overrides = |unlocks: &mut Vec<String>, items: &mut Items| {
+        for (k, level) in sets.iter() {
+            unlocks.retain(|u| u != k && !(u.starts_with(&format!("{}_", k)) && u[k.len() + 1..].parse::<i32>().is_ok()));
+            unlocks.push(if *level > 1 { format!("{}_{}", k, level) } else { k.clone() });
         }
-    }
+        for (k, n) in gives.iter() {
+            match ITEM_NAMES.iter().position(|x| x == k) {
+                Some(id) => items[id] = *n,
+                None => fail(&format!("unknown item {}", k)),
+            }
+        }
+    };
+    apply_overrides(&mut unlocks, &mut items);
     if let Some(it) = &item {
         if !ITEM_NAMES.contains(&it.as_str()) {
             fail(&format!("unknown item {}", it));
@@ -7692,13 +8069,32 @@ fn main() {
     let cfgs: Vec<Config> = scripts
         .into_iter()
         .map(|script| {
+            // A leaderboard run: from --leaderboard, or from a launcher script's leaderboard_run().
+            let (script, lb) = match lb_opt {
+                Some(lb) => (script, Some(lb)),
+                None => match std::fs::read_to_string(&script).ok().as_deref().and_then(leaderboard_call) {
+                    Some((lb, file)) => (script.parent().map(|p| p.to_path_buf()).unwrap_or_default().join(format!("{}.py", file)), Some(lb)),
+                    None => (script, None),
+                },
+            };
+            if let Some(lb) = lb {
+                if lb.dlc {
+                    fail(&format!("Leaderboards.{} needs the mining DLC, which this simulator does not port", lb.name));
+                }
+                let mut unlocks = leaderboard_unlocks(lb);
+                let mut items = leaderboard_items(lb);
+                apply_overrides(&mut unlocks, &mut items);
+                let item = item.clone().or_else(|| lb.goal.first().map(|g| g.0.to_string()));
+                let echo = if quiet { Echo::Off } else { Echo::Buffered };
+                return Config { script, item, unlocks, items, world_size: size, max_drones: drones, fps, echo, leaderboard: Some(lb) };
+            }
             let stem = script.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
             let by_name = item_from_stem(&stem);
             if guessed.is_none() {
                 guessed = by_name.clone();
             }
             let item = item.clone().or(by_name).or_else(|| guessed.clone());
-            Config { script, item, unlocks: unlocks.clone(), items: items.clone(), world_size: size, max_drones: drones, fps, echo }
+            Config { script, item, unlocks: unlocks.clone(), items: items.clone(), world_size: size, max_drones: drones, fps, echo, leaderboard: None }
         })
         .collect();
 
@@ -7706,9 +8102,21 @@ fn main() {
         (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(1) % 1_000_000_007) as i32
     });
 
+    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    if cfgs.iter().any(|c| c.leaderboard.is_some()) {
+        if cfgs.iter().any(|c| c.leaderboard.is_none()) {
+            fail("leaderboard runs and ordinary runs cannot be mixed in one command");
+        }
+        let fixed_runs = if seeds_given { Some(seeds) } else { None };
+        let ok = run_leaderboards(&cfgs, first_seed, fixed_runs, jobs.unwrap_or(cores).max(1), brief);
+        if !ok {
+            std::process::exit(1);
+        }
+        return;
+    }
+
     // One job per (script, seed). Each simulation is single-threaded and shares nothing, so the
     // jobs run on a pool of worker threads and are reported in order once all have finished.
-    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
     let workers = jobs.unwrap_or(cores).max(1).min(total_jobs);
     let next = std::sync::atomic::AtomicUsize::new(0);
     let results: Vec<std::sync::Mutex<Option<R<RunResult>>>> = (0..total_jobs).map(|_| std::sync::Mutex::new(None)).collect();

@@ -62,8 +62,50 @@ The first run after the file changes takes about 12 s to build; later runs use c
 | `--size N`, `--drones N` | override the board size and drone limit from the save |
 | `--quiet` | hide `print` / `quick_print` output (shown under each run's report when there are several runs) |
 | `--brief` | one line per script, sorted by rate: rate, cycle time, mean and smallest harvest, warnings and errors. Implies `--quiet` |
+| `--leaderboard NAME` | run as a leaderboard attempt (see below) |
 
 World size and drone limit come from the save's `expand` and `megafarm` levels unless overridden.
+
+## Leaderboard runs
+
+`--leaderboard NAME` runs a script the way `leaderboard_run()` does in the game, so a time can be
+checked before spending two in-game hours on it. Giving the launcher script (one that calls
+`leaderboard_run(Leaderboards.X, "file", speedup)`) does the same without the option:
+
+```
+cargo +nightly -Zscript <skill folder>/tfwr_sim.rs run_cactus_lb.py --seed 1 --quiet
+cargo +nightly -Zscript <skill folder>/tfwr_sim.rs cactus_lb_entry.py --leaderboard cactus --seeds 4 --quiet
+```
+
+It follows the game's code (`BuiltinFunctions.LeaderboardRun`, `MainSim.StartLeaderboard` and
+`MainSim.LeaderboardExecutionFinished` in Core.dll, and the `LeaderboardSO` assets):
+
+- save.json is ignored. Every board but the resets starts with every unlock at its top level (a
+  32x32 farm and 32 drones); `_single` boards get no megafarm and expand only to level 5 (one drone,
+  8x8). Fastest reset starts from the basic reset unlocks. The items are the board's own: cactus
+  gets 1e9 pumpkins and 1e9 power, maze 1e9 weird substance and power, and so on (`LEADERBOARDS` in
+  `tfwr_sim.rs`). `--set` / `--give` still apply on top, for experiments.
+- A run lasts until the script ends, meaning every drone has returned, not until the goal is met.
+  The time is the game time at that moment. The goal is checked only then.
+- Runs repeat with new seeds until they add up to two hours of game time, and the score is their
+  mean, the number the game uploads. `--seeds N` does exactly N runs instead, for a quick check.
+  Any run that ends short of the goal, errors, or has not ended after two game hours fails the
+  whole attempt, as in the game.
+- The code size limit is checked: at most 100,000 syntax nodes over the file and everything it
+  imports (`error_leaderboard_code_too_large`).
+- A leaderboard run may take up to 120 s of real time, not 10.
+
+The report shows the first run in full, then the score, the number of runs, their spread and how
+long the script ran on after the goal was met:
+
+```
+Leaderboards.cactus with cactus_lb_entry.py
+  score 0:57.796 (57.796s) = mean of 125 runs (2:00:24.514 simulated); min 53.123s, max 67.370s; goal met 0.034s before the end on average
+```
+
+The game scored the same `cactus_lb_entry.py` 57.7 s. Mining DLC boards (bamboo, rice, ores,
+dynamite, mushrooms, pyramids, treasure map, the underground reset) are refused, since the DLC is
+not ported.
 
 ## Reading the output
 
@@ -163,8 +205,9 @@ checked this way.
 ## Limits
 
 - Not ported: the mining DLC (`dig`, `push`, `place`, `hover`, prospecting, bamboo, rice,
-  dynamite, mushrooms), `simulate()` and `leaderboard_run()`. A script that calls one stops with
-  an error naming it.
+  dynamite, mushrooms) and `simulate()`. A script that calls one stops with an error naming it.
+  `leaderboard_run()` is not run from inside a script either; give the launcher script or
+  `--leaderboard` instead (see Leaderboard runs).
 - The "you have not unlocked this keyword" checks are skipped; plant and hat unlock checks are kept.
 - Every run starts on a freshly generated, dry field, not the player's current farm.
 - The real game seeds its randomness from the clock, so no seed reproduces a particular game run.

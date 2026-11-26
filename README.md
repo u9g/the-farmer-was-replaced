@@ -49,6 +49,25 @@ cargo +nightly -Zscript path/to/tfwr_sim.rs cactus.py cactus_new.py --seed 1 --s
 | `--fps N` | simulate the game at a given frame rate |
 | `--quiet` | hide the script's `print` / `quick_print` output |
 | `--brief` | one line per script, sorted by rate |
+| `--leaderboard NAME` | run it as a leaderboard attempt, as below |
+
+### Leaderboard runs
+
+Give the script that calls `leaderboard_run(...)`, or the entry script with `--leaderboard NAME`,
+and the simulator runs it the way the game does: the board's fixed unlocks and items, each run
+lasting until the script ends, repeated until the runs cover two hours of game time, scored by their
+mean time. `--seeds N` does exactly N runs instead.
+
+```
+cargo +nightly -Zscript path/to/tfwr_sim.rs run_cactus_lb.py --quiet
+```
+
+```
+Leaderboards.cactus with cactus_lb_entry.py
+  score 0:57.796 (57.796s) = mean of 125 runs (2:00:24.514 simulated); min 53.123s, max 67.370s; goal met 0.034s before the end on average
+```
+
+The game scored the same script 57.7 s. Mining DLC boards are not supported.
 
 ## Reading the output
 
@@ -96,8 +115,9 @@ get in the way. Don't read it any other way while the game is running.
 ## Limits
 
 - The mining DLC (`dig`, `push`, `place`, `hover`, bamboo, rice, mushrooms and so on),
-  `simulate()` and `leaderboard_run()` are not ported. A script that calls one stops with an error
-  naming it.
+  and `simulate()` are not ported. A script that calls one stops with an error naming it.
+  Leaderboard runs work from the command line (above), not by calling `leaderboard_run()` inside a
+  run.
 - Every run starts on a freshly generated, dry field, not your current farm.
 - The game seeds its randomness from the clock, so no seed reproduces a particular game run.
 - `import` only finds `.py` files in the script's folder.
