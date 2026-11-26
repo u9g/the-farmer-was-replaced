@@ -5,6 +5,7 @@ NA = #NA#
 NB = #NB#
 HV = #HV#
 KD = #KD#
+BW = #BW#
 
 #DATA#
 
@@ -128,8 +129,13 @@ def pretill(db):
 	for st in db[3]:
 		for m in st[0]:
 			move(m)
-		if st[1]:
+		f = st[1]
+		if f == 1 or f == 3:
 			till()
+		if f >= 2:
+			while num_items(Items.Water) < 1:
+				pass
+			use_item(Items.Water)
 
 
 def travel(p):
@@ -190,7 +196,7 @@ def worker(c):
 		pump -= SEED_COST * NB
 		while num_items(Items.Pumpkin) > pump:
 			pass
-		t = get_time() + GROW
+		t = get_time() + BW
 		while num_drones() > 1:
 			pass
 		wait_until(t)

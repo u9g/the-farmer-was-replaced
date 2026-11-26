@@ -72,6 +72,26 @@ def model_costs(R, order, till, seeds=60, seed=7):
 OKCUT = {}
 
 
+def chunk_costs(R, order, chunks, till, seeds=40, seed=11):
+    """per-cell cost with chunks simulated last-to-first (cut effects included)."""
+    rng = random.Random(seed)
+    tot = [0.0] * len(order)
+    for _ in range(seeds):
+        vals = {}
+        for ci in range(len(chunks) - 1, -1, -1):
+            p, q = chunks[ci]
+            dr = Drone(order[p])
+            for i in range(p, q):
+                c = order[i]
+                m0, s0 = dr.moves, dr.swaps
+                dr.go(c)
+                vals[c] = rng.randrange(10)
+                settle2(dr, c, R, vals)
+                act = (dr.moves - m0) + (dr.swaps - s0) + 1 + (1 if till else 0)
+                tot[i] += act * ACT + 30 * TICK
+    return [t / seeds for t in tot]
+
+
 def split(costs, starts_fn, T, order):
     ok = OKCUT.get(id(order))
     chunks = []
@@ -278,11 +298,21 @@ def main():
         o2, plans = spawn_plan(tuple(starts), origin)
         offs = [x * ACT for x in o2]
     chA, TA = best_split(cA, lambda k, p: BOOT + offs[min(k, ND - 1)], oA)
+    for it2 in range(int(os.environ.get("CIT", "0"))):
+        cA = chunk_costs(RA, oA, chA, True)
+        for it in range(3):
+            chA, TA = best_split(cA, lambda k, p: BOOT + offs[min(k, ND - 1)], oA)
+            starts = [oA[p] for p, q in chA]
+            o2, plans = spawn_plan(tuple(starts), origin)
+            offs = [x * ACT for x in o2]
+        chA, TA = best_split(cA, lambda k, p: BOOT + offs[min(k, ND - 1)], oA)
     starts = [oA[p] for p, q in chA]
     o2, plans = spawn_plan(tuple(starts), origin)
     print("TA", round(TA, 3), "sum start", round(sum(o2) * ACT, 2), "max start", round(max(o2) * ACT, 2), file=sys.stderr)
     chB, TB = best_split(cB, lambda k, p: 0.0, oB)
-    import os
+    for it2 in range(int(os.environ.get("CIT", "0"))):
+        cB = chunk_costs(RB, oB, chB, False)
+        chB, TB = best_split(cB, lambda k, p: 0.0, oB)
     if os.environ.get("BOUNDS"):
         Bd_ = json.load(open(os.environ["BOUNDS"]))
         chA = [tuple(x) for x in Bd_["chA"]]
@@ -303,14 +333,17 @@ def main():
     def route(c, j):
         p2, q2 = chB[j]
         bcells = oB[p2:q2]
-        tl = [cc for cc in bcells[::-1] if cc not in RA]
+        NW = int(os.environ.get("NW", "0"))
+        wat = set(bcells[-NW:]) if NW > 0 else set()
+        tl = [cc for cc in bcells[::-1] if cc not in RA or cc in wat]
         pos = endA[c]
         steps = []
         L = 0
         for cc in tl:
             mv = path_moves(pos, cc)
-            steps.append([mv, 1])
-            L += len(mv) + 1
+            fl = (1 if cc not in RA else 0) + (2 if cc in wat else 0)
+            steps.append([mv, fl])
+            L += len(mv) + (1 if fl & 1 else 0) + (1 if fl & 2 else 0)
             pos = cc
         mv = path_moves(pos, bcells[0])
         steps.append([mv, 0])
@@ -362,7 +395,7 @@ def main():
     sim_plan(0, origin)
     for c in range(ND):
         A[c][1][0] = path_moves(endpos[c], oA[chA[c][0]])
-    emit(out, A, Bd, {"template": "template.py", "consts": {"NA": len(RA), "NB": len(RB), "HV": hv, "LP": lit(LP), "KD": os.environ.get("KD", "20")}})
+    emit(out, A, Bd, {"template": "template.py", "consts": {"NA": len(RA), "NB": len(RB), "HV": hv, "LP": lit(LP), "KD": os.environ.get("KD", "20"), "BW": "%.4f" % max(0.5001, 1.0001 - int(os.environ.get("NW", "0")) * 400 / 6075.0)}})
 
 
 if __name__ == "__main__":
