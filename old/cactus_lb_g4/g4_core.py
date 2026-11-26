@@ -223,8 +223,11 @@ class Lay:
         return sw + mv, tk  # moves counted as actions too
 
 
+KMUL = {"cas": float(E("KC", "1.0")), "fm": float(E("KF", "1.0")), "jf": float(E("KJ", "1.0"))}
+
+
 def op_cost(op):
-    return op["tk"] + TA * op["sw"]
+    return (op["tk"] + TA * op["sw"]) * KMUL[op["k"]]
 
 
 def op_var(op):

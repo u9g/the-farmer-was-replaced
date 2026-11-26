@@ -465,6 +465,62 @@ def plan_B(lay, plan, cm, chs, arr, TA_lim, cands=None):
     return best
 
 
+def exact_A(lay, plan, cm, ch, arrival):
+    ms = [cm.best_m(*c, True)[1] for c in ch]
+    arr = [arrival(start_of(lay, c)) for c in ch]
+    fins0 = [arr[k] + cm.ev(*ch[k], True, ms[k])[0] for k in range(len(ch))]
+    try:
+        rp = RoundPlan(lay, plan, ch, True, ms, fins0, arr=arr)
+    except AssertionError:
+        return None
+    out = []
+    for k in range(len(ch)):
+        fwd, tail, cur = rp.chunk_ops(k, start_of(lay, ch[k]))
+        f, fv = rp.cost(fwd)
+        t, tv = rp.cost(tail)
+        out.append(arr[k] + f + max(GROW, t + Z * math.sqrt(tv)) + Z * math.sqrt(fv))
+    return out
+
+
+def local_search_A(lay, plan, cm, ch, arrival, iters):
+    ch = list(ch)
+    cur = exact_A(lay, plan, cm, ch, arrival)
+    print("LS start max %.3f" % (max(cur) / TPS), file=sys.stderr)
+    for it in range(iters):
+        improved = False
+        for k in sorted(range(len(ch)), key=lambda i: -cur[i]):
+            for nb_ in (k - 1, k + 1):
+                if nb_ < 0 or nb_ >= len(ch):
+                    continue
+                l, r = (nb_, k) if nb_ < k else (k, nb_)
+                for delta in (1, 2, 3, -1, -2, -3):
+                    p, q, d = ch[l]
+                    q2, r2, d2 = ch[r]
+                    x = q + delta
+                    if x - p < MINC or r2 - x < MINC or not plan.cut_ff[x]:
+                        continue
+                    t = cut_type(d, d2)
+                    if t in ("RF", "FR") and not plan.cut_clean[x]:
+                        continue
+                    trial = list(ch)
+                    trial[l] = (p, x, d)
+                    trial[r] = (x, r2, d2)
+                    ev = exact_A(lay, plan, cm, trial, arrival)
+                    if ev is None:
+                        continue
+                    if max(ev) < max(cur) - 1 or (max(ev) <= max(cur) and sorted(ev, reverse=True) < sorted(cur, reverse=True)):
+                        ch, cur = trial, ev
+                        improved = True
+                        break
+                else:
+                    continue
+                break
+        print("LS it %d max %.3f" % (it, max(cur) / TPS), file=sys.stderr)
+        if not improved:
+            break
+    return ch
+
+
 def render_ops(lay, ops):
     L = []
     for x in ops:
@@ -537,6 +593,12 @@ def main():
         print("A it %d  plan TA %.3f  spawned max %.3f  mean arr %.1f" % (
             it, TA_ / TPS, max(fin) / TPS, sum(arr) / ND / TA), file=sys.stderr)
         arr_of = {start_of(lay, c): arr[k] for k, c in enumerate(ch)}
+    if E("LS", "1") == "1":
+        ch = local_search_A(lay, plan, cm, ch, arrival, int(E("LSIT", "3")))
+        rest = [cm.best_m(*c, True)[0] for c in ch]
+        offs, plans = spawn(lay, ch, rest)
+        arr = [offs[k] * TA + TA for k in range(ND)]
+        fin = [arr[k] + rest[k] for k in range(ND)]
     pos_end = {}
 
     def sim_plan(c, pp):
