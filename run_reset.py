@@ -692,107 +692,286 @@ def power_check():
 
 
 # ---- pumpkins ----------------------------------------------------------------------------------
+# Entry points: pumpkin_round() (one whole-field pumpkin, harvested), pumpkin_until(goal).
+# Helpers shared with the cactus section: fan, snake, step_dir.
 
-def pumpkin_job(i, d, a, b):
+def fan(job, lo, hi, d, a):
+	# job(i, d, a) on drones lo..hi-1: each drone hands the upper half of its range to a new drone,
+	# so the last one starts after log2(d) spawns instead of d - 1
+	hs = []
+	left = []
+	while hi - lo > 1:
+		mid = (lo + hi + 1) // 2
+		h = spawn_drone(fan, job, mid, hi, d, a)
+		if h == None:
+			left.append((mid, hi))
+		else:
+			hs.append(h)
+		hi = mid
+	job(lo, d, a)
+	for r in left:
+		fan(job, r[0], r[1], d, a)
+	for h in hs:
+		wait_for(h)
+
+
+
+
+def snake(i, d):
+	# path through drone i's columns: up the first, down the next, ...
 	n = get_world_size()
-	todo = []
+	px = []
+	py = []
+	up = True
 	for x in my_cols(i, d):
-		go(x, 0)
-		for y in range(n):
-			e = get_entity_type()
-			if e != Entities.Pumpkin:
-				clear_cell()
-				soil()
-				if WET_PK:
-					wet()
+		for k in range(n):
+			px.append(x)
+			if up:
+				py.append(k)
+			else:
+				py.append(n - 1 - k)
+		up = not up
+	return (px, py)
+
+
+def step_dir(x0, y0, x1, y1):
+	if x1 > x0:
+		return East
+	if x1 < x0:
+		return West
+	if y1 > y0:
+		return North
+	return South
+
+
+# One pumpkin over the whole field. Every drone plants its columns, then walks over just the cells
+# of its columns that have not grown yet, replanting the dead ones, and is done once all of them
+# have grown (a grown pumpkin cannot die any more). Once column
+# 0: measure() there equals measure(North), which wraps round to (0, 0), only once one pumpkin
+# spans the whole height, so it harvests the moment the field has merged.
+# Water: a cell below PK_WLO gets one water whenever there is any. Water stays in the soil (it
+# loses about 1% a second), so it is spread thin over many cells rather than poured on a few.
+
+PK_WLO = 0.4
+PK_FA = 2
+
+
+def pk_wet():
+	if get_water() < PK_WLO and num_items(Items.Water) >= 1:
+		use_item(Items.Water)
+
+
+def pk_wet2():
+	# a replanted cell is likely to be among the last to grow: water it more
+	w = get_water()
+	s = num_items(Items.Water)
+	if w < 0.75 and s >= 1:
+		use_item(Items.Water, min(s, (1 - w) // 0.25))
+
+
+def pk_job(i, d, a):
+	n = get_world_size()
+	p = snake(i, d)
+	px = p[0]
+	py = p[1]
+	L = len(px)
+	seed = get_cost(Entities.Pumpkin)[Items.Carrot]
+	go(px[0], py[0])
+	todo = []
+	for t in range(L):
+		e = get_entity_type()
+		if e != Entities.Pumpkin:
+			if e == Entities.Dead_Pumpkin:
 				plant(Entities.Pumpkin)
-				todo.append((x, y))
-			elif not can_harvest():
-				todo.append((x, y))
-			move(North)
-	# revisit only the cells not yet grown; a pumpkin that died is replanted and revisited
+			else:
+				if e != None:
+					harvest()
+				if num_items(Items.Carrot) < seed:
+					return 0
+				soil()
+				plant(Entities.Pumpkin)
+			pk_wet()
+			todo.append(t)
+		elif not can_harvest():
+			todo.append(t)
+		if t < L - 1:
+			if px[t + 1] != px[t]:
+				move(East)
+			elif py[t + 1] > py[t]:
+				move(North)
+			else:
+				move(South)
+	# revisit the cells not grown yet, nearest first along the path; replant the dead ones
+	at = L - 1
 	while len(todo) > 0:
 		nt = []
-		for c in todo:
-			go(c[0], c[1])
-			while get_entity_type() == Entities.Pumpkin and not can_harvest():
-				pass
-			if get_entity_type() != Entities.Pumpkin:
-				if num_items(Items.Carrot) < 1:
-					return 0
-				clear_cell()
-				plant(Entities.Pumpkin)
-				if num_items(Items.Fertilizer) >= 1:
-					use_item(Items.Fertilizer)
-				nt.append(c)
+		if at > todo[0]:
+			r = []
+			for t in todo:
+				r.insert(0, t)
+			todo = r
+		alone = len(todo) == 1
+		fert = len(todo) <= PK_FA
+		for t in todo:
+			go(px[t], py[t])
+			at = t
+			while True:
+				e = get_entity_type()
+				if e == Entities.Pumpkin:
+					if can_harvest():
+						break
+					if fert and num_items(Items.Fertilizer) >= 1:
+						use_item(Items.Fertilizer)
+						continue
+					if not alone:
+						nt.append(t)
+						break
+				else:
+					if e != Entities.Dead_Pumpkin and e != None:
+						harvest()
+					if num_items(Items.Carrot) < seed:
+						return 0
+					plant(Entities.Pumpkin)
+					pk_wet2()
+					if not alone:
+						nt.append(t)
+						break
 		todo = nt
 	return 0
 
 
 def pumpkin_round():
-	all_drones(pumpkin_job, 0, 0)
+	# every drone returns once its columns have grown, so the field is one pumpkin by then
+	d = drones()
+	fan(pk_job, 0, d, d, 0)
 	if get_entity_type() == Entities.Pumpkin:
 		harvest()
 
 
+def pumpkin_until(goal):
+	# pumpkin rounds until the inventory holds goal pumpkins (or carrots run out)
+	seed = get_cost(Entities.Pumpkin)[Items.Carrot]
+	n = get_world_size()
+	while num_items(Items.Pumpkin) < goal and num_items(Items.Carrot) >= seed * n * n:
+		pumpkin_round()
+
+
 # ---- cactus ------------------------------------------------------------------------------------
+# Entry point: cactus_round(weird). weird=True makes every cactus weird before the harvest.
+# Every drone owns whole columns and walks them as one snake path, back and forth. It plants its
+# path, then sorts in place with no barrier: on each cell it measures the cell and its four
+# neighbours (across other drones' columns too) and swaps the most inverted pair, staying on the
+# cell until it is in order, then steps on. A drone stops once every cell of its path was in order
+# when it last looked. Then the field is harvested from the south-west corner.
 
-def cactus_plant_job(i, d, a, b):
+def cactus_job(i, d, a):
 	n = get_world_size()
-	for x in my_cols(i, d):
-		go(x, 0)
-		for y in range(n):
-			if get_entity_type() != Entities.Cactus:
-				clear_cell()
-				soil()
-				plant(Entities.Cactus)
-			move(North)
+	p = snake(i, d)
+	px = p[0]
+	py = p[1]
+	L = len(px)
+	F = []
+	B = [None]
+	DE = []
+	DN = []
+	DW = []
+	DS = []
+	for k in range(L):
+		x = px[k]
+		y = py[k]
+		if k < L - 1:
+			F.append(step_dir(x, y, px[k + 1], py[k + 1]))
+			B.append(step_dir(px[k + 1], py[k + 1], x, y))
+		else:
+			F.append(None)
+		DE.append(None)
+		DN.append(None)
+		DW.append(None)
+		DS.append(None)
+		if x < n - 1:
+			DE[k] = East
+		if y < n - 1:
+			DN[k] = North
+		if x > 0:
+			DW[k] = West
+		if y > 0:
+			DS[k] = South
+	go(px[0], py[0])
+	for k in range(L):
+		if get_entity_type() != Entities.Cactus:
+			clear_cell()
+			soil()
+			plant(Entities.Cactus)
+		if k < L - 1:
+			move(F[k])
+	k = L - 1
+	st = -1
+	lo = L
+	hi = -1
+	ld = None
+	delay = 3 + 7 * (i % 5)
+	while lo > 0 or hi < L - 1:
+		h = measure()
+		e = measure(DE[k])
+		if e == None:
+			e = h
+		nn = measure(DN[k])
+		if nn == None:
+			nn = h
+		w = measure(DW[k])
+		if w == None:
+			w = h
+		s = measure(DS[k])
+		if s == None:
+			s = h
+		if e < nn:
+			mlo = e
+			dl = DE[k]
+		else:
+			mlo = nn
+			dl = DN[k]
+		if w > s:
+			mhi = w
+			dh = DW[k]
+		else:
+			mhi = s
+			dh = DS[k]
+		dd = None
+		if h - mlo > mhi - h:
+			if h > mlo:
+				dd = dl
+		elif mhi > h:
+			dd = dh
+		if dd != None:
+			swap(dd)
+			lo = L
+			hi = -1
+			if dd == ld:
+				t = get_tick_count() + delay
+				while get_tick_count() < t:
+					pass
+				ld = None
+			else:
+				ld = dd
+		else:
+			ld = None
+			if k < lo:
+				lo = k
+			if k > hi:
+				hi = k
+			if lo == 0 and hi == L - 1:
+				break
+			if k + st < 0 or k + st >= L:
+				st = -st
+			if st > 0:
+				move(F[k])
+			else:
+				move(B[k])
+			k += st
 	return 0
 
 
-def sort_line(fwd, back, n):
-	# drone stands at the start of a line of n cacti; shaker sort, ascending along fwd
-	lo = 0
-	hi = n - 1
-	pos = 0
-	while lo < hi:
-		last = lo
-		while pos < hi:
-			if measure() > measure(fwd):
-				swap(fwd)
-				last = pos
-			move(fwd)
-			pos += 1
-		hi = last
-		if lo >= hi:
-			break
-		last = hi
-		while pos > lo:
-			if measure() < measure(back):
-				swap(back)
-				last = pos
-			move(back)
-			pos -= 1
-		lo = last
-
-
-def cactus_rows_job(i, d, a, b):
-	n = get_world_size()
-	for y in range(i * n // d, (i + 1) * n // d):
-		go(0, y)
-		sort_line(East, West, n)
-	return 0
-
-
-def cactus_cols_job(i, d, a, b):
-	n = get_world_size()
-	for x in my_cols(i, d):
-		go(x, 0)
-		sort_line(North, South, n)
-	return 0
-
-
-def weird_job(i, d, a, b):
+def weird_job(i, d, a):
 	# toggle weirdness on plus shapes: centres at (x + 2y) % 5 == 0 cover the plane once
 	n = get_world_size()
 	for x in my_cols(i, d):
@@ -807,11 +986,10 @@ def weird_job(i, d, a, b):
 
 
 def cactus_round(weird):
-	all_drones(cactus_plant_job, 0, 0)
-	all_drones(cactus_rows_job, 0, 0)
-	all_drones(cactus_cols_job, 0, 0)
+	d = drones()
+	fan(cactus_job, 0, d, d, 0)
 	if weird:
-		all_drones(weird_job, 0, 0)
+		fan(weird_job, 0, d, d, 0)
 	go(0, 0)
 	harvest()
 
