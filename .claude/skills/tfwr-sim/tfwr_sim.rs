@@ -1715,6 +1715,7 @@ static UNLOCKS: &[UnlockSO] = &[
 /// Scopes this small are searched name by name; a larger one also keeps a map.
 const SMALL_VARS: usize = 8;
 
+#[derive(Clone)]
 struct Vars {
     /// keyed by the interned name's address (see intern); empty while there are at most
     /// SMALL_VARS names
@@ -3591,11 +3592,39 @@ thread_local! {
 }
 
 fn register_builtins(scope: &ScopeRef) {
+    // A new module's scope holds only __name__ here: the builtins then always go in the same
+    // way, so the names, slots and index come from a copy made once.
+    let only_name = {
+        let b = scope.borrow();
+        b.parent_scope.is_none() && b.vars.items.len() == 1 && b.vars.items[0].0.as_ref() == "__name__"
+    };
+    if only_name {
+        BUILTIN_GLOBALS.with(|t| {
+            let mut b = scope.borrow_mut();
+            let mut vars = t.clone();
+            vars.items[0] = b.vars.items[0].clone();
+            b.vars = vars;
+        });
+        return;
+    }
+    set_builtins(scope);
+}
+fn set_builtins(scope: &ScopeRef) {
     BUILTINS.with(|b| {
         for (name, f) in b.iter() {
             scope_set_var(scope, name, V::Func(f.clone()), true);
         }
     });
+}
+thread_local! {
+    /// a module scope's names after register_builtins, with __name__ (its value a placeholder) first
+    static BUILTIN_GLOBALS: Vars = {
+        let scope = new_scope(None, None, &[]);
+        scope.borrow_mut().vars.set("__name__", V::None, false);
+        set_builtins(&scope);
+        let vars = std::mem::replace(&mut scope.borrow_mut().vars, Vars::new());
+        vars
+    };
 }
 
 impl PState {
