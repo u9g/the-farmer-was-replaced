@@ -2112,9 +2112,12 @@ def block_setup(N):
 	# rows 4s..4s+3, columns 1..N-1 form block s; column 0 is the way back down.
 	# A segment is one block walked in one of NMODES ways, or j skipped blocks plus the block
 	# after them; every route enters at (1, 4s) and leaves at the segment's top left corner.
+	# The routes are worked out on BG_BLK drones of their own while the first snake runs
+	# (the block phase comes 40 s in); get_blocks() collects them.
 	global NBLK
 	global RDIR
 	global RPOS
+	global BGB
 	NBLK = N // 4
 	tasks = []
 	RDIR = []
@@ -2130,36 +2133,131 @@ def block_setup(N):
 			tasks.append([j, m])
 			RDIR[j].append(0)
 			RPOS[j].append(0)
-	for r in all_drones(mk_job, tasks, N):
-		for e in r:
+	# biggest routes first, each to the drone with the least work so far
+	qs = []
+	load = []
+	for b in range(BG_BLK):
+		qs.append([])
+		load.append(0)
+	q = len(tasks) - 1
+	while q >= 0:
+		b = 0
+		for c in range(BG_BLK):
+			if load[c] < load[b]:
+				b = c
+		qs[b].append(q)
+		load[b] += tasks[q][0] + 1
+		q -= 1
+	BGB = []
+	for b in range(BG_BLK):
+		BGB.append(spawn_drone(blk_job, qs[b], tasks, N))
+
+
+def blk_job(qs, tasks, N):
+	out = []
+	for q in qs:
+		j = tasks[q][0]
+		m = tasks[q][1]
+		p = mk_path(j, m, N)
+		h = 4 * (j + 1)
+		pos = []
+		for c in range(N * h):
+			pos.append(0)
+		ds = []
+		for c in range(len(p)):
+			pos[p[c][0] * h + p[c][1]] = c
+			if c + 1 < len(p):
+				ds.append(dir_to(p[c], p[c + 1]))
+		out.append([j, m, ds, pos])
+	return out
+
+
+def get_blocks():
+	global BGB
+	for h in BGB:
+		for e in wait_for(h):
 			RDIR[e[0]][e[1]] = e[2]
 			RPOS[e[0]][e[1]] = e[3]
+	BGB = []
 
 
-def dn_rows(j, d, a0, b0):
-	N = SN
+BG_BLK = 3
+SD1 = []
+SW1 = []
+ST1 = []
+SD2 = []
+SW2 = []
+ST2 = []
+ST0 = []
+BGB = []
+BGT = None
+CX = [1, 1, -1, -1]
+CY = [1, -1, -1, 1]
+
+
+def dn_rows(j, d, a, b):
+	# drone j of d: the neighbour tables the free phase needs, for its slice of the cells
 	S = SS
-	ah = []
-	wy = []
+	N = SN
 	nb = []
-	to = []
-	nx = []
-	n2 = []
-	co = []
+	nb2 = []
+	cor = []
 	for i in range(j * S // d, (j + 1) * S // d):
-		pairs = []
 		row = []
+		r2 = []
+		q = []
+		px = PX[i]
+		py = PY[i]
 		for k in range(4):
-			x = PX[i] + DX[k]
-			y = PY[i] + DY[k]
+			x = px + DX[k]
+			y = py + DY[k]
 			if x >= 0 and x < N and y >= 0 and y < N:
-				pairs.append([(IDX[x][y] - i) % S, DIRS[k]])
-				row.append(IDX[x][y])
+				c = IDX[x][y]
+				row.append(c)
+				r2.append(c)
 			else:
 				row.append(-1)
+				r2.append(S)
+			x = px + CX[k]
+			y = py + CY[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				q.append(IDX[x][y])
+			else:
+				q.append(S)
 		nb.append(row)
+		nb2.append(r2)
+		cor.append(q)
+	return [nb, nb2, cor]
+
+
+def cyc_tables(a, b):
+	# AHEAD, WAY, TO and NEXT along the cycle, on a drone of its own while the first snake starts
+	# (they are first needed when the snake lines up on the cycle); get_tables() collects them
+	S = SS
+	N = SN
+	ah = []
+	wy = []
+	to = []
+	nx = []
+	d1 = []
+	w1 = []
+	t1 = []
+	d2 = []
+	w2 = []
+	t2 = []
+	t0 = []
+	for i in range(S):
+		pairs = []
+		px = PX[i]
+		py = PY[i]
+		for k in range(4):
+			x = px + DX[k]
+			y = py + DY[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				pairs.append([(IDX[x][y] - i) % S, DIRS[k]])
 		ds = []
 		ws = []
+		ts = []
 		while pairs:
 			best = pairs[0]
 			for p in pairs:
@@ -2168,37 +2266,71 @@ def dn_rows(j, d, a0, b0):
 			pairs.remove(best)
 			ds.append(best[0])
 			ws.append(best[1])
+			ts.append((i + best[0]) % S)
+			if best[0] == 1:
+				nx.append(best[1])
 		ah.append(ds)
 		wy.append(ws)
-		tr = []
-		for e in ds:
-			tr.append((i + e) % S)
-		to.append(tr)
-		for k in range(len(ds)):
-			if ds[k] == 1:
-				nx.append(ws[k])
-		r = []
-		q = []
-		for k in range(4):
-			x = PX[i] + DX[k]
-			y = PY[i] + DY[k]
-			if x >= 0 and x < N and y >= 0 and y < N:
-				r.append(IDX[x][y])
-			else:
-				r.append(S)
-			x = PX[i] + CXS[k]
-			y = PY[i] + CYS[k]
-			if x >= 0 and x < N and y >= 0 and y < N:
-				q.append(IDX[x][y])
-			else:
-				q.append(S)
-		n2.append(r)
-		co.append(q)
-	return [ah, wy, nb, to, nx, n2, co]
+		to.append(ts)
+		# the shortcuts other than the cycle's next and previous cell, longest first
+		e = []
+		for q in range(len(ds)):
+			if ds[q] != 1 and ds[q] != S - 1:
+				e.append(q)
+		if len(e) > 0:
+			d1.append(ds[e[0]])
+			w1.append(ws[e[0]])
+			t1.append(ts[e[0]])
+		else:
+			d1.append(1000000)
+			w1.append(0)
+			t1.append(0)
+		if len(e) > 0:
+			# the shorter one (the only one when there is one)
+			q = e[len(e) - 1]
+			d2.append(ds[q])
+			w2.append(ws[q])
+			t2.append(ts[q])
+		else:
+			d2.append(1000000)
+			w2.append(0)
+			t2.append(0)
+		t0.append((i + 1) % S)
+	return [ah, wy, to, nx, d1, w1, t1, d2, w2, t2, t0]
 
 
-CXS = [1, 1, -1, -1]
-CYS = [1, -1, -1, 1]
+def get_tables():
+	global BGT
+	global AHEAD
+	global WAY
+	global TO
+	global NEXT
+	global WALK
+	global SD1
+	global SW1
+	global ST1
+	global SD2
+	global SW2
+	global ST2
+	global ST0
+	if BGT != None:
+		r = wait_for(BGT)
+		BGT = None
+		AHEAD = r[0]
+		WAY = r[1]
+		TO = r[2]
+		NEXT = r[3]
+		SD1 = r[4]
+		SW1 = r[5]
+		ST1 = r[6]
+		SD2 = r[7]
+		SW2 = r[8]
+		ST2 = r[9]
+		ST0 = r[10]
+		if HALVES:
+			WALK = []
+			for i in range(2 * SS):
+				WALK.append(NEXT[i % SS])
 
 
 def dino_setup():
@@ -2208,15 +2340,18 @@ def dino_setup():
 	global IDX
 	global PX
 	global PY
-	global AHEAD
-	global WAY
-	global NEXT
 	global NB
-	global WALK
-	global TO
 	global occ
 	global hist
 	global vis
+	global NB2
+	global COR
+	global MT
+	global MT2
+	global ORD
+	global vis2
+	global bad
+	global BGT
 	N = get_world_size()
 	S = N * N
 	SN = N
@@ -2264,49 +2399,31 @@ def dino_setup():
 			PY.append(y)
 	for i in range(S):
 		IDX[PX[i]][PY[i]] = i
+	# the free phase's neighbour tables are built by every drone at once, a slice each (before
+	# the background drones below take any of the drone limit)
+	NB = []
+	NB2 = []
+	COR = []
+	for r in all_drones(dn_rows, 0, 0):
+		for e in r[0]:
+			NB.append(e)
+		for e in r[1]:
+			NB2.append(e)
+		for e in r[2]:
+			COR.append(e)
+	BGT = spawn_drone(cyc_tables, 0, 0)
 	if not HALVES:
 		block_setup(N)
-	# the neighbour tables are built by every drone at once, a slice each
-	AHEAD = []
-	WAY = []
-	NB = []
-	TO = []
-	NEXT = []
-	nb2 = []
-	cor = []
-	for r in all_drones(dn_rows, 0, 0):
-		AHEAD = AHEAD + r[0]
-		WAY = WAY + r[1]
-		NB = NB + r[2]
-		TO = TO + r[3]
-		NEXT = NEXT + r[4]
-		nb2 = nb2 + r[5]
-		cor = cor + r[6]
-	WALK = []
-	for i in range(2 * S):
-		WALK.append(NEXT[i % S])
-	occ = []
-	hist = []
-	vis = []
-	for i in range(S):
-		occ.append(0)
-		hist.append(0)
-		vis.append(0)
-	occ.append(1000000000)
-	global NB2
-	global COR
-	global MT
-	global MT2
-	global ORD
-	global vis2
-	global bad
-	vis2 = []
-	bad = []
-	for i in range(S + 1):
-		vis2.append(0)
-		bad.append(-5)
-	NB2 = nb2
-	COR = cor
+	z = [0]
+	while len(z) * 2 <= S:
+		z = z + z
+	while len(z) < S:
+		z.append(0)
+	occ = z + [1000000000]
+	hist = z + []
+	vis = z + []
+	vis2 = z + [0]
+	bad = z + [-5]
 	MT = []
 	MT2 = []
 	PW = [1, 2, 4, 8]
@@ -2900,6 +3017,7 @@ def play():
 			nxt = measure()
 			if nxt == None:
 				last = True
+	get_tables()
 	while not done:
 		if ch == ca:
 			if last:
@@ -2982,13 +3100,21 @@ def play():
 			done = True
 			break
 		while L > 0:
-			ds = AHEAD[ch]
-			j = 0
-			while ds[j] > L:
-				j += 1
-			move(WAY[ch][j])
-			L -= ds[j]
-			ch = TO[ch][j]
+			if SD2[ch] > L:
+				# SD2 is the shorter shortcut: none fits, the next cell on the cycle
+				move(NEXT[ch])
+				ch = ST0[ch]
+				L -= 1
+			else:
+				d = SD1[ch]
+				if d <= L:
+					move(SW1[ch])
+					ch = ST1[ch]
+				else:
+					d = SD2[ch]
+					move(SW2[ch])
+					ch = ST2[ch]
+				L -= d
 			t += 1
 			hist[t % S] = ch
 		if ch == ca:
@@ -3018,6 +3144,7 @@ def play():
 			if nxt == None:
 				last = True
 	elif not done:
+		get_blocks()
 		N = SN
 		W = N - 1
 		nb = NBLK
@@ -3045,7 +3172,7 @@ def play():
 		at = ch == ca
 		while True:
 			if at:
-				if last:
+				if last or k + 1 >= DINO_KT:
 					if seg == nb:
 						if i < N - 1:
 							move(South)
@@ -3146,10 +3273,21 @@ def play():
 	return k
 
 
+DINO_GOAL = 0
+DINO_KT = 1000000000
+
+
 def dino_round():
+	# a snake of k cells pays k * k * 2 ** (Dinosaurs - 1) bones: it stops at the length that
+	# covers what the purchase still needs (DINO_GOAL, set by farm), when that is under a full field
+	global DINO_KT
 	clear()
 	if SN != get_world_size():
 		dino_setup()
+	DINO_KT = 1000000000
+	need = DINO_GOAL - num_items(Items.Bone)
+	if need > 0:
+		DINO_KT = (need / lvl_mult(Unlocks.Dinosaurs)) ** 0.5 + 0.000001
 	k = play()
 	log("snake " + str(k) + " bones " + str(num_items(Items.Bone)))
 
@@ -3167,6 +3305,7 @@ WSB = 60000
 
 
 def farm(item, amount):
+	global DINO_GOAL
 	if item != Items.Gold:
 		power_check()
 	cells = width() * get_world_size()
@@ -3200,6 +3339,7 @@ def farm(item, amount):
 				power_round()
 			maze_round(n, amount)
 	elif item == Items.Bone:
+		DINO_GOAL = amount
 		ac = 2 * lvl_mult(Unlocks.Dinosaurs) * get_world_size() * get_world_size()
 		if num_items(Items.Cactus) < ac:
 			farm(Items.Cactus, ac)
