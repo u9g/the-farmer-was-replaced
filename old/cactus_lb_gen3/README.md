@@ -1,6 +1,6 @@
-Generator for `cactus_lb_entry.py` (Leaderboards.Cactus): one layout (dp_walls(3), 731 cells) harvested twice.
+Generator for `cactus_lb_entry.py` (Leaderboards.Cactus): one 729-cell layout (walls 0 mod 3 with 3-wide strips 9, 10, 12) harvested twice.
 
-    CCFLAT=1100 ZB=0.5 python b9.py ../../cactus_lb_entry.py
+    WSPEC=0:9,10,12 CCFLAT=1100 ZB=0.5 python b9.py ../../cactus_lb_entry.py
 
 Each drone plants its chunk with no sorting (deterministic forward pass), then walks back over a
 deferred tail fixing order while the cactus grow: 2-wide pairs by swap, 3-wide middles by `fm`

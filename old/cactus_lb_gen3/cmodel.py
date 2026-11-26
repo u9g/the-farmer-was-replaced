@@ -56,11 +56,21 @@ def run_drone(w, ph, start, st):
             d, up = op[1], op[2]
             yield 2
             a, b = meas(), meas(d)
-            while b is None and len(op) > 3 and op[3]:
+            fr = len(op) > 3 and op[3]
+            while b is None and fr:
+                st["wait"] = st.get("wait", 0) + 3
                 yield 3
                 b = meas(d)
             yield 2
-            if a is not None and b is not None and ((up and a > b) or ((not up) and a < b)):
+            if fr:
+                while True:
+                    a, b = meas(), meas(d)
+                    yield 4
+                    if a is not None and b is not None and ((up and a > b) or ((not up) and a < b)):
+                        yield from swap_gen(w, st, d)
+                    else:
+                        break
+            elif a is not None and b is not None and ((up and a > b) or ((not up) and a < b)):
                 yield from swap_gen(w, st, d)
         elif k == "fm":
             yield from fm_gen(w, st, op[1], op[2])
@@ -72,6 +82,8 @@ def run_drone(w, ph, start, st):
             st["pos"] = nbpos(op[4])
         elif k == "cc":
             yield from cc_gen(w, st, op[3])
+        elif k == "cx":
+            yield from cx_gen(w, st, op[1], op[2])
         else:
             raise ValueError(k)
 
@@ -117,6 +129,7 @@ def fm_gen(w, st, B, T):
             yield 3
             x = w.val.get(nbpos(d))
             while x is None:
+                st["wait"] = st.get("wait", 0) + 3
                 yield 3
                 x = w.val.get(nbpos(d))
             if x > bv:
@@ -129,6 +142,7 @@ def fm_gen(w, st, B, T):
             yield 3
             x = w.val.get(nbpos(d))
             while x is None:
+                st["wait"] = st.get("wait", 0) + 3
                 yield 3
                 x = w.val.get(nbpos(d))
             if x < tv:
@@ -137,6 +151,52 @@ def fm_gen(w, st, B, T):
             yield from swap_gen(w, st, td)
             continue
         return
+
+
+def cx_gen(w, st, BS, CS):
+    def nbpos(d, p=None):
+        dx, dy = DV[d]
+        p = st["pos"] if p is None else p
+        return ((p[0] + dx) % N, (p[1] + dy) % N)
+
+    def step(d):
+        yield ACT + 1
+        st["pos"] = nbpos(d)
+    for d, tops, od, pre in CS:
+        if pre:
+            yield from step(d)
+            yield from fm_gen(w, st, [], tops)
+            yield from step(od)
+    for d, lows, od, pre in BS:
+        if pre:
+            yield from step(d)
+            yield from fm_gen(w, st, lows, [])
+            yield from step(od)
+    for n in range(10):
+        yield 20
+        g = w.val.get(st["pos"])
+        hit = False
+        for d, tops, od, pre in CS:
+            x = w.val.get(nbpos(d))
+            if x is not None and g > x:
+                yield from swap_gen(w, st, d)
+                yield from step(d)
+                yield from fm_gen(w, st, [], tops)
+                yield from step(od)
+                hit = True
+                break
+        if not hit:
+            for d, lows, od, pre in BS:
+                x = w.val.get(nbpos(d))
+                if x is not None and g < x:
+                    yield from swap_gen(w, st, d)
+                    yield from step(d)
+                    yield from fm_gen(w, st, lows, [])
+                    yield from step(od)
+                    hit = True
+                    break
+        if not hit:
+            return
 
 
 def cc_gen(w, st, args):
@@ -179,6 +239,13 @@ def cc_gen(w, st, args):
                 ch = True
         yield 8 * len(EDG)
     for e in S:
+        yield 8
+        if e[5] >= 0:
+            px, py = st["pos"]
+            if abs(px - e[5]) + abs(py - e[6]) < abs(px - e[2]) + abs(py - e[3]):
+                yield from goto(e[5], e[6])
+                yield from swap_gen(w, st, e[7])
+                continue
         yield from goto(e[2], e[3])
         yield from swap_gen(w, st, e[4])
     yield from goto(AX, AY)

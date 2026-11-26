@@ -151,8 +151,18 @@ def cc(RD, EDG, NS, AX, AY):
 				S.append(e)
 				ch = True
 	for e in S:
-		goto(e[2], e[3])
-		swap(e[4])
+		if e[5] >= 0:
+			px = get_pos_x()
+			py = get_pos_y()
+			if abs(px - e[5]) + abs(py - e[6]) < abs(px - e[2]) + abs(py - e[3]):
+				goto(e[5], e[6])
+				swap(e[7])
+			else:
+				goto(e[2], e[3])
+				swap(e[4])
+		else:
+			goto(e[2], e[3])
+			swap(e[4])
 	goto(AX, AY)
 
 

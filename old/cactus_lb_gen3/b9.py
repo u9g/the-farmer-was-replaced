@@ -24,7 +24,19 @@ def has_dn(c, R):
 class Gen:
     def __init__(self):
         self.KL = int(E("KL", "3"))
-        self.walls = dp_walls(self.KL)
+        if E("WSPEC"):
+            off, pos = E("WSPEC").split(":")
+            pos = set(int(x) for x in pos.split(",") if x)
+            ws = []
+            d = int(off)
+            i = 0
+            while d <= 62:
+                ws.append(d)
+                d += (3 if i in pos else 2) + 1
+                i += 1
+            self.walls = ws
+        else:
+            self.walls = dp_walls(self.KL)
         self.R, self.o = build(self.walls)
         R, o = self.R, self.o
         self.NL = len(o)
@@ -339,6 +351,8 @@ class Gen:
         return best
 
     def plan(self):
+        if E("BMODE") == "4":
+            return self.plan4()
         o = self.o
         NL = self.NL
         self.percell()
@@ -357,7 +371,8 @@ class Gen:
                 c0 = sc(o[p]) + fw[0]
                 c1 = sc(o[q - 1]) + bw[0]
                 segA[(p, q, 0)] = (c0, 0, fw[4])
-                segA[(p, q, 1)] = (c1, 1, bw[4])
+                if E("AFWD") != "1":
+                    segA[(p, q, 1)] = (c1, 1, bw[4])
 
         def feas(T):
             INF = 10 ** 9
@@ -371,7 +386,7 @@ class Gen:
                     r = reach[(p, dp_)]
                     for q in range(p + 4, min(NL, p + LMAX) + 1):
                         for d in (0, 1):
-                            if dp_ == 0 and d == 1:
+                            if dp_ == 0 and d == 1 and E("FACE") != "1":
                                 continue  # facing at cut p
                             v = segA.get((p, q, d))
                             if v is None or BOOT + v[0] > T:
@@ -436,7 +451,22 @@ class Gen:
             return r
 
         # B boundaries b_0..b_31 (b_32 = b_0 + NL); candidates near A boundaries
-        cand = [sorted(set(x for x in range(ch[k][0] - W, ch[k][0] + W + 1) if self.adj_ok[x % NL])) for k in range(ND)]
+        # drone k ends A at its tail start (walk index n-K)
+        endidx = []
+        for k in range(ND):
+            p, q = ch[k]
+            n = q - p
+            K = self.KA[k]
+            wl = list(range(p, q)) if dirs[k] == 0 else list(range(q - 1, p - 1, -1))
+            endidx.append(wl[n - K] if K > 0 else wl[n - 1])
+        apos = [o[e] for e in endidx]
+        cen = endidx if E("BCEN") == "1" else [ch[k][0] for k in range(ND)]
+        cand = [sorted(set(x for x in range(cen[k] - W, cen[k] + W + 1) if self.adj_ok[x % NL])) for k in range(ND)]
+        if E("BCEN") == "1":
+            # keep candidates increasing in k
+            for k in range(1, ND):
+                lo_ = min(cand[k - 1]) + 1
+                cand[k] = [x for x in cand[k] if x >= lo_] or cand[k]
         best = None
         best = None
         for b0 in cand[0]:
@@ -458,13 +488,13 @@ class Gen:
                     cs = cand[k] if k < ND else [b0 + NL]
                     for b in cs:
                         for d in (0, 1):
-                            if k == ND and d == 0 and d0 == 1:
+                            if k == ND and d == 0 and d0 == 1 and E("FACE") != "1":
                                 continue  # chunk 31 fwd ends at b0+NL, chunk 0 bwd ends at b0: facing
                             bv = None
                             for (bp, dp_), (v, _) in f.items():
                                 if b - bp < 4 or b - bp > LMAX:
                                     continue
-                                if dp_ == 0 and d == 1:
+                                if dp_ == 0 and d == 1 and E("FACE") != "1":
                                     continue
                                 c = max(v, bcost(k - 1, bp, b)[d][0])
                                 if bv is None or c < bv[0]:
@@ -499,7 +529,578 @@ class Gen:
             self.cellsB.append(cl if r[1] == 0 else cl[::-1])
             self.KB.append(r[2])
         self.bch = self.cellsB
+        if E("BSA") == "1":
+            self.plan_bsa(apos, G, LMAX)
+            TB = self.TB
+        if E("BMODE") == "2":
+            self.plan_b2(apos, G, LMAX)
+            TB = self.TB
+        if E("BMODE") == "3":
+            self.plan_b3(ch, G)
+            TB = self.TB
+        if E("BMODE") == "5":
+            self.plan_b5(ch, dirs, G)
+            TB = self.TB
         print("plan TA %.0f TB %.0f est %.3f s" % (max(tA), TB, (max(tA) + TB + 600) / 6075.0), file=sys.stderr)
+
+    def chain_a_cost(self, p, q, t, G):
+        """A chunk [p,q) forward with deferred tail [t,q) (K = q - t)."""
+        cl = list(range(p, q))
+        n = q - p
+        K = q - t
+        f = 0.0
+        corr = self.corrA
+        stp = [0.0] * n
+        for j in range(n):
+            i = cl[j]
+            f += corr[i] + 405
+            if j > 0:
+                stp[j] = 201 * tdist(self.o[cl[j - 1]], self.o[i])
+                f += stp[j]
+        inl = sum(self.CFPI for j in range(n - K) if self.kind[cl[j]] == "p2")
+        bk = 0.0
+        bv = 0.0
+        forced = [j for j in range(n) if self.kind[cl[j]] in ("cx", "fm", "sf")]
+        e0 = min(forced) if forced else n
+        if n - K > e0:
+            return None
+        for j in range(n - K, n):
+            i = cl[j]
+            bk += self.fix[i] if self.kind[i] != "in3" else 0.0
+            bv += self.fvar[i]
+            if j < n - 1:
+                bk += stp[j + 1]
+        Z = float(E("ZB", "0.5"))
+        return f + inl + max(G, bk + Z * bv ** 0.5), K
+
+    def chain_a_cost_cells(self, cl, K, G):
+        n = len(cl)
+        f = 0.0
+        stp = [0.0] * n
+        for j in range(n):
+            i = cl[j]
+            f += self.corrA[i] + 405
+            if j > 0:
+                stp[j] = 201 * tdist(self.o[cl[j - 1]], self.o[i])
+                f += stp[j]
+        forced = [j for j in range(n) if self.kind[cl[j]] in ("cx", "fm", "sf")]
+        e0 = min(forced) if forced else n
+        if n - K > e0:
+            return None
+        inl = sum(self.CFPI for j in range(n - K) if self.kind[cl[j]] == "p2")
+        bk = 0.0
+        bv = 0.0
+        for j in range(n - K, n):
+            i = cl[j]
+            bk += self.fix[i] if self.kind[i] != "in3" else 0.0
+            bv += self.fvar[i]
+            if j < n - 1:
+                bk += stp[j + 1]
+        Z = float(E("ZB", "0.5"))
+        return f + inl + max(G, bk + Z * bv ** 0.5)
+
+    def plan_b5(self, ch, dirs, G):
+        o = self.o
+        NL = self.NL
+        BOOT = float(E("BOOT", "200"))
+        Acand = []
+        for k, ((p, q), d) in enumerate(zip(ch, dirs)):
+            cl = list(range(p, q)) if d == 0 else list(range(q - 1, p - 1, -1))
+            n = len(cl)
+            opts = {}
+            for K in range(1, n + 1):
+                e = cl[n - K]  # drone ends at walk index n-K
+                # B chunk boundary at e must be an allowed cut
+                if not self.adj_ok[e]:
+                    continue
+                r = self.chain_a_cost_cells(cl, K, G)
+                if r is None:
+                    continue
+                opts[e] = (BOOT + self.offs[k] * 200 + r, K)
+            if not opts:
+                opts[cl[0]] = (BOOT + self.offs[k] * 200 + self.chain_a_cost_cells(cl, n, G), n)
+            Acand.append(opts)
+        TAmin = max(min(v[0] for v in a.values()) for a in Acand)
+        slack = float(E("ASLACK", "600"))
+        allowed = [[e for e, v in Acand[k].items() if v[0] <= TAmin + slack] for k in range(len(ch))]
+        bmemo = {}
+
+        def bcost(t0, t1):
+            key = (t0, t1)
+            if key not in bmemo:
+                cl = [x % NL for x in range(t0, t1 if t1 > t0 else t1 + NL)]
+                bmemo[key] = self.chunk_cost(cl, False, G) if len(cl) >= 2 else (1e9, 0, 0, 0, 0)
+            return bmemo[key]
+        ND_ = len(ch)
+        best = None
+        for t0 in allowed[0]:
+            f = {t0: (0.0, None)}
+            hist = []
+            for k in range(1, ND_):
+                g = {}
+                for t in allowed[k]:
+                    bv = None
+                    for tp, (v, _) in f.items():
+                        if (t - tp) % NL < 2:
+                            continue
+                        c = max(v, bcost(tp, t)[0])
+                        if bv is None or c < bv[0]:
+                            bv = (c, tp)
+                    if bv is not None:
+                        g[t] = bv
+                hist.append(g)
+                f = g
+            for t, (v, _) in f.items():
+                c = max(v, bcost(t, t0)[0])
+                if best is None or c < best[0]:
+                    best = (c, t0, t, hist)
+        TB, t0, tl, hist = best
+        ts = [0] * ND_
+        ts[ND_ - 1] = tl
+        for k in range(ND_ - 1, 0, -1):
+            ts[k - 1] = hist[k - 1][ts[k]][1]
+        ts[0] = t0
+        self.KA = [Acand[k][ts[k]][1] for k in range(ND_)]
+        self.cellsB = []
+        self.KB = []
+        for k in range(ND_):
+            t1 = ts[(k + 1) % ND_]
+            cl = [x % NL for x in range(ts[k], t1 if t1 > ts[k] else t1 + NL)]
+            self.cellsB.append(cl)
+            self.KB.append(bcost(ts[k], t1)[4])
+        self.bch = self.cellsB
+        self.TB = TB
+        TA = max(Acand[k][ts[k]][0] for k in range(ND_))
+        print("B5: TAmin %.0f TA %.0f TB %.0f" % (TAmin, TA, TB), file=sys.stderr)
+
+    def plan_b3(self, ch, G):
+        """B chunks chained: B chunk k = [t_k, t_{k+1}) where t_k is drone k's A tail start."""
+        o = self.o
+        NL = self.NL
+        BOOT = float(E("BOOT", "200"))
+        # A costs per candidate t
+        Acand = []
+        for k, (p, q) in enumerate(ch):
+            opts = {}
+            for t in range(p, q):
+                if t > p and not self.adj_ok[t]:
+                    continue
+                r = self.chain_a_cost(p, q, t, G)
+                if r is None:
+                    continue
+                opts[t] = BOOT + self.offs[k] * 200 + r[0]
+            Acand.append(opts)
+        TAmin = max(min(v.values()) for v in Acand)
+        slack = float(E("ASLACK", "600"))
+        allowed = [[t for t, v in Acand[k].items() if v <= TAmin + slack] for k in range(len(ch))]
+        bmemo = {}
+
+        def bcost(t0, t1):
+            key = (t0, t1)
+            if key not in bmemo:
+                cl = [x % NL for x in range(t0, t1 if t1 > t0 else t1 + NL)]
+                bmemo[key] = self.chunk_cost(cl, False, G)
+            return bmemo[key]
+        best = None
+        ND_ = len(ch)
+        for t0 in allowed[0]:
+            f = {t0: (0.0, None)}
+            hist = []
+            for k in range(1, ND_):
+                g = {}
+                for t in allowed[k]:
+                    bv = None
+                    for tp, (v, _) in f.items():
+                        c = max(v, bcost(tp, t)[0])
+                        if bv is None or c < bv[0]:
+                            bv = (c, tp)
+                    if bv is not None:
+                        g[t] = bv
+                hist.append(g)
+                f = g
+            for t, (v, _) in f.items():
+                c = max(v, bcost(t, t0)[0])
+                if best is None or c < best[0]:
+                    best = (c, t0, t, hist)
+        TB, t0, tl, hist = best
+        ts = [0] * ND_
+        ts[ND_ - 1] = tl
+        for k in range(ND_ - 1, 0, -1):
+            ts[k - 1] = hist[k - 1][ts[k]][1]
+        ts[0] = t0
+        self.KA = [q - ts[k] for k, (p, q) in enumerate(ch)]
+        self.cellsB = []
+        self.KB = []
+        for k in range(ND_):
+            t1 = ts[(k + 1) % ND_]
+            cl = [x % NL for x in range(ts[k], t1 if t1 > ts[k] else t1 + NL)]
+            self.cellsB.append(cl)
+            self.KB.append(bcost(ts[k], t1)[4])
+        self.bch = self.cellsB
+        self.TB = TB
+        TA = max(Acand[k][ts[k]] for k in range(ND_))
+        print("B3: TAmin %.0f TA %.0f TB %.0f" % (TAmin, TA, TB), file=sys.stderr)
+
+    def plan4(self):
+        """B chunks balanced first (all forward, cyclic); A chunks each contain one B start b_k and
+        defer the tail [b_k, q_k) so the drone ends A where its B chunk starts."""
+        o = self.o
+        NL = self.NL
+        self.percell()
+        G = GROW_T + 30
+        BOOT = float(E("BOOT", "200"))
+        LMAX = int(E("LMAX", "40"))
+        # ---- B split (cyclic, forward)
+        bc = {}
+
+        def bcost(t0, t1):
+            key = (t0, t1)
+            if key not in bc:
+                cl = [x % NL for x in range(t0, t1)]
+                bc[key] = self.chunk_cost(cl, False, G)
+            return bc[key]
+
+        def bsplit(T, b0):
+            INF = 10 ** 9
+            reach = {b0: 0}
+            prev = {}
+            for pos in range(b0, b0 + NL):
+                if pos not in reach:
+                    continue
+                for L in range(4, LMAX + 1):
+                    q = pos + L
+                    if q > b0 + NL:
+                        break
+                    if q < b0 + NL and not self.adj_ok[q % NL]:
+                        continue
+                    if bcost(pos, q)[0] > T:
+                        continue
+                    if reach[pos] + 1 < reach.get(q, INF):
+                        reach[q] = reach[pos] + 1
+                        prev[q] = pos
+            if reach.get(b0 + NL, INF) > ND:
+                return None
+            ch = []
+            q = b0 + NL
+            while q > b0:
+                p = prev[q]
+                ch.append(p)
+                q = p
+            return ch[::-1]
+
+        b0s = [x for x in range(0, 30) if self.adj_ok[x]][:int(E("B0N", "6"))]
+        lo, hi = 0.0, 40000.0
+        bestb = None
+        for _ in range(22):
+            T = (lo + hi) / 2
+            got = None
+            for b0 in b0s:
+                r = bsplit(T, b0)
+                if r is not None:
+                    got = r
+                    break
+            if got is not None:
+                hi = T
+                bestb = got
+            else:
+                lo = T
+        bs = bestb
+        while len(bs) < ND:
+            # split longest
+            ext = bs + [bs[0] + NL]
+            k = max(range(len(bs)), key=lambda i: ext[i + 1] - ext[i])
+            m = (ext[k] + ext[k + 1]) // 2
+            while not self.adj_ok[m % NL]:
+                m += 1
+            bs.insert(k + 1, m)
+        bs = sorted(x % NL for x in bs)
+        self.TB = hi
+        # ---- A DP: chunk k = [p_k, p_{k+1}) contains bs[k]; p_0 = 0, p_ND = NL
+        # rotate so that bs[0] is the smallest >= 0 (already sorted); chunk k gets bs[k]
+        offs = [12.0] * ND
+        for it in range(4):
+            def acost(k, p, q):
+                t = bs[k]
+                r = self.chain_a_cost(p, q, t, G) if p <= t < q else None
+                if r is None:
+                    return None
+                return BOOT + offs[k] * 200 + r[0]
+
+            # DP over k: state p_k in (bs[k-1], bs[k]]
+            INF = 10 ** 18
+            f = {0: 0.0}
+            back = []
+            for k in range(ND):
+                g = {}
+                nexts = [NL] if k == ND - 1 else [q for q in range(bs[k] + 1, bs[k + 1] + 1) if self.adj_ok[q]]
+                for q in nexts:
+                    bv = None
+                    for p, v in f.items():
+                        c = acost(k, p, q)
+                        if c is None:
+                            continue
+                        c = max(v, c)
+                        if bv is None or c < bv[0]:
+                            bv = (c, p)
+                    if bv is not None:
+                        g[q] = bv
+                back.append(g)
+                f = {q: v[0] for q, v in g.items()}
+            TA = f[NL]
+            ps = [0] * (ND + 1)
+            ps[ND] = NL
+            for k in range(ND - 1, -1, -1):
+                ps[k] = back[k][ps[k + 1]][1]
+            ch = [(ps[k], ps[k + 1]) for k in range(ND)]
+            starts = [o[p] for p, q in ch]
+            offs_, plans = spawn_plan(tuple(starts), (0, 0))
+            offs = list(offs_)
+        self.chA, self.offs, self.plans, self.TA = ch, offs, plans, TA
+        self.dirA = [0] * ND
+        self.cellsA = [list(range(p, q)) for p, q in ch]
+        self.KA = [q - bs[k] for k, (p, q) in enumerate(ch)]
+        self.cellsB = []
+        self.KB = []
+        ext = bs + [bs[0] + NL]
+        for k in range(ND):
+            cl = [x % NL for x in range(ext[k], ext[k + 1])]
+            self.cellsB.append(cl)
+            self.KB.append(bcost(ext[k], ext[k + 1])[4])
+        self.bch = self.cellsB
+        print("plan4 TA %.0f TB %.0f est %.3f s; avg off %.1f" % (TA, self.TB, (TA + self.TB + 600) / 6075.0, sum(offs) / ND), file=sys.stderr)
+
+    def plan_bsa(self, apos, G, LMAX):
+        """simulated annealing over cyclic B boundaries, directions and drone assignment."""
+        import math, random as rnd
+        o = self.o
+        NL = self.NL
+        rng = rnd.Random(int(E("SASEED", "1")))
+        # initial from current cellsB (chunk k -> drone k)
+        bnd = []
+        dirs = []
+        for cl in self.cellsB:
+            # chunk covers a cyclic interval; recover start index in path order
+            if len(cl) > 1 and (cl[1] - cl[0]) % NL == 1:
+                bnd.append(cl[0]); dirs.append(0)
+            else:
+                bnd.append(cl[-1]); dirs.append(1)
+        order = sorted(range(32), key=lambda k: bnd[k])
+        b = [bnd[k] for k in order]
+        dd = [dirs[k] for k in order]
+        asg = list(order)  # chunk j (in cyclic order) -> drone asg[j]
+        memo = {}
+
+        def ccost(p, q, d):
+            key = (p, q, d)
+            if key not in memo:
+                cl = [x % NL for x in range(p, q)]
+                if d == 1:
+                    cl = cl[::-1]
+                r = self.chunk_cost(cl, False, G)
+                memo[key] = (r[0], o[cl[0]], r[4], cl)
+            return memo[key]
+
+        def chunk(j):
+            p = b[j]
+            q = b[(j + 1) % 32] + (NL if j == 31 else 0)
+            return p, q
+
+        def jcost(j):
+            p, q = chunk(j)
+            if q - p < 4 or q - p > LMAX:
+                return 1e9
+            c, st, K, cl = ccost(p, q, dd[j])
+            return c + tdist(apos[asg[j]], st) * 200
+
+        def valid_cut(x):
+            return self.adj_ok[x % NL]
+
+        def facing_ok():
+            if E("FACE") == "1":
+                return True
+            for j in range(32):
+                if dd[j] == 0 and dd[(j + 1) % 32] == 1:
+                    return False
+            return True
+        costs = [jcost(j) for j in range(32)]
+        cur = max(costs)
+        best = (cur, list(b), list(dd), list(asg))
+        T0 = float(E("SAT0", "800"))
+        NIT = int(E("SAIT", "60000"))
+        for it in range(NIT):
+            temp = T0 * (1 - it / NIT) + 1
+            mv = rng.random()
+            saved = (list(b), list(dd), list(asg))
+            if mv < 0.5:
+                j = rng.randrange(32)
+                delta = rng.choice([-3, -2, -1, 1, 2, 3])
+                nb_ = b[j] + delta
+                lo = b[j - 1] if j > 0 else b[31] - NL
+                hi = b[j + 1] if j < 31 else b[0] + NL
+                if not (lo + 4 <= nb_ <= hi - 4) or not valid_cut(nb_):
+                    continue
+                b[j] = nb_
+                if j == 0:
+                    pass
+                if b[0] >= NL or b[0] < 0:
+                    b[:] = saved[0]
+                    continue
+            elif mv < 0.8:
+                j1, j2 = rng.randrange(32), rng.randrange(32)
+                asg[j1], asg[j2] = asg[j2], asg[j1]
+            else:
+                j = rng.randrange(32)
+                dd[j] = 1 - dd[j]
+                if not facing_ok():
+                    dd[j] = 1 - dd[j]
+                    continue
+            new = [jcost(j) for j in range(32)]
+            nc = max(new)
+            if nc <= cur or rng.random() < math.exp(-(nc - cur) / temp):
+                cur = nc
+                costs = new
+                if nc < best[0]:
+                    best = (nc, list(b), list(dd), list(asg))
+            else:
+                b[:], dd[:], asg[:] = saved
+        cur, b, dd, asg = best
+        cellsB = [None] * 32
+        KB = [None] * 32
+        for j in range(32):
+            p, q = chunk(j)
+            c, st, K, cl = ccost(p, q, dd[j])
+            cellsB[asg[j]] = cl
+            KB[asg[j]] = K
+        self.cellsB = cellsB
+        self.KB = KB
+        self.bch = cellsB
+        self.TB = cur
+        print("BSA: TB %.0f" % cur, file=sys.stderr)
+
+    def plan_b2(self, apos, G, LMAX):
+        import numpy as np
+        from scipy.optimize import linear_sum_assignment
+        o = self.o
+        NL = self.NL
+        TRAV = float(E("TRAV0", "600"))
+        segc = {}
+        for p in range(NL):
+            if not self.adj_ok[p]:
+                continue
+            for L in range(4, LMAX + 1):
+                q = p + L
+                if not self.adj_ok[q % NL] and q % NL != 0:
+                    continue
+                cl = [x % NL for x in range(p, q)]
+                fw = self.chunk_cost(cl, False, G)
+                bw = self.chunk_cost(cl[::-1], False, G)
+                segc[(p, L)] = ((fw[0], fw[4]), (bw[0], bw[4]))
+        b0s = [x for x in range(0, 60) if self.adj_ok[x]][:12]
+
+        def feas(T, b0):
+            INF = 10 ** 9
+            reach = {(b0, 1): 0}
+            prev = {}
+            for pos in range(b0, b0 + NL):
+                for dp_ in (0, 1):
+                    if (pos, dp_) not in reach:
+                        continue
+                    r = reach[(pos, dp_)]
+                    for L in range(4, LMAX + 1):
+                        q = pos + L
+                        if q > b0 + NL:
+                            break
+                        v = segc.get((pos % NL, L))
+                        if v is None:
+                            continue
+                        for d in (0, 1):
+                            if dp_ == 0 and d == 1:
+                                continue
+                            if q == b0 + NL and d == 0 and first_d[0] == 1:
+                                pass
+                            if v[d][0] + TRAV > T:
+                                continue
+                            if r + 1 < reach.get((q, d), INF):
+                                reach[(q, d)] = r + 1
+                                prev[(q, d)] = (pos, dp_, d)
+            best = None
+            for d in (0, 1):
+                if (b0 + NL, d) in reach and reach[(b0 + NL, d)] <= 32:
+                    best = d
+                    break
+            if best is None:
+                return None
+            ch = []
+            key = (b0 + NL, best)
+            while key[0] > b0:
+                p, dp_, d = prev[key]
+                ch.append((p, key[0], d))
+                key = (p, dp_)
+            return ch[::-1]
+
+        first_d = [0]
+        lo, hi = 0.0, 60000.0
+        bestch = None
+        for _ in range(26):
+            T = (lo + hi) / 2
+            got = None
+            for b0 in b0s:
+                ch = feas(T, b0)
+                if ch is not None:
+                    got = ch
+                    break
+            if got is not None:
+                hi = T
+                bestch = got
+            else:
+                lo = T
+        ch = bestch
+        while len(ch) < 32:
+            k = max(range(len(ch)), key=lambda i: ch[i][1] - ch[i][0])
+            p, q, d = ch[k]
+            m = (p + q) // 2
+            while not self.adj_ok[m % NL]:
+                m += 1
+            ch[k:k + 1] = [(p, m, d), (m, q, d)]
+        # chunk starts/costs
+        starts = []
+        costs = []
+        cells = []
+        Ks = []
+        for p, q, d in ch:
+            cl = [x % NL for x in range(p, q)]
+            if d == 1:
+                cl = cl[::-1]
+            v = segc.get((p % NL, q - p))
+            if v is None:
+                fw = self.chunk_cost(cl, False, G)
+                c, K = fw[0], fw[4]
+            else:
+                c, K = v[d]
+            starts.append(o[cl[0]])
+            costs.append(c)
+            cells.append(cl)
+            Ks.append(K)
+        C = np.array([[tdist(apos[k], starts[j]) * 200 + costs[j] for j in range(32)] for k in range(32)])
+        # bottleneck assignment
+        vals = sorted(set(C.flatten()))
+        lo, hi = 0, len(vals) - 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            M = (C > vals[mid]).astype(float)
+            r, a = linear_sum_assignment(M)
+            if M[r, a].sum() == 0:
+                hi = mid
+            else:
+                lo = mid + 1
+        thr = vals[lo]
+        M = np.where(C > thr, 1e9, C)
+        r, a = linear_sum_assignment(M)
+        self.cellsB = [cells[a[k]] for k in range(32)]
+        self.KB = [Ks[a[k]] for k in range(32)]
+        self.bch = self.cellsB
+        self.TB = thr
+        print("B2: T %.0f thr %.0f" % (hi, thr), file=sys.stderr)
 
     def build(self):
         o = self.o
@@ -552,11 +1153,14 @@ class Gen:
                 d, up = op[1], op[2]
                 fr = op[3] if len(op) > 3 else False
                 if fr:
-                    L.append("\tw = measure(%s)" % DN[d])
-                    L.append("\tif w != None and measure() %s w:" % (">" if up else "<"))
+                    L.append("	w = measure(%s)" % DN[d])
+                    L.append("	while w == None:")
+                    L.append("		w = measure(%s)" % DN[d])
+                    L.append("	while measure() %s measure(%s):" % (">" if up else "<", DN[d]))
+                    L.append("		swap(%s)" % DN[d])
                 else:
-                    L.append("\tif measure() %s measure(%s):" % (">" if up else "<", DN[d]))
-                L.append("\t\tswap(%s)" % DN[d])
+                    L.append("	if measure() %s measure(%s):" % (">" if up else "<", DN[d]))
+                    L.append("		swap(%s)" % DN[d])
             elif k == "fm":
                 _, B, T = op
                 L.append("\tfm(%s, %s)" % (lit([Dr(d) for d in B]), lit([Dr(d) for d in T])))
@@ -572,7 +1176,7 @@ class Gen:
                 L.append("\tcx(%s, %s)" % (lit([[Dr(a), [Dr(x) for x in b], Dr(c2), 1 if pr else 0] for a, b, c2, pr in BS]), lit([[Dr(a), [Dr(x) for x in b], Dr(c2), 1 if pr else 0] for a, b, c2, pr in CS])))
             elif k == "cc":
                 RD, EDG, NS, AX, AY = op[3]
-                L.append("\tcc(%s, %s, %d, %d, %d)" % (lit([[a, b, [[Dr(x), y] for x, y in cl]] for a, b, cl in RD]), lit([[a, b, x, y, Dr(z)] for a, b, x, y, z in EDG]), NS, AX, AY))
+                L.append("\tcc(%s, %s, %d, %d, %d)" % (lit([[a, b, [[Dr(x), y] for x, y in cl]] for a, b, cl in RD]), lit([[a, b, x, y, Dr(z), x2, y2, Dr(z2)] for a, b, x, y, z, x2, y2, z2 in EDG]), NS, AX, AY))
             else:
                 raise ValueError("unrendered op " + k)
         L.append("\treturn tl")
@@ -613,10 +1217,12 @@ class Gen:
                 if (lo, hi) in seen_e:
                     continue
                 seen_e.add((lo, hi))
-                # stand on a component cell
-                if c in comp:
-                    st, dd = c, d
-                EDG.append([slots[lo], slots[hi], st[0], st[1], dd])
+                # stand on a component cell (alternative: the other endpoint if it is a component cell)
+                st, dd = c, d
+                if m in comp:
+                    EDG.append([slots[lo], slots[hi], st[0], st[1], dd, m[0], m[1], OPP[d]])
+                else:
+                    EDG.append([slots[lo], slots[hi], st[0], st[1], dd, -1, -1, dd])
         return (RD, EDG, len(slots), anchor[0], anchor[1])
 
     def write(self, out):
