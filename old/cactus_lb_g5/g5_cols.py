@@ -14,6 +14,9 @@ from build_entry import path_moves
 E = os.environ.get
 PUSH = E("PUSH", "1") == "1"
 COLFIX = E("COLFIX", "0") == "1"   # sort a 3-wide column in place right after planting it
+COLFIX_A = E("COLFIX_A", "1") == "1"  # ... in round A (with COLFIX)
+TM_A = float(E("TM_A", "0"))          # ticks of the growth wait kept clear of tail work, round A
+TM_B = float(E("TM_B", "0"))          # ... round B
 MIRROR = E("MIRROR", "0") == "1"   # R walks too: the drone whose walk ends at a cut fixes the mixed cells just past it
 C_CM = float(E("C_CM", "290"))     # column sort at the middle cell: ticks + expected swaps
 C_SD = float(E("C_SD", "55"))      # its edge to the previous column
@@ -173,7 +176,7 @@ def walk_plan(lay, p, q, d, till, K, start, xstart=None, hx=True, nolast=False, 
             deferred.setdefault(t, []).append(it)
 
     def inline_ok(col, t):
-        return (col is not None and COLFIX and col["reg"] and col["plain"] and t + 2 < zone
+        return (col is not None and COLFIX and (COLFIX_A or not till) and col["reg"] and col["plain"] and t + 2 < zone
                 and not (t + 2 >= n - Wn) and (till or (PUSH and col["push"])))
 
     t = 0
@@ -300,7 +303,7 @@ def chunk_eval(lay, p, q, d, till, start):
         _, _, f, vf, b, vb = walk_plan(lay, p, q, d, till, K, start)
         f += ZF * max(vf, 0) ** 0.5
         b += ZB * vb ** 0.5
-        tot = f + max(GW, b)
+        tot = f + max(GW, b + ((TM_A if till else TM_B) if b > 0 else 0))
         if best is None or tot < best[0] - 1e-9:
             best = (tot, K, f, b, GW)
     c = corr(till, p, q)

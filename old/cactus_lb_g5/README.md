@@ -42,6 +42,7 @@ Measured in the simulator (mean of the run): first harvest 4.70 -> 4.44 s, secon
 - `python ../../.claude/skills/cactus-diag/cactus_diag.py --chunks TRACES... ENTRY.py`: when
   each chunk's drone is done in each round, mean and sd, and how often it was the latest.
 - `mc_col2.py`, `mc_col3.py`: Monte Carlo of the in-place column sort below.
+- `junction_sim.py`: the junction settle against the fewest swaps possible (see the last section).
 
 ## Tried, not used
 
@@ -78,3 +79,39 @@ At 6075 ticks/s an action is 32.9 ms. The goal is 32 x 1024^2 cactus: one sorted
 What is left in this design: the spread between drones (0.5 s over both rounds), deployment
 (0.76 s average before the first plant), and cheaper junction settles (18 per round, 0.5 to 0.8 s
 each, the widest spread of any tail item).
+
+## Looking for 7.25 s: where the 7.47 s goes, and what did not move it
+
+With the entry's own shapes (4 moves per 3-wide column in round A, 2 actions per cell in round B)
+the floor is: 0.76 s average arrival + 2.39 s planting + 1 s growth for round A, 1.56 s planting +
+1 s growth for round B, 0.03 s for the last harvest: 6.74 s. The entry is 0.73 s above that:
+
+- round A, 0.29 s: 0.05 s of inline swaps, about 0.10 s of tail work that does not fit the
+  growth wait, and 0.14 s because the harvest waits for the latest of 32 drones;
+- round B, 0.43 s: 0.05 s of inline swaps, 0.07 s of travel left over from the pre-travel, 0.12 s
+  of tail work over the wait, and 0.19 s for the latest drone.
+
+Tail work is about 31.5 drone-seconds per round against 32 drone-seconds of growth wait, so the
+wait is full: fix work moved into the forward pass costs time there, and fix work left in the
+tail runs past the wait. A third of the tail work is walking back (420 moves per round), a third
+is the junction settles, the rest swaps. Measured against that:
+
+- **Junction settle** (`junction_sim.py`): the shipped work list does 5.9 swaps where the fewest
+  possible is 5.5 (7.1 against 6.5 with nothing settled around it), so only its 7 moves can
+  shrink. Every visiting order is within 0.3 action of the shipped one; nearest-cell-first with a
+  free exit saves up to 2 of 13; settling while planting costs more (14.8). Not built: about
+  0.03 s.
+- **Layouts with fewer mixed cells**: 129 to 131 isolated middles instead of 144 (a 3-wide band in
+  a corner), or 60 to 86 with 7-cell junctions (four 3-wide bands, JMAX=7): 7.53 to 7.66 s
+  against 7.46 s on the same 128 seeds.
+- **A margin under the growth wait** (`TM_A`, `TM_B`), alone or with the in-place column sort in
+  round B only (`COLFIX_A=0`): 7.46 to 7.58 s. A short run of sorted columns still leaves its
+  first middle to the neighbour and its last one to the tail, so the planner hardly uses it.
+- **Planting on the way to the chunk start**: a drone crossing a 3-wide band could plant a
+  column's end cell and save its owner two moves, but only 43 such cells lie on shortest paths:
+  at most 0.09 s, in round A only. Not built.
+- **Starting every chunk at its nearer end**: start distances fall from 510 to 417 moves, but
+  the chunks that gain sit in the middle of 3-wide bands and would end facing each other there,
+  where the first tail fixes of both drones share cells. Not built.
+- The interpreter overhead of `fmc` is 23 ticks per call and of `jf` 240: nothing to unroll.
+
