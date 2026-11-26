@@ -2136,7 +2136,8 @@ enum TT {
 #[derive(Clone)]
 struct Token {
     ty: TT,
-    value: String,
+    /// (a keyword or symbol's text is the constant itself, not a copy)
+    value: std::borrow::Cow<'static, str>,
     start: usize,
 }
 
@@ -2236,7 +2237,7 @@ fn tokenize(code: &str) -> R<TokenStream> {
                     continue;
                 }
             }
-            stream.add(Token { ty: *ty, value: t.iter().collect(), start: num });
+            stream.add(Token { ty: *ty, value: std::borrow::Cow::Borrowed(CONSTANT_TOKENS[ci].0), start: num });
             num += len;
             continue 'outer;
         }
@@ -2337,7 +2338,7 @@ fn tokenize(code: &str) -> R<TokenStream> {
             return Err(format!("line {}: error_unknown_token `{}`", line, text[num..num + len].iter().collect::<String>()));
         }
         if ty != TT::Ignore {
-            stream.add(Token { ty, value: text[num..num + len].iter().collect(), start: num });
+            stream.add(Token { ty, value: std::borrow::Cow::Owned(text[num..num + len].iter().collect()), start: num });
         }
         num += len;
     }
@@ -2566,9 +2567,9 @@ impl Parser {
                 break;
             }
             let value = self.consume(TT::Identifier, None)?.value;
-            list.push(intern(value.as_str()));
-            hash_set.borrow_mut().insert(value.clone());
-            all_vars.borrow_mut().insert(value);
+            list.push(intern(value.as_ref()));
+            hash_set.borrow_mut().insert(value.to_string());
+            all_vars.borrow_mut().insert(value.into_owned());
             self.optional_variable_type_annotation()?;
             self.line_breaks();
             if self.cur() == TT::Assign {
@@ -2591,7 +2592,7 @@ impl Parser {
         let body = self.block(indentation, &hash_set, &new_set(), all_vars, imported, false, true)?;
         let mut vars: Vec<Rc<str>> = hash_set.borrow().iter().map(|s| intern(s.as_str())).collect();
         vars.sort();
-        let name: Rc<str> = intern(token2.value.as_str());
+        let name: Rc<str> = intern(token2.value.as_ref());
         let mut function_node = PN::new(
             NK::Function { params: list, name: name.clone(), vars },
             token.start,
@@ -2675,10 +2676,10 @@ impl Parser {
                 self.consume(TT::Global, None)?;
                 let t = self.consume(TT::Identifier, None)?;
                 self.optional_variable_type_annotation()?;
-                if vars.borrow().contains(&t.value) {
-                    return self.perr(&err("error_assign_before_global", &[t.value.clone()]), t.start);
+                if vars.borrow().contains(t.value.as_ref()) {
+                    return self.perr(&err("error_assign_before_global", &[t.value.to_string()]), t.start);
                 }
-                global_vars.borrow_mut().insert(t.value.clone());
+                global_vars.borrow_mut().insert(t.value.to_string());
                 return Ok(PN::new(NK::Global, t.start, t.start + t.value.len()));
             }
             TT::Import => {
@@ -2704,13 +2705,13 @@ impl Parser {
                 let t = self.consume(TT::From, None)?;
                 let t8 = self.consume(TT::Identifier, Some("error_invalid_import"))?;
                 self.consume(TT::Import, Some("error_invalid_import"))?;
-                let module: Rc<str> = intern(t8.value.as_str());
+                let module: Rc<str> = intern(t8.value.as_ref());
                 if self.stream.current().map(|c| c.value == "*").unwrap_or(false) {
                     if !global {
                         return self.perr("error_wildcard_imports_not_allowed_in_function", self.stream.current_string_start_index());
                     }
                     self.consume(TT::Mult, None)?;
-                    imported.borrow_mut().insert(t8.value.clone());
+                    imported.borrow_mut().insert(t8.value.to_string());
                     return Ok(PN::new(
                         NK::Import { module_names: vec![module], unpack: true, unpack_all: true, vars_to_unpack: Vec::new(), is_static },
                         t.start,
@@ -2755,7 +2756,7 @@ impl Parser {
         if self.cur() == TT::BracketOpen {
             self.consume(TT::BracketOpen, None)?;
             self.line_breaks();
-            list.push(self.consume(TT::Identifier, error)?.value);
+            list.push(self.consume(TT::Identifier, error)?.value.into_owned());
             self.line_breaks();
             loop {
                 if self.cur() == TT::Comma {
@@ -2765,7 +2766,7 @@ impl Parser {
                         self.consume(TT::BracketClose, None)?;
                         break;
                     }
-                    list.push(self.consume(TT::Identifier, error)?.value);
+                    list.push(self.consume(TT::Identifier, error)?.value.into_owned());
                     self.line_breaks();
                     continue;
                 }
@@ -2773,10 +2774,10 @@ impl Parser {
                 break;
             }
         } else {
-            list.push(self.consume(TT::Identifier, error)?.value);
+            list.push(self.consume(TT::Identifier, error)?.value.into_owned());
             while self.cur() == TT::Comma {
                 self.consume(TT::Comma, None)?;
-                list.push(self.consume(TT::Identifier, error)?.value);
+                list.push(self.consume(TT::Identifier, error)?.value.into_owned());
             }
             if let Some(e) = error {
                 if self.stream.current().is_some() && self.cur() != TT::NewLine {
@@ -2792,7 +2793,7 @@ impl Parser {
         let item = self.tuple_or_expression(false, TT::BracketClose, None, false)?;
         self.check_assignment_lhs_rec(&lhs, vars, global_vars, all_vars)?;
         Ok(PN::with(
-            NK::Assignment(Rc::from(token.value.as_str())),
+            NK::Assignment(Rc::from(token.value.as_ref())),
             token.start,
             token.start + token.value.len(),
             vec![lhs, item],
@@ -3073,7 +3074,7 @@ impl Parser {
                 while self.cur() == TT::Compare || self.cur() == TT::In {
                     let token = self.consume_any()?;
                     list.push(self.binary_expression(op_index + 1, can_line_break, exclude_token, false)?);
-                    list2.push(Rc::from(token.value.as_str()));
+                    list2.push(Rc::from(token.value.as_ref()));
                 }
                 let cops = list2.iter().map(|o| COp::of(o)).collect();
                 return Ok(PN::with(NK::Comparison(list2, cops), start, self.stream.current_string_end_index(), list));
@@ -3081,7 +3082,7 @@ impl Parser {
             let token2 = self.consume(*item, None)?;
             let mut node2 = self.binary_expression(op_index, can_line_break, exclude_token, false)?;
             let mut node3 = PN::new(
-                NK::Binary(Rc::from(token2.value.as_str()), token2.ty, BOp::of(&token2.value)),
+                NK::Binary(Rc::from(token2.value.as_ref()), token2.ty, BOp::of(&token2.value)),
                 token2.start,
                 token2.start + token2.value.len(),
             );
@@ -3113,7 +3114,7 @@ impl Parser {
                 let token = self.consume(*item2, None)?;
                 let item = self.expression(op_index, can_line_break, TT::NoToken, false)?;
                 return Ok(PN::with(
-                    NK::Unary(Rc::from(token.value.as_str())),
+                    NK::Unary(Rc::from(token.value.as_ref())),
                     token.start,
                     token.start + token.value.len(),
                     vec![item],
@@ -3175,7 +3176,7 @@ impl Parser {
                         }
                     } else {
                         let item2 = PN::new(
-                            NK::Value(intern(token4.value.as_str())),
+                            NK::Value(intern(token4.value.as_ref())),
                             token4.start,
                             token4.start + token4.value.len(),
                         );
@@ -3252,7 +3253,7 @@ impl Parser {
                 if let Some(v) = evaluate_constant(&token3.value) {
                     return Ok(PN::new(NK::Literal(v), token3.start, end));
                 }
-                Ok(PN::new(NK::Value(intern(token3.value.as_str())), token3.start, end))
+                Ok(PN::new(NK::Value(intern(token3.value.as_ref())), token3.start, end))
             }
             _ => self.perr("error_invalid_expression", self.stream.current_string_start_index()),
         }
@@ -4907,6 +4908,11 @@ enum Op {
     StoreIndex(u32),
     /// StoreIndex with one index, pushed bare (no MakeSeq)
     StoreIndex1(u32),
+    /// `if <literal>:`'s first pass: its Eb (null for none), CondLit(k) and ChargeFirst, then the
+    /// JumpIfFalse that follows (kept for a resume after a stop at the charge)
+    IfLit(*const Node, u32, u32),
+    /// a loop's back edge: Eb then Yp
+    YpE(*const Node, u32),
     /// a list literal of literals: the elements' Lit (the last one's node and their depth; null for
     /// none), MakeSeq and MkList in one; consts[k] holds the elements
     MkConstList(*const Node, u32, u32),
@@ -5222,8 +5228,8 @@ impl Compiler {
         let mut jf_first = Vec::new();
         match lit_k {
             Some(k) => {
-                self.emit(Op::CondLit(k));
-                self.emit(Op::ChargeFirst);
+                let (en, ed) = self.pending_eb.take().unwrap_or((std::ptr::null(), 0));
+                self.ops.push(Op::IfLit(en, ed, k));
                 jf_first.push(self.emit(Op::JumpIfFalse(0)));
             }
             None => {
@@ -5247,7 +5253,8 @@ impl Compiler {
                 self.patch(c, tail);
             }
             self.eb(np, depth);
-            self.emit(Op::Yp);
+            let (en, ed) = self.pending_eb.take().unwrap();
+            self.ops.push(Op::YpE(en, ed));
             // later passes
             if lit_k.is_none() && (wait_name.is_some() || items_spin) {
                 self.emit(Op::WaitPre(np, items_spin));
@@ -6381,6 +6388,28 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     }
                 }
                 Op::Jump(t) => pc = t as usize,
+                Op::IfLit(en, ed, k) => {
+                    if !en.is_null() {
+                        eb!(en, ed);
+                    }
+                    let c = is_true_value(&code.consts[k as usize])?;
+                    // ChargeFirst; if it stops, the JumpIfFalse after this decides on resume
+                    if charge(st, OPERATION_OPS) {
+                        vm.stack.push(V::Bool(c));
+                        stop!(pc);
+                    }
+                    let t = match ops[pc] {
+                        Op::JumpIfFalse(t) => t,
+                        _ => unreachable!(),
+                    };
+                    pc = if c { pc + 1 } else { t as usize };
+                }
+                Op::YpE(en, ed) => {
+                    eb!(en, ed);
+                    if yield_stops(st) {
+                        stop!(pc);
+                    }
+                }
                 Op::JumpIfFalse(t) => {
                     let v = vm.stack.pop().unwrap();
                     if matches!(v, V::Bool(false)) {
@@ -10609,9 +10638,11 @@ impl Sim {
     /// wait, or the end of this Execute call. `base` is the op count the current time stands for.
     /// (The ops skipped are consumed, for power, in this pass of Execute rather than spread over
     /// the later ones, as with any skipping.)
-    fn skip_busy_waits(&mut self, num: f64, base: f64) {
+    /// Returns min_op_count(num) when it can tell it at no cost: no drone is in a wait it could
+    /// skip, so the least op count of the others is that of every running drone.
+    fn skip_busy_waits(&mut self, num: f64, base: f64) -> Option<f64> {
         if self.paused {
-            return;
+            return None;
         }
         let mut limit = num - 1.0;
         // each skipped drone with its ops per pass
@@ -10632,7 +10663,13 @@ impl Sim {
             let running = b[0] & !b[1];
             let waits = b[2] ^ b[3];
             special = running & waits;
-            limit = limit.min(masked_min(&ex.ops[..n], running & !waits));
+            let m = masked_min(&ex.ops[..n], running & !waits);
+            if special == 0 {
+                // nothing to skip (min_op_count: num when no drone is running)
+                self.waiting_scratch = waiting;
+                return Some(if running != 0 { m } else { num });
+            }
+            limit = limit.min(m);
         }
         for si in 0..n {
             if n <= 64 {
@@ -10731,6 +10768,7 @@ impl Sim {
             }
         }
         self.waiting_scratch = waiting;
+        None
     }
 
     /// Execution.Execute
@@ -10765,8 +10803,10 @@ impl Sim {
                     }
                 }
             }
-            self.skip_busy_waits(num, global_op_count);
-            let g = self.min_op_count(num);
+            let g = match self.skip_busy_waits(num, global_op_count) {
+                Some(g) => g,
+                None => self.min_op_count(num),
+            };
             self.execution.as_mut().unwrap().global_op_count = g;
 
             let mut num2 = 0.0;
