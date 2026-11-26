@@ -5437,8 +5437,19 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     let s = stm(st);
                     let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
                     let exec_time = if op.as_ref() == "=" {
-                        // get_value_to_assign for "=": the value itself, no time
-                        scope_set_var(scope, value, rhs, false);
+                        // get_value_to_assign for "=": the value itself, no time. scope_set_var sets
+                        // the first scope up the chain holding the name: the slot the target's
+                        // lookup cache points at, if still valid.
+                        let lnode = node_ref(ln);
+                        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
+                        if !slot.is_null() {
+                            let e = unsafe { &mut *slot };
+                            e.1 = rhs;
+                            e.2 = false;
+                        } else {
+                            scope_set_var(scope, value, rhs, false);
+                            remember_slot(scope, value, &lnode.lookup);
+                        }
                         0.0
                     } else {
                         let before = scope_evaluate(scope, value)?.0;
@@ -5617,7 +5628,29 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(&lhs)])));
                     }
                     let mut steps: i32 = 0;
-                    let result = index_at(lhs, std::slice::from_ref(idx), &mut steps, None)?;
+                    // a list or tuple and a number: index_at's single index (one step)
+                    let fast = match (lhs, idx) {
+                        (V::List(_) | V::Tuple(_), V::Num(x)) => {
+                            let count = seq_len(lhs) as f64;
+                            let mut num = *x;
+                            if num < 0.0 {
+                                num += count;
+                            }
+                            if num < 0.0 || num >= count || num.is_nan() {
+                                None
+                            } else {
+                                Some(seq_get(lhs, num as i32 as usize))
+                            }
+                        }
+                        _ => None,
+                    };
+                    let result = match fast {
+                        Some(v) => {
+                            steps = 1;
+                            v
+                        }
+                        None => index_at(lhs, std::slice::from_ref(idx), &mut steps, None)?,
+                    };
                     vm.stack.push(result);
                     if charge(st, OPERATION_OPS * steps as f64) {
                         stop!(pc);
@@ -6343,6 +6376,50 @@ impl<'a> Val<'a> {
             Val::R(r) => r.clone(),
             Val::O(v) => v,
         }
+    }
+}
+
+/// The slot the lookup cache points at, if it is still this name's (assigned or not: for a store).
+#[inline(always)]
+fn scope_slot_store_cached(scope: &ScopeRef, key: usize, c: u64) -> *mut (Rc<str>, V, bool) {
+    if c == 0 {
+        return std::ptr::null_mut();
+    }
+    let bit = bloom_bit(key);
+    let hops = (c & 0xff) - 1;
+    let idx = (c >> 8) as usize;
+    let mut s: &mut Scope = unsafe { &mut *scope.as_ptr() };
+    for _ in 0..hops {
+        if s.vars.bloom & bit != 0 {
+            return std::ptr::null_mut();
+        }
+        match &s.parent_scope {
+            Some(p) => s = unsafe { &mut *p.as_ptr() },
+            None => return std::ptr::null_mut(),
+        }
+    }
+    match s.vars.items.get_mut(idx) {
+        Some(e) if name_key(&e.0) == key => e as *mut _,
+        _ => std::ptr::null_mut(),
+    }
+}
+
+/// Fills a lookup cache with where a name is found from this scope (after a store).
+#[inline(never)]
+fn remember_slot(scope: &ScopeRef, name: &str, cache: &Cell<u64>) {
+    let key = name_key(name);
+    let mut hops = 0u64;
+    let mut s: &Scope = unsafe { &*scope.as_ptr() };
+    loop {
+        if let Some(i) = s.vars.find(key) {
+            cache.set(((i as u64) << 8) | (hops + 1));
+            return;
+        }
+        match &s.parent_scope {
+            Some(p) => s = unsafe { &*p.as_ptr() },
+            None => return,
+        }
+        hops += 1;
     }
 }
 
