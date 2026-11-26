@@ -52,6 +52,74 @@ class Layout:
             drop = set(c for c in mids if dist.get(c, 99) <= TAP)
             R = set(R) - drop
             o = [c for c in o if c not in drop]
+        TX = int(E("TAPERX", "0"))
+        if TX:
+            wallset = set(walls)
+            R = set(R)
+            conn = [c for c in R if (c[0] + c[1]) in wallset]
+            bw = {}
+            sd = 0
+            for w in widths:
+                for t in range(sd, sd + w):
+                    bw[t] = (sd, w)
+                sd += w + 1
+
+            def mm_comp_size(Rs, wc):
+                lo_ = lambda c: any(d not in UPD for d, m in nb(c, Rs))
+                up_ = lambda c: any(d in UPD for d, m in nb(c, Rs))
+                isM = lambda c: c in Rs and lo_(c) and up_(c)
+                if not isM(wc):
+                    return 0
+                seen = {wc}
+                st = [wc]
+                while st:
+                    x = st.pop()
+                    for d, m in nb(x, Rs):
+                        if m not in seen and isM(m) and any(isM(z) for dd, z in nb(m, Rs)):
+                            seen.add(m)
+                            st.append(m)
+                return len(seen)
+            for wc in conn:
+                swl = wc[0] + wc[1]
+                for far, band_d in ((swl - 3, swl - 1), (swl + 3, swl + 1)):
+                    if band_d in bw and bw[band_d][1] == 3:
+                        for rad in range(1, TX + 1):
+                            if mm_comp_size(R, wc) <= int(E("JMAX", "4")):
+                                break
+                            drop = set(c for c in R if c[0] + c[1] == far and abs(c[0] - wc[0]) + abs(c[1] - wc[1]) <= rad)
+                            R = R - drop
+            o = [c for c in o if c in R]
+        EX = int(E("EXTRA", "0"))
+        if EX:
+            R = set(R)
+            o = list(o)
+            pos = {c: i for i, c in enumerate(o)}
+            wallset = sorted(set(walls))
+            # candidate interior connectors: wall cells with 4 region neighbours, spread out
+            cand = []
+            for wd in wallset:
+                cells = [(x, wd - x) for x in range(N) if 0 <= wd - x < N]
+                inner = [c for c in cells if c not in R and len(nb(c, R)) == 4]
+                if inner:
+                    cand.append((wd, inner))
+            chosen = []
+            k = 0
+            while len(chosen) < EX and k < 200:
+                for wd, inner in cand:
+                    if len(chosen) >= EX:
+                        break
+                    j = (len(inner) * (2 * (k // len(cand)) + 1)) // (2 * (k // len(cand) + 1) + 2 * (k // len(cand)))
+                    c = inner[min(len(inner) - 1, j)]
+                    if c not in chosen and all(abs(c[0] - z[0]) + abs(c[1] - z[1]) > 6 for z in chosen):
+                        chosen.append(c)
+                    k += 1
+                k += 1
+            for c in chosen:
+                R.add(c)
+                # insert right after its earliest region neighbour in the path
+                j = min(pos[m] for d, m in nb(c, R) if m in pos)
+                o.insert(j + 1, c)
+                pos = {cc: i for i, cc in enumerate(o)}
         self.R, self.o = R, o
         self.n = len(o)
         self.pos = {c: i for i, c in enumerate(o)}
@@ -260,6 +328,7 @@ def plan(lay):
         return memo[key]
 
     def offs_of(p):
+        if E('ZOFF'): return 0.0
         return T_ACT * (tdist((0, 0), o[p]) + DEPTH) * BOOT
 
     def feas(T, offf):
@@ -305,7 +374,7 @@ def plan(lay):
             ch[k:k + 1] = [(p, m), (m, q)]
         starts = [o[p] for p, q in ch]
         offs, plans = spawn_plan(tuple(starts), (0, 0))
-        actual = {ch[k][0]: offs[k] * T_ACT + T_ACT for k in range(ND)}
+        actual = {ch[k][0]: (0 if E('ZOFF') else offs[k] * T_ACT + T_ACT) for k in range(ND)}
         fin = [actual[p] + cA(p, q)[0] for p, q in ch]
         print("A iter", it, "T %.0f" % hi, "actual max %.0f (%.3fs)" % (max(fin), max(fin) / 6075), file=sys.stderr)
         offf = (lambda act: (lambda p: act.get(p, offs_of(p))))(dict(actual))
@@ -371,6 +440,8 @@ def render(name, ops):
             L.append("\tmove(%s)" % DN[op[1]])
         elif k == "till":
             L.append("\ttill()")
+        elif k == "water":
+            L.append("	use_item(Items.Water)")
         elif k == "plant":
             L.append("\tplant(Entities.Cactus)")
         elif k == "LP":
@@ -379,6 +450,9 @@ def render(name, ops):
             d, up = op[1], op[2]
             L.append("\tif measure() %s measure(%s):" % (">" if up else "<", DN[d]))
             L.append("\t\tswap(%s)" % DN[d])
+        elif k == "xcasw":
+            d, up = op[1], op[2]
+            L.append("	xcasw(%s, %d)" % (DN[d], 1 if up else 0))
         elif k == "xcas":
             d, up = op[1], op[2]
             L.append("\txcas(%s, %d)" % (DN[d], 1 if up else 0))

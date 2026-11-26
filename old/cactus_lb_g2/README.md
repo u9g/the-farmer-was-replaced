@@ -21,3 +21,17 @@ Fixes:
 `ilp/`: scipy MILP (HiGHS) models used to bound the design: `ilp_types.py` shows a 725-cell
 layout needs at least 125 mixed cells; `span.py` shows a connected layout with no two mixed
 cells adjacent cannot span more than 3 antidiagonals (so junction chains are unavoidable).
+
+## g3 (7.86 s over a full 916-run attempt)
+
+    WIDTHS=2,2,2,2,2,3,3,3,3,3,3,3,2,2,2,2,2,2,2 TAPERX=4 JMAX=5 DEPTH=8 AITER=5 DIRS=1 python g3.py ../../cactus_lb_entry.py
+
+- Layout: seven 3-wide bands; next to each connector the far diagonal of a 3-wide band is dropped
+  (`TAPERX`, adaptive radius) so every junction component has at most 5 cells (725 cells).
+- Chunks may run in either direction. Race-free boundary rules: F|F and R|R as before; at a
+  facing cut (F|R) the predicted earlier finisher waits for the other's last plant plus 300
+  ticks before fixing the shared edge (`xcasw`), the other fixes its last cell inline; at a
+  back-to-back cut (R|F, round A only) the handler is chosen from the exact spawn arrival times
+  so its fix never coincides with the other drone's next swap. A mixed cell just past a cut is
+  fixed by the drone whose walk ends at that cut; a chunk never defers its first two cells.
+- Round-B travel happens in the drone's round-A slack (`PT`), before it waits for the harvest.
