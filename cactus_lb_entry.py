@@ -5,7 +5,7 @@
 # chain to at most three cacti inside a strip between two walls, so sorting only moves a cactus a
 # step or two instead of across the field. Gates sit on the walls every 12 tiles along the
 # diagonal, shifted by 6 on every other wall, so a chain can pass at most one gate. 809 tiles hold
-# a cactus; a harvest of that is about 20.9M, so two harvests make the 33,554,432 goal.
+# a cactus; a harvest of that is about 20.9M, so two harvests make the 33,554,432 goal (about 15.4s simulated).
 #
 # One drone per column. It plants the column end to end (tilling the first time), sorting each
 # new cactus into its neighbours as it lands, then sweeps end to end while another whole sweep
@@ -20,12 +20,12 @@
 GOAL = 33554432
 N = get_world_size()
 
-SORT_SLOTS = 120
+SORT_SLOTS = 126
 REPS = 3
 PLANT_SLOTS = 70
 TILL_SLOTS = 26
 SWEEP_SLOTS = 42
-START_SLOTS = 22
+START_SLOTS = 26
 GAP_TICKS = 60
 HARVESTERS = [0, 9, 17, 25, 31]
 HARVEST_TICKS = 15
@@ -54,12 +54,18 @@ def is_gate(cx, cy):
 	return (cx - cy - off) % GATE_STEP == 0
 
 
-CACTUS = []
-for cx in range(N):
+# Which tiles of column cx hold a cactus (all False outside the field). Each drone works out only
+# the three columns it needs, after it has been spawned: building the whole field up front cost the
+# first drone about 2 seconds before it could spawn anyone.
+def column(cx):
 	col = []
 	for cy in range(N):
-		col.append((cx + cy) % 4 != 0 or is_gate(cx, cy))
-	CACTUS.append(col)
+		col.append(False)
+	if cx < 0 or cx >= N:
+		return col
+	for cy in range(N):
+		col[cy] = (cx + cy) % 4 != 0 or is_gate(cx, cy)
+	return col
 
 
 def wait_until(e):
@@ -132,7 +138,9 @@ def fix(CN, CE, CS, CW, y):
 
 
 def worker(x, t0):
-	col = CACTUS[x]
+	col = column(x)
+	right = column(x + 1)
+	left = column(x - 1)
 	CN = []
 	CE = []
 	CS = []
@@ -146,11 +154,11 @@ def worker(x, t0):
 			if y + 1 < N:
 				n = col[y + 1]
 			if x + 1 < N:
-				e = CACTUS[x + 1][y]
+				e = right[y]
 			if y > 0:
 				so = col[y - 1]
 			if x > 0:
-				w = CACTUS[x - 1][y]
+				w = left[y]
 		CN.append(n)
 		CE.append(e)
 		CS.append(so)
