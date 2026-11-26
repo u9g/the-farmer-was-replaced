@@ -11277,19 +11277,47 @@ fn run_parallel(cfg: &Config, seeds: &[i32], workers: usize) -> Vec<R<RunResult>
 /// Runs cfg with seeds first_seed, first_seed + 1, ... on `workers` threads, each taking the next
 /// run as soon as it finishes one (at most `limit` runs). `accept` sees the results in seed order
 /// and returns false once it needs no more; runs already under way past that point are dropped.
-fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize>, mut accept: impl FnMut(i32, R<RunResult>) -> bool) {
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+/// With `budget` (accept stops once the runs' game times add up to it), a worker waits rather than
+/// start a run that the results in hand and the runs under way (at the mean time so far) already
+/// look like covering with a run to spare: those would mostly be dropped, and they would take
+/// cores from the runs still needed. It starts one if the runs fall short after all.
+fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize>, budget: Option<f64>, mut accept: impl FnMut(i32, R<RunResult>) -> bool) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Progress {
+        /// game time of every result received so far, in or out of order
+        known: f64,
+        received: usize,
+        stop: bool,
+    }
     let next = AtomicUsize::new(0);
-    let stop = AtomicBool::new(false);
+    let progress = std::sync::Mutex::new(Progress { known: 0.0, received: 0, stop: false });
+    let changed = std::sync::Condvar::new();
     let (tx, rx) = std::sync::mpsc::channel::<(usize, R<RunResult>)>();
     ABANDON.store(false, Ordering::Relaxed);
     std::thread::scope(|scope| {
         for _ in 0..workers.max(1).min(limit.unwrap_or(usize::MAX).max(1)) {
             let tx = tx.clone();
-            let (next, stop) = (&next, &stop);
+            let (next, progress, changed) = (&next, &progress, &changed);
             let spawned = std::thread::Builder::new().stack_size(256 << 20).spawn_scoped(scope, move || loop {
-                if stop.load(Ordering::Relaxed) {
-                    break;
+                {
+                    let mut p = progress.lock().unwrap();
+                    loop {
+                        if p.stop {
+                            return;
+                        }
+                        let covered = match budget {
+                            Some(b) if p.received > 0 => {
+                                let mean = p.known / p.received as f64;
+                                let under_way = next.load(Ordering::Relaxed) - p.received;
+                                p.known + (under_way as f64 - 1.0) * mean >= b
+                            }
+                            _ => false,
+                        };
+                        if !covered {
+                            break;
+                        }
+                        p = changed.wait(p).unwrap();
+                    }
                 }
                 let job = next.fetch_add(1, Ordering::Relaxed);
                 if limit.map_or(false, |l| job >= l) {
@@ -11313,16 +11341,22 @@ fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize
             if !accepting {
                 continue;
             }
+            {
+                let mut p = progress.lock().unwrap();
+                p.known += r.as_ref().map(|r| r.elapsed).unwrap_or(0.0);
+                p.received += 1;
+            }
             pending.insert(job, r);
             while let Some(r) = pending.remove(&want) {
                 if !accept(first_seed.wrapping_add(want as i32), r) {
                     accepting = false;
-                    stop.store(true, Ordering::Relaxed);
+                    progress.lock().unwrap().stop = true;
                     ABANDON.store(true, Ordering::Relaxed);
                     break;
                 }
                 want += 1;
             }
+            changed.notify_all();
         }
     });
 }
@@ -11349,7 +11383,8 @@ fn run_leaderboards(cfgs: &[Config], first_seed: i32, fixed_runs: Option<i32>, w
         let mut total = 0.0;
         let mut failure: Option<String> = None;
         let limit = fixed_runs.map(|n| n.max(1) as usize);
-        run_stream(cfg, first_seed, workers, limit, |seed, r| {
+        let budget = if fixed_runs.is_none() { Some(LEADERBOARD_TOTAL_SECONDS) } else { None };
+        run_stream(cfg, first_seed, workers, limit, budget, |seed, r| {
             let r = match r {
                 Ok(r) => r,
                 Err(e) => {
