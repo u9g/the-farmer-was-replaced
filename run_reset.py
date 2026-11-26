@@ -360,15 +360,19 @@ def mixed_job(i, d, need, flags):
 					co = Entities.Bush
 				else:
 					co = Entities.Grass
+			sx = SUN_STRIP and x < SUN_COLS and w >= 6 and num_unlocked(Unlocks.Sunflowers) > 0
 			for k in range(n):
-				if (x + get_pos_y()) % 2 == 0:
-					c = ce
+				if sx:
+					sun_cell()
 				else:
-					c = co
-				if w * n <= 3:
-					tend_wait(c)
-				else:
-					tend_plain(c)
+					if (x + get_pos_y()) % 2 == 0:
+						c = ce
+					else:
+						c = co
+					if w * n <= 3:
+						tend_wait(c)
+					else:
+						tend_plain(c)
 				if k < n - 1 or w == 1:
 					move(North)
 		cur = NEED[0]
@@ -676,8 +680,12 @@ def power_round():
 		all_drones(sun_cut_job, cells, v)
 
 
+SUN_STRIP = True
+SUN_COLS = 2
+
+
 def power_check():
-	if num_unlocked(Unlocks.Sunflowers) == 0 or width() < 6:
+	if num_unlocked(Unlocks.Sunflowers) == 0 or width() < 6 or (SUN_STRIP and drones() == 1):
 		return
 	if num_items(Items.Power) < 60 * drones():
 		power_round()
@@ -820,416 +828,589 @@ WET_PK = True
 WET_POLY = True
 
 # ---- shared mazes --------------------------------------------------------------------------
-# The field is cut into q x q mazes of size s. A leader drone per maze makes the maze, maps it
-# with one depth-first walk, splits it into territories around h home cells, and spawns the
-# other h - 1 workers, which inherit the map. Every worker polls where the treasure is and goes
-# for it only when it lies in its own territory, then walks back home.
+# One maze over the whole field and one drone per start cell (the centres of a grid of blocks).
+# Every drone stands on its start before the maze is made, then maps only its own part: a depth
+# first walk from its start that stops at other drones' starts and drops whatever hangs off a
+# path past the middle between two starts. A fresh maze is a tree, so the cells nearest a start
+# along the maze follow from that walk alone and no drone needs anybody else's map: nothing is
+# merged, nobody walks out from a leader, and each drone serves as soon as its own walk is done.
+# A drone parks at the middle of its cells, goes for the treasure when it lands there (or close
+# to its park, racing the owner), and on the way back tries the walls next to its path, since
+# every use knocks a few out, then re-plans its shortest ways. A treasure left lying (a cell no
+# map covers, from walls knocked out during the walks) is fetched by a drone that knows the cell
+# after MZ_RESCUE s, or found by search by the drone of its block after MZ_LOST s. The gold
+# count tells everybody when the 300 uses are spent: the owner of the last spot harvests, walks
+# to its start and makes the next maze there once the others are back on theirs.
 
-MZ_S = 0
-MZ_RX = 0
-MZ_RY = 0
-OPENS = []
-OWNER = []
-PDIR = []
-HOMES = []
-CPATH = []
-DEPTH = []
-PARK = []
-MZ_STAY = True
-MZ_PAR = True
+MZ_N = 0
+MZ_ME = 0
+MZ_PD = {}
+MZ_DP = {}
+MZ_OWN = {}
+MZ_ROOT = 0
+MZ_PARK = 0
+MZ_CUR = 0
+MZ_PATH = {}
+MZ_ADJ = {}
+MZ_PROBE = {}
+MZ_SHORT = True
+MZ_ORDER = -1
+MZ_RACE = 4
+MZ_PRUNE = True
+MZ_RACE2 = 0
+MZ_PRUNE_MIN = 4
+MZ_LOST = 3.0
+MZ_GX = 1
+MZ_GY = 1
+MZ_WAIT = 12
+MZ_RESCUE = 1.0
 MZ_PARKING = True
 
 
-def mz_map():
-	# depth-first walk from the drone's cell; OPENS[c] = open directions of local cell c
-	global OPENS
-	s = MZ_S
-	opens = []
-	for c in range(s * s):
-		opens.append(None)
-	x = get_pos_x() - MZ_RX
-	y = get_pos_y() - MZ_RY
-	c = x + y * s
-	o = []
-	for k in range(4):
+def mz_starts(n, d):
+	g = 1
+	while (g + 1) * (g + 1) <= d:
+		g += 1
+	while d % g != 0:
+		g -= 1
+	gx = d // g
+	st = []
+	for j in range(g):
+		for i in range(gx):
+			st.append((2 * i + 1) * n // (2 * gx) + ((2 * j + 1) * n // (2 * g)) * n)
+	return st
+
+
+def mz_walk(a, b):
+	# along the map's tree from cell a to cell b
+	n = MZ_N
+	pd = MZ_PD
+	dp = MZ_DP
+	up = []
+	down = []
+	while dp[a] > dp[b]:
+		k = pd[a]
+		up.append(BACK[k])
+		a = a - DX[k] - DY[k] * n
+	while dp[b] > dp[a]:
+		k = pd[b]
+		down.append(k)
+		b = b - DX[k] - DY[k] * n
+	while a != b:
+		k = pd[a]
+		up.append(BACK[k])
+		a = a - DX[k] - DY[k] * n
+		k = pd[b]
+		down.append(k)
+		b = b - DX[k] - DY[k] * n
+	for k in up:
+		move(DIRS[k])
+	for i in range(len(down) - 1, -1, -1):
+		move(DIRS[down[i]])
+
+
+def mz_paths(park):
+	# shortest ways from the park to every walked cell over the sides known open
+	n = MZ_N
+	adj = MZ_ADJ
+	path = {park: []}
+	q = [park]
+	i = 0
+	while i < len(q):
+		x = q[i]
+		i += 1
+		px = path[x]
+		for k in adj[x]:
+			y = x + DX[k] + DY[k] * n
+			if not (y in path):
+				path[y] = px + [k]
+				q.append(y)
+	return path
+
+
+def mz_try(x):
+	# try the untried sides of cell x (I stand on it); True if one turned out open
+	n = MZ_N
+	adj = MZ_ADJ
+	if x in MZ_PROBE:
+		pr = MZ_PROBE[x]
+	else:
+		px = x % n
+		py = x // n
+		pr = []
+		for k in range(4):
+			qx = px + DX[k]
+			qy = py + DY[k]
+			if qx >= 0 and qy >= 0 and qx < n and qy < n and (qx + qy * n) in adj and not (k in adj[x]):
+				pr.append(k)
+	if len(pr) == 0:
+		MZ_PROBE[x] = pr
+		return False
+	keep = []
+	got = False
+	for k in pr:
 		if can_move(DIRS[k]):
-			o.append(k)
-	opens[c] = o
+			y = x + DX[k] + DY[k] * n
+			adj[x].append(k)
+			adj[y].append(BACK[k])
+			if y in MZ_PROBE:
+				py = MZ_PROBE[y]
+				b = BACK[k]
+				if b in py:
+					py.remove(b)
+			got = True
+		else:
+			keep.append(k)
+	MZ_PROBE[x] = keep
+	return got
+
+
+def mz_dist(a, b):
+	n = MZ_N
+	pd = MZ_PD
+	dp = MZ_DP
+	d = 0
+	while dp[a] > dp[b]:
+		k = pd[a]
+		a = a - DX[k] - DY[k] * n
+		d += 1
+	while dp[b] > dp[a]:
+		k = pd[b]
+		b = b - DX[k] - DY[k] * n
+		d += 1
+	while a != b:
+		k = pd[a]
+		a = a - DX[k] - DY[k] * n
+		k = pd[b]
+		b = b - DX[k] - DY[k] * n
+		d += 2
+	return d
+
+
+def mz_explore(si):
+	# si: start cell -> drone index. Depth first from here, never into another start.
+	global MZ_PD
+	global MZ_DP
+	global MZ_OWN
+	global MZ_ROOT
+	global MZ_PARK
+	global MZ_CUR
+	global MZ_PATH
+	global MZ_ADJ
+	global MZ_PROBE
+	n = MZ_N
+	me = MZ_ME
+	c = get_pos_x() + get_pos_y() * n
+	root = c
+	rx = c % n
+	ry = c // n
+	pd = {c: -1}
+	dp = {c: 0}
+	order = [c]
+	found = []
 	stack = []
-	nxt = [0]
-	while True:
-		o = opens[c]
-		i = nxt[-1]
-		moved = False
-		while i < len(o):
-			k = o[i]
-			i += 1
-			nc = c + DX[k] + DY[k] * s
-			if opens[nc] == None:
-				nxt[-1] = i
-				move(DIRS[k])
-				stack.append(k)
-				c = nc
-				o2 = []
-				for k2 in range(4):
-					if can_move(DIRS[k2]):
-						o2.append(k2)
-				opens[c] = o2
-				nxt.append(0)
-				moved = True
-				break
-		if moved:
-			continue
-		if len(stack) == 0:
-			OPENS = opens
-			return
-		k = stack.pop()
-		nxt.pop()
-		move(DIRS[BACK[k]])
-		c = c - DX[k] - DY[k] * s
-
-
-def mz_branch(k0):
-	# walk into direction k0 from here, map that whole branch of the maze tree depth first and
-	# come back; at a fork, a free drone takes one of the branches. Returns [cell, opens] pairs.
-	s = MZ_S
-	out = []
-	hs = []
-	move(DIRS[k0])
-	stack = [k0]
-	c = (get_pos_x() - MZ_RX) + (get_pos_y() - MZ_RY) * s
-	o = []
+	kids = []
+	ks = []
 	for k in range(4):
 		if can_move(DIRS[k]):
-			o.append(k)
-	out.append([c, o])
-	kids = [[]]
-	for k in o:
-		if k != BACK[k0]:
-			kids[0].append(k)
-	while True:
+			nc = c + DX[k] + DY[k] * n
+			if nc in dp:
+				pass
+			elif nc in si:
+				pd[nc] = k
+				dp[nc] = 1
+				found.append(nc)
+			else:
+				ks.append(k)
+	kids.append(ks)
+	pending = len(ks)
+	nd = 0
+	while pending > 0:
 		ks = kids[-1]
 		if len(ks) > 0:
 			k = ks.pop()
-			if len(ks) > 0 and num_drones() < max_drones():
-				h = spawn_drone(mz_branch, k)
-				if h != None:
-					hs.append(h)
-					continue
+			pending -= 1
+			if (c + DX[k] + DY[k] * n) in dp:
+				continue
 			move(DIRS[k])
 			stack.append(k)
-			c = c + DX[k] + DY[k] * s
-			o = []
+			nd = dp[c] + 1
+			c = c + DX[k] + DY[k] * n
+			pd[c] = k
+			dp[c] = nd
+			order.append(c)
+			b = BACK[k]
+			ks = []
+			ks2 = []
+			hit = False
+			tie = False
+			cx = c % n - rx
+			cy = c // n - ry
 			for k2 in range(4):
-				if can_move(DIRS[k2]):
-					o.append(k2)
-			out.append([c, o])
-			nk = []
-			for k2 in o:
-				if k2 != BACK[k]:
-					nk.append(k2)
-			kids.append(nk)
+				if k2 != b and can_move(DIRS[k2]):
+					nc = c + DX[k2] + DY[k2] * n
+					if nc in dp:
+						pass
+					elif nc in si:
+						pd[nc] = k2
+						dp[nc] = nd + 1
+						found.append(nc)
+						hit = True
+						if si[nc] < me:
+							tie = True
+					elif MZ_ORDER != 0 and (DX[k2] * cx + DY[k2] * cy) * MZ_ORDER > 0:
+						ks2.append(k2)
+					else:
+						ks.append(k2)
+			if len(ks2) > 0:
+				ks = ks + ks2
+			kids.append(ks)
+			pending += len(ks)
+			if MZ_PRUNE and hit and len(si) >= MZ_PRUNE_MIN:
+				# whatever hangs off this path past its middle is the other drone's: skip it
+				h = nd + 1
+				L = nd
+				while L >= 0 and (2 * L > h or (2 * L == h and tie)):
+					pending -= len(kids[L])
+					kids[L] = []
+					L -= 1
 		else:
 			kids.pop()
 			k = stack.pop()
 			move(DIRS[BACK[k]])
-			c = c - DX[k] - DY[k] * s
+			c = c - DX[k] - DY[k] * n
+	# cut every path to another start at its middle (ties to the lower index)
+	cut = {}
+	for f in found:
+		j = si[f]
+		h = dp[f]
+		x = f
+		while x != root:
+			if 2 * dp[x] > h or (2 * dp[x] == h and j < me):
+				cut[x] = True
+				k = pd[x]
+				x = x - DX[k] - DY[k] * n
+			else:
+				break
+	own = {root: True}
+	cnt = {root: 1}
+	for i in range(1, len(order)):
+		x = order[i]
+		k = pd[x]
+		p = x - DX[k] - DY[k] * n
+		if p in own and not (x in cut):
+			own[x] = True
+			cnt[x] = 1
+		else:
+			cnt[x] = 0
+	for i in range(len(order) - 1, 0, -1):
+		x = order[i]
+		if cnt[x] > 0:
+			k = pd[x]
+			p = x - DX[k] - DY[k] * n
+			cnt[p] += cnt[x]
+	tot = len(own)
+	park = root
+	for x in own:
+		if 2 * cnt[x] > tot and dp[x] > dp[park]:
+			park = x
+	# the open sides of every cell walked (tree edges for now; walls only ever come down),
+	# and the sides toward other walked cells still to be tried
+	adj = {}
+	for x in order:
+		adj[x] = []
+	for i in range(1, len(order)):
+		x = order[i]
+		k = pd[x]
+		p = x - DX[k] - DY[k] * n
+		adj[p].append(k)
+		adj[x].append(BACK[k])
+	MZ_ADJ = adj
+	MZ_PROBE = {}
+	path = mz_paths(park)
+	MZ_PATH = path
+	MZ_PD = pd
+	MZ_DP = dp
+	MZ_OWN = own
+	MZ_ROOT = root
+	MZ_PARK = park
+	MZ_CUR = c
+
+
+def mz_seek(tc, chase):
+	# depth first toward cell tc, closer steps first; gives up once the treasure leaves tc.
+	# Returns the moves made, a simple path from where it started.
+	n = MZ_N
+	tx = tc % n
+	ty = tc // n
+	c = get_pos_x() + get_pos_y() * n
+	seen = {c: True}
+	stack = []
+	while c != tc:
+		if chase:
+			t = measure()
+			if t == None or t[0] + t[1] * n != tc:
+				return stack
+		x = c % n
+		y = c // n
+		best = -1
+		bd = 999
+		for k in range(4):
+			nc = c + DX[k] + DY[k] * n
+			if not (nc in seen) and can_move(DIRS[k]):
+				dd = abs(x + DX[k] - tx) + abs(y + DY[k] - ty)
+				if dd < bd:
+					bd = dd
+					best = k
+		if best >= 0:
+			move(DIRS[best])
+			stack.append(best)
+			c = c + DX[best] + DY[best] * n
+			seen[c] = True
+		else:
 			if len(stack) == 0:
-				break
-	for h in hs:
-		for e in wait_for(h):
-			out.append(e)
-	return out
+				return stack
+			k = stack.pop()
+			move(DIRS[BACK[k]])
+			c = c - DX[k] - DY[k] * n
+	return stack
 
 
-def mz_map_par():
-	global OPENS
-	s = MZ_S
-	opens = []
-	for c in range(s * s):
-		opens.append(None)
-	c = (get_pos_x() - MZ_RX) + (get_pos_y() - MZ_RY) * s
-	o = []
-	for k in range(4):
-		if can_move(DIRS[k]):
-			o.append(k)
-	opens[c] = o
-	hs = []
-	mine = []
-	for i in range(len(o)):
-		if i < len(o) - 1 and num_drones() < max_drones():
-			h = spawn_drone(mz_branch, o[i])
-			if h != None:
-				hs.append(h)
-				continue
-		mine.append(o[i])
-	for k in mine:
-		for e in mz_branch(k):
-			opens[e[0]] = e[1]
-	for h in hs:
-		for e in wait_for(h):
-			opens[e[0]] = e[1]
-	OPENS = opens
-
-
-
-def mz_split(h, start):
-	# h homes spread over the maze; every cell goes to the home nearest along the maze
-	global OWNER
-	global PDIR
-	global HOMES
-	global CPATH
-	global DEPTH
-	global PARK
-	s = MZ_S
-	g = 1
-	while g * g < h:
-		g += 1
-	homes = []
-	for j in range(g):
-		for i in range(g):
-			if len(homes) < h:
-				hx = (2 * i + 1) * s // (2 * g)
-				hy = (2 * j + 1) * s // (2 * g)
-				homes.append(hx + hy * s)
-	owner = []
-	pdir = []
-	depth = []
-	for c in range(s * s):
-		owner.append(-1)
-		pdir.append(-1)
-		depth.append(0)
-	front = []
-	for i in range(len(homes)):
-		owner[homes[i]] = i
-		front.append(homes[i])
-	while len(front) > 0:
-		nf = []
-		for c in front:
-			oc = owner[c]
-			for k in OPENS[c]:
-				nc = c + DX[k] + DY[k] * s
-				if owner[nc] == -1:
-					owner[nc] = oc
-					pdir[nc] = k
-					depth[nc] = depth[c] + 1
-					nf.append(nc)
-		front = nf
-	# path from the start cell to every home
-	seen = []
-	for c in range(s * s):
-		seen.append(-1)
-	seen[start] = 4
-	front = [start]
-	while len(front) > 0:
-		nf = []
-		for c in front:
-			for k in OPENS[c]:
-				nc = c + DX[k] + DY[k] * s
-				if seen[nc] == -1:
-					seen[nc] = k
-					nf.append(nc)
-		front = nf
-	cpath = []
-	for hc in homes:
-		p = []
-		c = hc
-		while c != start:
-			k = seen[c]
-			p.append(k)
-			c = c - DX[k] - DY[k] * s
-		q = []
-		for i in range(len(p) - 1, -1, -1):
-			q.append(p[i])
-		cpath.append(q)
-	OWNER = owner
-	PDIR = pdir
-	DEPTH = depth
-	# park cell of each territory: the cell whose removal leaves no piece over half of it
-	size = []
-	for c in range(s * s):
-		size.append(1)
-	order = []
-	for c in range(s * s):
-		order.append(c)
-	# children before parents: sort by depth, deepest first (bucket by depth)
-	md = 0
-	for c in range(s * s):
-		if depth[c] > md:
-			md = depth[c]
-	buckets = []
-	for dd in range(md + 1):
-		buckets.append([])
-	for c in range(s * s):
-		buckets[depth[c]].append(c)
-	tot = []
-	for i in range(len(homes)):
-		tot.append(0)
-	for c in range(s * s):
-		tot[owner[c]] += 1
-	for dd in range(md, 0, -1):
-		for c in buckets[dd]:
-			k = pdir[c]
-			p = c - DX[k] - DY[k] * s
-			size[p] += size[c]
-	park = []
-	for i in range(len(homes)):
-		c = homes[i]
-		half = tot[i] // 2
-		while True:
-			nxt = -1
-			for k in OPENS[c]:
-				nc = c + DX[k] + DY[k] * s
-				if owner[nc] == i and pdir[nc] == k and depth[nc] == depth[c] + 1 and size[nc] > half:
-					nxt = nc
-			if nxt < 0:
-				break
-			c = nxt
-		park.append(c)
-	PARK = park
-	HOMES = homes
-	CPATH = cpath
-
-
-def mz_work(me, goal, cost, stop):
-	s = MZ_S
-	for k in CPATH[me]:
-		move(DIRS[k])
-	# the treasure moves one action after a use; no other use can bring it back sooner
+def mz_serve(goal, per, cost, g0, park):
+	# 0: done, 1: the maze's uses are spent, 2: I harvested the spent maze
+	global MZ_CUR
+	global MZ_PATH
+	n = MZ_N
+	own = MZ_OWN
+	known = MZ_DP
+	paths = MZ_PATH
+	home = MZ_PARK
+	race = MZ_RACE
 	rep = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed)) + 0.001
-	home = HOMES[me]
-	cur = home
+	lim = g0 + 300 * per
+	cur = MZ_CUR
+	if park:
+		mz_walk(cur, home)
+		cur = home
+	last = -1
+	seen = 0
 	while True:
 		t = measure()
 		if t == None:
-			return 0
-		c = (t[0] - MZ_RX) + (t[1] - MZ_RY) * s
-		if OWNER[c] == me:
-			if MZ_STAY:
-				# along the tree of this territory: up from here to the meeting cell, down to c
-				a = cur
-				b = c
-				up = []
-				down = []
-				while DEPTH[a] > DEPTH[b]:
-					k = PDIR[a]
-					up.append(BACK[k])
-					a = a - DX[k] - DY[k] * s
-				while DEPTH[b] > DEPTH[a]:
-					k = PDIR[b]
-					down.append(k)
-					b = b - DX[k] - DY[k] * s
-				while a != b:
-					k = PDIR[a]
-					up.append(BACK[k])
-					a = a - DX[k] - DY[k] * s
-					k = PDIR[b]
-					down.append(k)
-					b = b - DX[k] - DY[k] * s
-				for k in up:
-					move(DIRS[k])
-				for i in range(len(down) - 1, -1, -1):
-					move(DIRS[down[i]])
-				cur = c
-				if num_items(Items.Gold) >= goal or get_time() > stop or not use_item(Items.Weird_Substance, cost):
-					harvest()
-					return 0
-				until = get_time() + rep
-				if MZ_PARKING and len(HOMES) >= 4:
-					a = cur
-					b = PARK[me]
-					up = []
-					down = []
-					while DEPTH[a] > DEPTH[b]:
-						k = PDIR[a]
-						up.append(BACK[k])
-						a = a - DX[k] - DY[k] * s
-					while DEPTH[b] > DEPTH[a]:
-						k = PDIR[b]
-						down.append(k)
-						b = b - DX[k] - DY[k] * s
-					while a != b:
-						k = PDIR[a]
-						up.append(BACK[k])
-						a = a - DX[k] - DY[k] * s
-						k = PDIR[b]
-						down.append(k)
-						b = b - DX[k] - DY[k] * s
-					for k in up:
-						move(DIRS[k])
-					for i in range(len(down) - 1, -1, -1):
-						move(DIRS[down[i]])
-					cur = PARK[me]
-				while get_time() < until:
-					pass
+			MZ_CUR = cur
+			if num_items(Items.Gold) >= goal:
+				return 0
+			return 1
+		c = t[0] + t[1] * n
+		go_for = False
+		if c != last:
+			# a new spot: mine, or close enough to my park to race its owner for it
+			last = c
+			seen = get_time()
+			if num_items(Items.Gold) > lim:
+				# this is the next maze already: my map is stale
+				MZ_CUR = cur
+				return 1
+			if c in own:
+				go_for = True
 			else:
-				p = []
-				while c != home:
-					k = PDIR[c]
-					p.append(k)
-					c = c - DX[k] - DY[k] * s
-				for i in range(len(p) - 1, -1, -1):
-					move(DIRS[p[i]])
-				if num_items(Items.Gold) >= goal or get_time() > stop or not use_item(Items.Weird_Substance, cost):
-					harvest()
+				if num_items(Items.Gold) >= goal:
 					return 0
-				until = get_time() + rep
-				for k in p:
-					move(DIRS[BACK[k]])
-				while get_time() < until:
-					pass
+				if park:
+					go_for = cur == home and c in paths and len(paths[c]) <= race
+				else:
+					go_for = c in known and mz_dist(cur, c) <= MZ_RACE2
+		elif MZ_LOST > 0 and not (c in known) and (c % n) * MZ_GX // n + ((c // n) * MZ_GY // n) * MZ_GX == MZ_ME:
+			# in my block but on nobody's map I know of: after a long wait, search the maze for it
+			deadline = seen + MZ_LOST
+			while c == last and get_time() < deadline:
+				t = measure()
+				if t == None:
+					c = -2
+				else:
+					c = t[0] + t[1] * n
+			if c == last:
+				p = mz_seek(c, True)
+				if get_pos_x() + get_pos_y() * n == c:
+					use_item(Items.Weird_Substance, cost)
+				for i in range(len(p) - 1, -1, -1):
+					move(DIRS[BACK[p[i]]])
+		elif c in known:
+			# not mine, but on my map: fetch it if its owner has not come for a while
+			deadline = seen + MZ_RESCUE
+			while c == last and get_time() < deadline:
+				t = measure()
+				if t == None:
+					c = -2
+				else:
+					c = t[0] + t[1] * n
+			go_for = c == last
+		else:
+			# wait for it to move (skippable: only reads the farm)
+			while c == last:
+				t = measure()
+				if t == None:
+					c = -2
+				else:
+					c = t[0] + t[1] * n
+		if go_for:
+			if cur == home and c in paths:
+				for k in paths[c]:
+					move(DIRS[k])
+			else:
+				mz_walk(cur, c)
+			cur = c
+			if num_items(Items.Gold) >= goal:
+				if get_entity_type() == Entities.Treasure:
+					harvest()
+				return 0
+			if not use_item(Items.Weird_Substance, cost):
+				g = num_items(Items.Gold)
+				if g >= lim and get_entity_type() == Entities.Treasure:
+					harvest()
+					if num_items(Items.Gold) > g:
+						MZ_CUR = cur
+						return 2
+			until = get_time() + rep
+			if park:
+				if c in paths:
+					p = paths[c]
+					if MZ_SHORT:
+						# on the way back, look for walls that came down, then re-plan
+						x = c
+						got = mz_try(x)
+						for i in range(len(p) - 1, -1, -1):
+							k = p[i]
+							move(DIRS[BACK[k]])
+							x = x - DX[k] - DY[k] * n
+							if mz_try(x):
+								got = True
+						if got:
+							paths = mz_paths(home)
+							MZ_PATH = paths
+					else:
+						for i in range(len(p) - 1, -1, -1):
+							move(DIRS[BACK[p[i]]])
+				else:
+					mz_walk(cur, home)
+				cur = home
+			while get_time() < until:
+				pass
 
 
-def mz_lead(rx, ry, s, h, goal, start, stop):
-	global MZ_S
-	global MZ_RX
-	global MZ_RY
-	MZ_S = s
-	MZ_RX = rx
-	MZ_RY = ry
-	cost = s * lvl_mult(Unlocks.Mazes)
-	go(rx + s // 2, ry + s // 2)
-	harvest()
-	plant(Entities.Bush)
-	# no maze may exist while other leaders still walk to their mazes
-	while get_time() < start:
-		pass
-	use_item(Items.Weird_Substance, cost)
-	if MZ_PAR:
-		mz_map_par()
-	else:
-		mz_map()
-	start = (get_pos_x() - rx) + (get_pos_y() - ry) * s
-	mz_split(h, start)
-	hs = []
-	for i in range(1, h):
-		d = spawn_drone(mz_work, i, goal, cost, stop)
-		if d != None:
-			hs.append(d)
-	mz_work(0, goal, cost, stop)
-	for d in hs:
-		wait_for(d)
-	return 0
+def mz_life(me, goal, stop, st, start_at, park):
+	global MZ_N
+	global MZ_ME
+	global MZ_GX
+	global MZ_GY
+	n = get_world_size()
+	g = 1
+	while (g + 1) * (g + 1) <= len(st):
+		g += 1
+	while len(st) % g != 0:
+		g -= 1
+	MZ_GY = g
+	MZ_GX = len(st) // g
+	MZ_N = n
+	MZ_ME = me
+	m = lvl_mult(Unlocks.Mazes)
+	cost = n * m
+	per = n * n * m
+	si = {}
+	for i in range(len(st)):
+		si[st[i]] = i
+	root = st[me]
+	go(root % n, root // n)
+	if me == 0:
+		harvest()
+		plant(Entities.Bush)
+		while get_time() < start_at:
+			pass
+		use_item(Items.Weird_Substance, cost)
+	while True:
+		# wait for the maze on my start cell
+		e = get_entity_type()
+		while e != Entities.Hedge and e != Entities.Treasure:
+			e = get_entity_type()
+		g0 = num_items(Items.Gold)
+		if get_pos_x() + get_pos_y() * n != root:
+			mz_seek(root, False)
+		mz_explore(si)
+		r = mz_serve(goal, per, cost, g0, park)
+		if r == 0:
+			return 0
+		act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
+		if r == 2:
+			# I emptied the maze: make the next one at my start, once the others stand on theirs
+			t0 = get_time()
+			g = num_items(Items.Gold)
+			finds = (goal - g) // per + 1
+			if g >= goal or get_time() > stop or num_items(Items.Weird_Substance) < cost * (min(finds, 300) + 1):
+				return 0
+			go(root % n, root // n)
+			plant(Entities.Bush)
+			until = t0 + act * MZ_WAIT
+			while get_time() < until:
+				pass
+			use_item(Items.Weird_Substance, cost)
+		else:
+			# wait for the harvest, then for the next maze (or give up when none comes)
+			while num_items(Items.Gold) < g0 + 301 * per:
+				pass
+			if num_items(Items.Gold) >= goal:
+				return 0
+			if get_pos_x() + get_pos_y() * n != root:
+				e = get_entity_type()
+				if e != Entities.Hedge and e != Entities.Treasure:
+					go(root % n, root // n)
+				else:
+					mz_seek(root, False)
+			until = get_time() + act * (MZ_WAIT + 2 * n + 4)
+			e = get_entity_type()
+			while e != Entities.Hedge and e != Entities.Treasure and get_time() < until:
+				e = get_entity_type()
+			if e != Entities.Hedge and e != Entities.Treasure:
+				return 0
 
 
 def maze_round(s, goal):
+	# s is ignored: the maze always covers the whole field. Keeps making mazes (each good for
+	# 300 treasures) until goal gold, MAZE_SECS, or too little weird substance for another maze.
 	stop = get_time() + MAZE_SECS
 	n = get_world_size()
-	q = n // s
-	d = max_drones()
-	nm = q * q
-	h = d // nm
+	d = min(max_drones(), n * n)
+	st = mz_starts(n, d)
+	park = MZ_PARKING and d >= 4
 	clear()
 	act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
-	start = get_time() + act * (nm + n + 4)
+	# farthest first, so the walks overlap the spawns
+	dist = []
+	for i in range(len(st)):
+		x = st[i] % n
+		y = st[i] // n
+		dist.append(min(x, n - x) + min(y, n - y))
+	idx = []
+	for i in range(1, len(st)):
+		idx.append(i)
+	for a in range(len(idx)):
+		for b in range(a + 1, len(idx)):
+			if dist[idx[b]] > dist[idx[a]]:
+				tmp = idx[a]
+				idx[a] = idx[b]
+				idx[b] = tmp
+	t = get_time()
+	ready = t
 	hs = []
-	for i in range(1, nm):
-		dd = spawn_drone(mz_lead, (i % q) * s, (i // q) * s, s, h, goal, start, stop)
-		if dd != None:
-			hs.append(dd)
-	mz_lead(0, 0, s, h, goal, start, stop)
-	for dd in hs:
-		wait_for(dd)
+	for j in range(len(idx)):
+		i = idx[j]
+		h = spawn_drone(mz_life, i, goal, stop, st, 0, park)
+		if h != None:
+			hs.append(h)
+		ready = max(ready, t + act * (j + 2 + dist[i]))
+	ready = max(ready, get_time() + act * (dist[0] + 2))
+	mz_life(0, goal, stop, st, ready + 2 * act, park)
+	for h in hs:
+		wait_for(h)
 
 
 
@@ -1662,10 +1843,10 @@ def opening():
 		elif num_unlocked(Unlocks.Expand) == 0:
 			buy(Unlocks.Expand)
 	while num_unlocked(Unlocks.Plant) == 0:
+		# grass regrows in 0.5 s, faster than a harvest and a move: stay on one cell
 		if can_harvest():
 			harvest()
-		move(North)
-		buy(Unlocks.Plant)
+			buy(Unlocks.Plant)
 	for u in OPENING_WOOD:
 		while num_unlocked(u[0]) < u[1]:
 			n = get_world_size()
@@ -1722,6 +1903,7 @@ PLAN = [
 	(Unlocks.Watering, 1),
 	(Unlocks.Expand, 3),
 	(Unlocks.Trees, 1),
+	(Unlocks.Trees, 2),
 	(Unlocks.Watering, 2),
 	(Unlocks.Expand, 4),
 	(Unlocks.Carrots, 2),
@@ -1731,7 +1913,6 @@ PLAN = [
 	(Unlocks.Sunflowers, 1),
 	(Unlocks.Pumpkins, 1),
 	(Unlocks.Speed, 4),
-	(Unlocks.Trees, 2),
 	(Unlocks.Fertilizer, 1),
 	(Unlocks.Mazes, 1),
 	(Unlocks.Megafarm, 1),
