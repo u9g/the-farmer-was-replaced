@@ -4650,6 +4650,11 @@ enum Op {
     /// x[i] with one index: x (a name, literal or the stack) and i (a name or literal) from
     /// code.fused[k], without building the index list
     IndexF(*const Node, u32),
+    /// IndexF, then the StoreAssign that follows it (kept as the fallback, where a stopped drone
+    /// resumes and where jumps land)
+    IndexStoreF(*const Node, u32),
+    /// CmpF, then the CondJumpF (+ JumpIfFalse) / LoopCond that follows it, likewise
+    CmpJF(*const Node, u32),
     /// pops the arguments (this many, or one argument list for u32::MAX), the static flag and the
     /// function; a builtin is called here (then TakeRv, 3 on), a user function charges its op and
     /// goes on to CallB
@@ -4783,7 +4788,7 @@ impl Compiler {
             let starts_with_eb = matches!(op, Op::Load(..) | Op::Lit(..) | Op::Eb(..) | Op::Def(..) | Op::Pass(..) | Op::BrkCont(..) | Op::ImportStart(..) | Op::LoadCallee(..));
             // (BinF / CmpF with a name or literal on the left are pushed through emit too)
             let starts_with_eb = starts_with_eb
-                || matches!(op, Op::BinF(_, k) | Op::CmpF(_, k) | Op::IndexF(_, k) if !matches!(self.fused[k as usize].0, Opnd::Stack));
+                || matches!(op, Op::BinF(_, k) | Op::CmpF(_, k) | Op::IndexF(_, k) | Op::IndexStoreF(_, k) | Op::CmpJF(_, k) if !matches!(self.fused[k as usize].0, Opnd::Stack));
             if !(starts_with_eb && d < 1000) {
                 self.ops.push(Op::Eb(n, d));
             }
@@ -4796,6 +4801,14 @@ impl Compiler {
             Op::Jump(t) | Op::JumpIfFalse(t) | Op::ForNext(t) | Op::AndOr(_, _, t) | Op::DotMod(_, t) | Op::BrkCont(_, _, t) | Op::CondJumpF(_, t) => *t = target,
             Op::LoopCond(_, t, _) => *t = target,
             _ => panic!("patch of a non-jump"),
+        }
+    }
+    /// a condition that ends in CmpF: let the CmpF also do the jump that follows
+    fn fuse_cmp(&mut self) {
+        if self.pending_eb.is_none() {
+            if let Some(Op::CmpF(n, k)) = self.ops.last().copied() {
+                *self.ops.last_mut().unwrap() = Op::CmpJF(n, k);
+            }
         }
     }
     /// a name or a literal operand, compiled into the fused instruction instead of its own
@@ -4890,6 +4903,11 @@ impl Compiler {
                 self.eb(np, depth);
                 self.expr(&node.slots[1], depth + 1);
                 if let NK::Value(_) = &node.slots[0].kind {
+                    if self.pending_eb.is_none() {
+                        if let Some(Op::IndexF(n, k)) = self.ops.last().copied() {
+                            *self.ops.last_mut().unwrap() = Op::IndexStoreF(n, k);
+                        }
+                    }
                     self.emit(Op::StoreAssign(np, Rc::as_ptr(&node.slots[0])));
                 } else {
                     self.emit(Op::SetNode(np));
@@ -4972,6 +4990,7 @@ impl Compiler {
             }
             None => {
                 self.expr(&node.slots[0], depth + 1);
+                self.fuse_cmp();
                 jf_first.push(self.emit(Op::CondJumpF(items_spin, 0)));
                 jf_first.push(self.emit(Op::JumpIfFalse(0)));
             }
@@ -5003,6 +5022,7 @@ impl Compiler {
                 }
                 None => {
                     self.expr(&node.slots[0], depth + 1);
+                    self.fuse_cmp();
                     jf_later = Some(self.emit(Op::LoopCond(items_spin, 0, body)));
                 }
             }
@@ -5608,6 +5628,142 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vm.stack.push(result);
                     if charge(st, OPERATION_OPS * steps as f64) {
                         stop!(pc);
+                    }
+                }
+                Op::IndexStoreF(n, k) => {
+                    let (a, b) = code.fused[k as usize];
+                    let lhs = match a {
+                        Opnd::Stack => Val::O(vm.stack.pop().unwrap()),
+                        _ => operand(st, &code, a, depth_off)?,
+                    };
+                    let idx = operand(st, &code, b, depth_off)?;
+                    let lhs = lhs.get();
+                    let idx = idx.get();
+                    stm(st).current_executing_node = n;
+                    // binary_value's checks for "[]" (the index list itself is never a function)
+                    if let V::Func(f) = &lhs {
+                        return Err(Ctrl::Err(err("error_function_in_operator", &[f.name.to_string(), "[]".to_string()])));
+                    }
+                    if !(lhs.is_seq() || matches!(lhs, V::Dict(_))) {
+                        return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(&lhs)])));
+                    }
+                    let mut steps: i32 = 0;
+                    // a list or tuple and a number: index_at's single index (one step)
+                    let fast = match (lhs, idx) {
+                        (V::List(_) | V::Tuple(_), V::Num(x)) => {
+                            let count = seq_len(lhs) as f64;
+                            let mut num = *x;
+                            if num < 0.0 {
+                                num += count;
+                            }
+                            if num < 0.0 || num >= count || num.is_nan() {
+                                None
+                            } else {
+                                Some(seq_get(lhs, num as i32 as usize))
+                            }
+                        }
+                        _ => None,
+                    };
+                    let result = match fast {
+                        Some(v) => {
+                            steps = 1;
+                            v
+                        }
+                        None => index_at(lhs, std::slice::from_ref(idx), &mut steps, None)?,
+                    };
+                    vm.stack.push(result);
+                    if charge(st, OPERATION_OPS * steps as f64) {
+                        stop!(pc);
+                    }
+                    // the StoreAssign after this one, done here
+                    let (an, ln) = match ops[pc] {
+                        Op::StoreAssign(an, ln) => (an, ln),
+                        _ => unreachable!(),
+                    };
+                    pc += 1;
+                    {
+                    stm(st).current_executing_node = an;
+                    let rhs = vm.stack.pop().unwrap();
+                    let value = match &node_ref(ln).kind {
+                        NK::Value(v) => v,
+                        _ => unreachable!(),
+                    };
+                    let op = match &node_ref(an).kind {
+                        NK::Assignment(op) => op,
+                        _ => unreachable!(),
+                    };
+                    let s = stm(st);
+                    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+                    let exec_time = if op.as_ref() == "=" {
+                        // get_value_to_assign for "=": the value itself, no time. scope_set_var sets
+                        // the first scope up the chain holding the name: the slot the target's
+                        // lookup cache points at, if still valid.
+                        let lnode = node_ref(ln);
+                        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
+                        if !slot.is_null() {
+                            let e = unsafe { &mut *slot };
+                            e.1 = rhs;
+                            e.2 = false;
+                        } else {
+                            scope_set_var(scope, value, rhs, false);
+                            remember_slot(scope, value, &lnode.lookup);
+                        }
+                        0.0
+                    } else {
+                        let before = scope_evaluate(scope, value)?.0;
+                        let (v, exec_time) = get_value_to_assign(Some(&before), &rhs, op)?;
+                        scope_set_var(scope, value, v, false);
+                        exec_time
+                    };
+                    if charge(st, OPERATION_OPS * exec_time) {
+                        stop!(pc);
+                    }
+                    }
+                }
+                Op::CmpJF(n, k) => {
+                    let (a, b) = code.fused[k as usize];
+                    let lhs = match a {
+                        Opnd::Stack => Val::O(vm.stack.pop().unwrap()),
+                        _ => operand(st, &code, a, depth_off)?,
+                    };
+                    let rhs = operand(st, &code, b, depth_off)?;
+                    stm(st).current_executing_node = n;
+                    let (ops_t, cops) = match &node_ref(n).kind {
+                        NK::Comparison(o, c) => (o, c),
+                        _ => unreachable!(),
+                    };
+                    let (flag, steps) = compare_two(ops_t, cops, lhs.get(), rhs.get())?;
+                    if let Val::O(v) = lhs {
+                        vdrop(v);
+                    }
+                    if let Val::O(v) = rhs {
+                        vdrop(v);
+                    }
+                    vm.stack.push(V::Bool(flag));
+                    if charge(st, OPERATION_OPS * steps as f64) {
+                        stop!(pc);
+                    }
+                    // the condition jump after this one, done here
+                    match ops[pc] {
+                        Op::CondJumpF(items_spin, t) => {
+                            let cv = vm.stack.pop().unwrap();
+                            let condition = cond_truth(st, &cv, items_spin)?;
+                            vdrop(cv);
+                            pc += 1;
+                            // ChargeFirst; if it stops, the JumpIfFalse after decides on resume
+                            if charge(st, OPERATION_OPS) {
+                                vm.stack.push(V::Bool(condition));
+                                stop!(pc);
+                            }
+                            pc = if condition { pc + 1 } else { t as usize };
+                        }
+                        Op::LoopCond(items_spin, e, b) => {
+                            let cv = vm.stack.pop().unwrap();
+                            let condition = cond_truth(st, &cv, items_spin)?;
+                            vdrop(cv);
+                            pc = if condition { b as usize } else { e as usize };
+                        }
+                        _ => unreachable!(),
                     }
                 }
                 Op::IndexF(n, k) => {
