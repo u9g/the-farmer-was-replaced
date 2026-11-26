@@ -706,9 +706,14 @@ def power_round():
 	n = width() * get_world_size()
 	if num_items(Items.Carrot) < n:
 		return
+	if SUN_NEW:
+		power_round2(n)
+		return
 	d = drones()
 	cells = all_drones(sun_plant_job, 0, 0)
 	for v in range(15, 6, -1):
+		if SUN_TARGET > 0 and num_items(Items.Power) >= SUN_TARGET:
+			break
 		# this petal count's cells, in field order, shared out evenly in runs of neighbours
 		cv = []
 		for cl in cells:
@@ -727,6 +732,162 @@ def power_round():
 
 SUN_STRIP = True
 SUN_COLS = 2
+
+SUN_WET = 1.0
+SUN_WN = 4
+SUN_WRES = 0
+SUN_MARGIN = 1.1
+SUN_SLACK = 2
+SUN_GROW = 0.3
+SUN_NEW = True
+
+
+def sun_dist(x0, y0, x1, y1, w, n):
+	dx = (x1 - x0) % w
+	if dx > w - dx:
+		dx = w - dx
+	dy = (y1 - y0) % n
+	if dy > n - dy:
+		dy = n - dy
+	return dx + dy
+
+
+def sun_plant2(i, d, wet, b):
+	# plant my columns, water them when stock allows, then plan my cuts level by level from the
+	# main drone's end cell (where every cut drone is spawned)
+	n = get_world_size()
+	w = width()
+	by = []
+	for v in range(16):
+		by.append([])
+	ready = 0
+	for x in my_cols(i, d):
+		go(x, 0)
+		for y in range(n):
+			if get_entity_type() != Entities.Sunflower:
+				clear_cell()
+				soil()
+				plant(Entities.Sunflower)
+			if wet > 0:
+				k = min(wet, (SUN_WET - get_water()) // 0.25)
+				if k >= 1 and num_items(Items.Water) >= k:
+					use_item(Items.Water, k)
+			t = get_time() + 8.4 / (1 + 3.8 * get_water())
+			if t > ready:
+				ready = t
+			m = measure()
+			if m != None:
+				by[m].append((x, y))
+			move(North)
+	cx = my_cols(0, d)[-1]
+	cy = 0
+	plan = []
+	for v in range(15, 6, -1):
+		left = by[v]
+		route = []
+		walk = 0
+		work = 0
+		while len(left) > 0:
+			bj = 0
+			bd = 999
+			for j in range(len(left)):
+				c = left[j]
+				dd = sun_dist(cx, cy, c[0], c[1], w, n)
+				if dd < bd:
+					bd = dd
+					bj = j
+			c = left.pop(bj)
+			if len(route) == 0:
+				walk = bd
+			else:
+				work += bd
+			work += 1
+			route.append(c)
+			cx = c[0]
+			cy = c[1]
+		plan.append((route, walk, work))
+	return (plan, ready)
+
+
+def sun_cut2(i, d, a):
+	plans = a[0]
+	T = a[1]
+	plan = plans[i]
+	for li in range(a[2]):
+		route = plan[li][0]
+		until = T[li]
+		for k in range(len(route)):
+			c = route[k]
+			go(c[0], c[1])
+			if k == 0:
+				while get_time() < until:
+					pass
+			while not can_harvest():
+				pass
+			harvest()
+
+
+def power_round2(n):
+	wet = min(SUN_WN, (num_items(Items.Water) - SUN_WRES) // n)
+	res = all_drones(sun_plant2, wet, 0)
+	d = len(res)
+	act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
+	if num_items(Items.Power) > 0:
+		act = act / 2
+	act = act * SUN_MARGIN
+	plans = []
+	ready = 0
+	for r in res:
+		plans.append(r[0])
+		if r[1] > ready:
+			ready = r[1]
+	L = 9
+	if SUN_TARGET > 0:
+		gain = num_items(Items.Power) - d * 0.5 * (ready - get_time() + 3)
+		per = 8 * lvl_mult(Unlocks.Sunflowers)
+		L = 0
+		while L < 9 and gain < SUN_TARGET:
+			for i in range(d):
+				gain += per * len(plans[i][L][0])
+			L += 1
+	T = [ready + SUN_GROW]
+	now = get_time() + 6 * act
+	ts = []
+	for i in range(d):
+		ts.append(now)
+	for li in range(L):
+		tv = T[li]
+		f = tv
+		for i in range(d):
+			c = plans[i][li]
+			ti = ts[i] + c[1] * act
+			if ti < tv:
+				ti = tv
+			ti = ti + c[2] * act
+			ts[i] = ti
+			if ti > f:
+				f = ti
+		T.append(f + SUN_SLACK * act)
+	fan(sun_cut2, 0, d, d, (plans, T, L))
+
+
+
+
+
+MZ_TPF = 0.21
+SUN_PAD = 150
+SUN_TARGET = 0
+
+
+def power_need(need):
+	# before a maze: enough power for all of it, the round cut short once the stock covers it
+	global SUN_TARGET
+	if num_unlocked(Unlocks.Sunflowers) == 0 or width() < 6 or (SUN_STRIP and drones() == 1):
+		return
+	if num_items(Items.Power) < need:
+		SUN_TARGET = need
+		power_round()
+		SUN_TARGET = 0
 
 
 def power_check():
@@ -2623,7 +2784,8 @@ def carrots_for(n):
 
 
 def farm(item, amount):
-	power_check()
+	if item != Items.Gold:
+		power_check()
 	cells = width() * get_world_size()
 	if item == Items.Hay or item == Items.Wood or item == Items.Carrot:
 		n = with_seeds({item: amount})
