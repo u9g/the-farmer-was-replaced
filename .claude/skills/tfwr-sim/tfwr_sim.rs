@@ -2102,17 +2102,25 @@ fn tokenize(code: &str) -> R<TokenStream> {
     let n = text.len();
     let mut num = 0usize;
     let starts_with = |pos: usize, s: &str| -> bool {
-        let cs: Vec<char> = s.chars().collect();
-        pos + cs.len() <= n && text[pos..pos + cs.len()] == cs[..]
+        let mut i = pos;
+        for c in s.chars() {
+            if i >= n || text[i] != c {
+                return false;
+            }
+            i += 1;
+        }
+        true
     };
+    // CONSTANT_TOKENS as chars, tried in the same order
+    let consts: Vec<(Vec<char>, bool, TT)> = CONSTANT_TOKENS.iter().map(|(t, b, ty)| (t.chars().collect(), *b, *ty)).collect();
     let boundary = |pos: usize| -> bool {
         // \b after a word character
         pos >= n || !is_word(text[pos])
     };
     'outer: while num < n {
-        for (t, needs_boundary, ty) in CONSTANT_TOKENS.iter() {
-            let len = t.chars().count();
-            if !starts_with(num, t) {
+        for (t, needs_boundary, ty) in consts.iter() {
+            let len = t.len();
+            if text[num] != t[0] || num + len > n || text[num..num + len] != t[..] {
                 continue;
             }
             if *needs_boundary && num + len < n {
@@ -2121,7 +2129,7 @@ fn tokenize(code: &str) -> R<TokenStream> {
                     continue;
                 }
             }
-            stream.add(Token { ty: *ty, value: t.to_string(), start: num });
+            stream.add(Token { ty: *ty, value: t.iter().collect(), start: num });
             num += len;
             continue 'outer;
         }
@@ -3144,10 +3152,12 @@ impl Parser {
             self.stream.tokens.pop_front();
         }
         let value = &self.stream.current().unwrap().value;
-        if value.contains('\t') && value.contains(' ') {
+        let spaces = value.bytes().filter(|b| *b == b' ').count();
+        let tabs = value.bytes().filter(|b| *b == b'\t').count();
+        if tabs > 0 && spaces > 0 {
             return self.perr("error_mixed_indentation", self.stream.current_string_start_index() + 1);
         }
-        Ok((value.matches(' ').count() + value.matches('\t').count() * 4) as i32)
+        Ok((spaces + tabs * 4) as i32)
     }
 
     fn consume_colon(&mut self) -> R<Token> {
