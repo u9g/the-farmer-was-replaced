@@ -257,8 +257,11 @@ def tend_plain(c):
 			till()
 	if plant(c):
 		PEND[item_of(c)] += yield_of(c)
+		if c == Entities.Tree and get_water() < WT_LO and num_items(Items.Water) >= 1:
+			use_item(Items.Water)
 
 
+WT_LO = 0.12
 WANT = {}
 REQ = {}
 COLS = [0, 0]
@@ -467,6 +470,10 @@ def tend_fast(c):
 			till()
 	if plant(c):
 		PEND[IT[c]] += YC[c]
+		if c == Entities.Tree and get_water() < WT_LO and num_items(Items.Water) >= 1:
+			# one water at planting ripens the tree within a pass on a small farm, and the
+			# soil keeps enough for the next tree as long as it is above WT_LO
+			use_item(Items.Water)
 
 
 def tend_wait(c):
@@ -2950,7 +2957,12 @@ def opening():
 			for x in range(w):
 				for y in range(n):
 					e = get_entity_type()
-					if e == Entities.Bush:
+					if open_grass(x, y, w, n):
+						# kept as grass and cut on the way past: cheap hay for Grass 2 and the carrot seeds, and a
+						# companion for the bushes that want grass
+						if OG_H and e == Entities.Grass and can_harvest():
+							harvest()
+					elif e == Entities.Bush:
 						if can_harvest():
 							harvest()
 							plant(Entities.Bush)
@@ -2967,6 +2979,15 @@ def opening():
 					break
 
 
+def open_grass(x, y, w, n):
+	if w == 1:
+		return y == OG1
+	return (x + y) % OG_M == 0 and OG_M > 0
+
+
+OG1 = 2
+OG_H = True
+OG_M = 2
 OPENING_WOOD = [(Unlocks.Expand, 2), (Unlocks.Speed, 2), (Unlocks.Carrots, 1)]
 
 
