@@ -7418,6 +7418,10 @@ struct Sim {
     /// skip_busy_waits' list of drones it moves on (index, ops per pass, own target or NaN),
     /// kept between calls
     waiting_scratch: Vec<(usize, f64, f64)>,
+    /// drones in `while num_items(i) <op> x: pass` that skip_busy_waits sent to the end of this
+    /// Execute call because the count they read has not changed: (index, item id, ops per pass).
+    /// The apply loop wakes one as soon as an applied side effect changes its item.
+    sleepers: Vec<(usize, usize, f64)>,
     // Simulation
     timers: PriorityQueue<Rc<Timer>>,
     current_time: i64,
@@ -7506,6 +7510,7 @@ impl Sim {
             unlocks: FxMap::default(),
             used_power: 0.0,
             waiting_scratch: Vec::new(),
+            sleepers: Vec::new(),
             num_speed_upgrades: 0,
             next_uid: 1,
             max_drones_override,
@@ -9572,6 +9577,54 @@ impl Sim {
         if any { m[0].min(m[1]).min(m[2].min(m[3])) } else { default }
     }
 
+    /// Wakes the sleepers (see Sim::sleepers) whose item a side effect just changed, at global op
+    /// count g, while the apply loop is at drone `at`: each goes back to its first read that sees
+    /// the change (a read at g sees it if it comes later in the loop, i.e. a higher index). A
+    /// sleeper put back at g after `at` is due in this same loop: its bit joins `due`.
+    fn wake_sleepers(&mut self, g: f64, at: usize, due: &mut u64) {
+        let mut k = 0;
+        while k < self.sleepers.len() {
+            let (si, id, p) = self.sleepers[k];
+            let ex = self.execution.as_ref().unwrap();
+            let st = match &ex.states[si] {
+                Some(st) if ex.flags[si] & F_PRESENT != 0 => st.clone(),
+                _ => {
+                    self.sleepers.swap_remove(k);
+                    continue;
+                }
+            };
+            let mut b = st.borrow_mut();
+            let (last_at, v) = match b.spin_read {
+                Some(r) => r,
+                None => {
+                    drop(b);
+                    self.sleepers.swap_remove(k);
+                    continue;
+                }
+            };
+            if self.items[id] == v {
+                k += 1;
+                continue;
+            }
+            // the reads are at last_at + j * p
+            let mut r = last_at + p * ((g - last_at) / p).ceil();
+            if r == g && si < at {
+                r += p;
+            }
+            if r < *b.op() {
+                *b.op() = r;
+                if let Some((x, _)) = b.spin_read.as_mut() {
+                    *x = r - p;
+                }
+                if r == g && si > at && si < 64 {
+                    *due |= 1u64 << si;
+                }
+            }
+            drop(b);
+            self.sleepers.swap_remove(k);
+        }
+    }
+
     /// Not in the game: a shortcut with the same outcome. Drones spinning in
     /// `while get_time() < x: pass` take two ops per pass and affect nothing, yet the loop below
     /// would visit every pass of every one of them. A drone waiting for the clock moves straight
@@ -9591,6 +9644,7 @@ impl Sim {
         // each skipped drone with its ops per pass
         let mut waiting = std::mem::take(&mut self.waiting_scratch);
         waiting.clear();
+        self.sleepers.clear();
         let ex = self.execution.as_ref().unwrap();
         for si in 0..ex.states.len() {
             let f = ex.flags[si];
@@ -9611,9 +9665,15 @@ impl Sim {
             if let (SE::NumItems(item), true, Some((_, v)), Some(p)) =
                 (&b.current_side_effect, b.spin_loop, b.spin_read, b.spin_period)
             {
-                if p > 0.0 && self.items[item_id(item)] == v {
+                let id = item_id(item);
+                if p > 0.0 && self.items[id] == v {
                     drop(b);
-                    waiting.push((si, p, f64::NAN));
+                    // Reads nothing new until a side effect changes item `id` (see sleepers): it
+                    // sleeps to its first pass past this Execute call, where it would stand when the
+                    // call ends. A count does not depend on the clock, and a timer that changes it
+                    // between calls comes before that pass.
+                    waiting.push((si, p, num + 1.0));
+                    self.sleepers.push((si, id, p));
                     continue;
                 }
             }
@@ -9657,7 +9717,7 @@ impl Sim {
             waiting.push((si, 2.0, c + 2.0 * j));
         }
         for (si, p, own) in waiting.iter() {
-            let target = if own.is_nan() { limit } else { own.min(num - 1.0) };
+            let target = if own.is_nan() { limit } else if *own > num { *own } else { own.min(num - 1.0) };
             let mut b = ex.states[*si].as_ref().unwrap().borrow_mut();
             if (*b.op()) < target {
                 (*b.op()) += p * ((target - (*b.op())) / p).ceil();
@@ -9780,6 +9840,15 @@ impl Sim {
                         let mut b = s.borrow_mut();
                         num2 += b.consume_ops();
                         b.set_se(SE::None);
+                        drop(b);
+                        if !self.sleepers.is_empty() && self.execution.is_some() {
+                            let g = self.execution.as_ref().unwrap().global_op_count;
+                            let mut extra = 0u64;
+                            self.wake_sleepers(g, num6, &mut extra);
+                            if masked {
+                                due_mask |= extra;
+                            }
+                        }
                     }
                     num6 += 1;
                 }

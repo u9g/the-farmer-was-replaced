@@ -227,7 +227,9 @@ where the game's iterators yield: it counts the resume and hands back to the sch
 `PerformExecutionStep` would stop (past the target op count, a side effect, or 1000 resumes), so op
 counts and stopping points match the game exactly. Keep it that way when changing a node: an
 extra or missing `yp()` changes timing. Two things are not in the game: `skip_busy_waits` (the shortcut for `while get_time() < x: pass` and
-`while num_items(i) > y: pass`) and the
+`while num_items(i) > y: pass`: every read, op count and time stays exact, but the ops a skipped
+wait spends are booked for power earlier than the game would, so the power left at the end can
+differ by a fraction of a unit) and the
 reporting in `main`. After touching the interpreter or `execute`, build the old and new versions
 into separate target directories and `cmp` their full output for the same scripts and seeds,
 including a script that uses power and one with `--fps 20`: the simulator is deterministic, so any
