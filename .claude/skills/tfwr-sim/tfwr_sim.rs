@@ -653,8 +653,32 @@ fn entity_so(name: &str) -> &'static EntSO {
 fn unlock_so(name: &str) -> Option<&'static UnlockSO> {
     UNLOCKS.iter().find(|u| u.name == name)
 }
+/// ITEM_NAMES' index of an item (a match, so a literal name folds to its index)
+#[inline(always)]
 fn item_id(name: &str) -> usize {
-    ITEM_NAMES.iter().position(|n| *n == name).unwrap_or_else(|| panic!("unknown item {name}"))
+    match name {
+        "bamboo" => 0,
+        "block" => 1,
+        "bone" => 2,
+        "cactus" => 3,
+        "carrot" => 4,
+        "coal" => 5,
+        "dynamite" => 6,
+        "fertilizer" => 7,
+        "gold" => 8,
+        "hay" => 9,
+        "iron" => 10,
+        "mushroom" => 11,
+        "piggy" => 12,
+        "power" => 13,
+        "pumpkin" => 14,
+        "quartz" => 15,
+        "rice" => 16,
+        "water" => 17,
+        "weird_substance" => 18,
+        "wood" => 19,
+        _ => panic!("unknown item {name}"),
+    }
 }
 
 struct PyFunc {
@@ -10986,6 +11010,9 @@ struct RunResult {
     goal_at: Option<f64>,
 }
 
+/// Set by run_stream once it needs no more results: runs still under way stop at their next frame.
+static ABANDON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     // dropped last, once everything else of the run is gone
     let _sweep = ScopeSweep;
@@ -11043,6 +11070,9 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
                     dur_seconds(sim.current_time)
                 ));
                 break;
+            }
+            if ABANDON.load(std::sync::atomic::Ordering::Relaxed) {
+                return Err("abandoned".into());
             }
             let goal_time = (sim.current_time + frame).min(limit);
             while !sim.run_next_step(goal_time) {
@@ -11252,6 +11282,7 @@ fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize
     let next = AtomicUsize::new(0);
     let stop = AtomicBool::new(false);
     let (tx, rx) = std::sync::mpsc::channel::<(usize, R<RunResult>)>();
+    ABANDON.store(false, Ordering::Relaxed);
     std::thread::scope(|scope| {
         for _ in 0..workers.max(1).min(limit.unwrap_or(usize::MAX).max(1)) {
             let tx = tx.clone();
@@ -11287,6 +11318,7 @@ fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize
                 if !accept(first_seed.wrapping_add(want as i32), r) {
                     accepting = false;
                     stop.store(true, Ordering::Relaxed);
+                    ABANDON.store(true, Ordering::Relaxed);
                     break;
                 }
                 want += 1;
