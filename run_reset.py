@@ -834,8 +834,10 @@ PDIR = []
 HOMES = []
 CPATH = []
 DEPTH = []
+PARK = []
 MZ_STAY = True
 MZ_PAR = True
+MZ_PARKING = True
 
 
 def mz_map():
@@ -978,6 +980,7 @@ def mz_split(h, start):
 	global HOMES
 	global CPATH
 	global DEPTH
+	global PARK
 	s = MZ_S
 	g = 1
 	while g * g < h:
@@ -1042,6 +1045,48 @@ def mz_split(h, start):
 	OWNER = owner
 	PDIR = pdir
 	DEPTH = depth
+	# park cell of each territory: the cell whose removal leaves no piece over half of it
+	size = []
+	for c in range(s * s):
+		size.append(1)
+	order = []
+	for c in range(s * s):
+		order.append(c)
+	# children before parents: sort by depth, deepest first (bucket by depth)
+	md = 0
+	for c in range(s * s):
+		if depth[c] > md:
+			md = depth[c]
+	buckets = []
+	for dd in range(md + 1):
+		buckets.append([])
+	for c in range(s * s):
+		buckets[depth[c]].append(c)
+	tot = []
+	for i in range(len(homes)):
+		tot.append(0)
+	for c in range(s * s):
+		tot[owner[c]] += 1
+	for dd in range(md, 0, -1):
+		for c in buckets[dd]:
+			k = pdir[c]
+			p = c - DX[k] - DY[k] * s
+			size[p] += size[c]
+	park = []
+	for i in range(len(homes)):
+		c = homes[i]
+		half = tot[i] // 2
+		while True:
+			nxt = -1
+			for k in OPENS[c]:
+				nc = c + DX[k] + DY[k] * s
+				if owner[nc] == i and pdir[nc] == k and depth[nc] == depth[c] + 1 and size[nc] > half:
+					nxt = nc
+			if nxt < 0:
+				break
+			c = nxt
+		park.append(c)
+	PARK = park
 	HOMES = homes
 	CPATH = cpath
 
@@ -1090,6 +1135,31 @@ def mz_work(me, goal, cost, stop):
 					harvest()
 					return 0
 				until = get_time() + rep
+				if MZ_PARKING and len(HOMES) >= 4:
+					a = cur
+					b = PARK[me]
+					up = []
+					down = []
+					while DEPTH[a] > DEPTH[b]:
+						k = PDIR[a]
+						up.append(BACK[k])
+						a = a - DX[k] - DY[k] * s
+					while DEPTH[b] > DEPTH[a]:
+						k = PDIR[b]
+						down.append(k)
+						b = b - DX[k] - DY[k] * s
+					while a != b:
+						k = PDIR[a]
+						up.append(BACK[k])
+						a = a - DX[k] - DY[k] * s
+						k = PDIR[b]
+						down.append(k)
+						b = b - DX[k] - DY[k] * s
+					for k in up:
+						move(DIRS[k])
+					for i in range(len(down) - 1, -1, -1):
+						move(DIRS[down[i]])
+					cur = PARK[me]
 				while get_time() < until:
 					pass
 			else:
