@@ -363,77 +363,134 @@ def mixed_job(i, d, need, flags):
 	# one drone, no polyculture: pass after pass until the current unlock is affordable;
 	# a torus walk (n - 1 steps north per column, then east) visits n * n cells in n * n moves
 	small = w * n <= 3
+	lt = lvl_mult(Unlocks.Trees)
+	lc = lvl_mult(Unlocks.Carrots)
+	YC[Entities.Tree] = 5 * lt
+	YC[Entities.Bush] = lt
+	YC[Entities.Carrot] = lc
+	sun_on = SUN_STRIP and w >= 6 and num_unlocked(Unlocks.Sunflowers) > 0
+	plant_on = num_unlocked(Unlocks.Plant) > 0
+	need_vars()
+	# buying needs only the unlock's own cost (seeds for carrots not yet planted are not needed)
+	goal = NEED[0]
+	if len(NEED) > 2:
+		goal = NEED[2]
+	# carry on from the column after the one the last round ended on
+	x0 = (get_pos_x() + 1) % w
 	while True:
-		lt = lvl_mult(Unlocks.Trees)
-		lc = lvl_mult(Unlocks.Carrots)
-		YC[Entities.Tree] = 5 * lt
-		YC[Entities.Bush] = lt
-		YC[Entities.Carrot] = lc
-		sun_on = SUN_STRIP and w >= 6 and num_unlocked(Unlocks.Sunflowers) > 0
-		trees = num_unlocked(Unlocks.Trees) > 0
-		plant_on = num_unlocked(Unlocks.Plant) > 0
-		carrots_on = num_unlocked(Unlocks.Carrots) > 0
-		for x in range(w):
-			if get_pos_x() != x:
-				go(x, get_pos_y())
-			sx = sun_on and x < SUN_COLS
-			if not sx:
-				# the crops for the even and the odd cells of this column (choose(True), choose(False))
-				sh = short(Items.Hay)
-				ce = Entities.Grass
-				co = Entities.Grass
-				be = sh
-				bo = sh
-				if plant_on:
-					s = max(short(Items.Wood), short(Items.Weird_Substance))
-					if s > sh:
-						if not trees:
-							be = s
-							bo = s
-							ce = Entities.Bush
-							co = Entities.Bush
-						else:
-							be = s
-							ce = Entities.Tree
-				if carrots_on:
-					s = short(Items.Carrot)
-					if s > be or s > bo:
-						if carrot_ok():
-							if s > be:
-								ce = Entities.Carrot
-							if s > bo:
-								co = Entities.Carrot
-				if ce == co and plant_on:
-					# a mix of crop types lets some plants find their companion (x5 even before polyculture)
-					if ce == Entities.Grass:
-						co = Entities.Bush
-					else:
-						co = Entities.Grass
-			for k in range(n):
-				if sx:
-					sun_cell()
+		for i in range(w):
+			x = (x0 + i) % w
+			if i > 0:
+				# checked every column, so the unlock is bought as soon as it is affordable
+				done = True
+				for it in goal:
+					if num_items(it) < goal[it]:
+						done = False
+				if done:
+					return 0
+			px = get_pos_x()
+			if px != x:
+				if (px + 1) % w == x:
+					move(East)
 				else:
-					if (x + get_pos_y()) % 2 == 0:
-						c = ce
-					else:
-						c = co
-					if small:
-						tend_wait(c)
-					else:
-						tend_fast(c)
-				if k < n - 1 or w == 1:
+					go(x, get_pos_y())
+			if sun_on and x < SUN_COLS:
+				for k in range(n):
+					sun_cell()
+					if k < n - 1 or w == 1:
+						move(North)
+				continue
+			p = choose3()
+			ce = p[0]
+			co = p[1]
+			if ce == co and plant_on:
+				# a mix of crop types lets some plants find their companion (x5 even before polyculture)
+				if ce == Entities.Grass:
+					co = Entities.Bush
+				else:
+					co = Entities.Grass
+			if x % 2 == 0:
+				cs = [ce, co]
+			else:
+				cs = [co, ce]
+			if small:
+				for k in range(n):
+					tend_wait(cs[get_pos_y() % 2])
 					move(North)
-		cur = NEED[0]
-		if RAWC[0] != None:
-			cur = RAWC[0]
+			else:
+				for k in range(n - 1):
+					tend_fast(cs[get_pos_y() % 2])
+					move(North)
+				tend_fast(cs[get_pos_y() % 2])
 		done = True
-		for it in cur:
-			if num_items(it) < cur[it]:
+		for it in goal:
+			if num_items(it) < goal[it]:
 				done = False
 		if done:
 			return 0
 		for k in PEND:
 			PEND[k] = 0
+
+
+def sh(have, c, l):
+	r = 0
+	if c > have:
+		r = 10 + (c - have) / c
+	if l > have:
+		r += (l - have) / l
+	return r
+
+
+def need_vars():
+	# what choose3() reads instead of NEED and num_unlocked, set once per round
+	global NV
+	global FL
+	cur = NEED[0]
+	look = NEED[1]
+	NV = []
+	for it in [Items.Hay, Items.Wood, Items.Weird_Substance, Items.Carrot]:
+		for d in [cur, look]:
+			if it in d:
+				NV.append(d[it])
+			else:
+				NV.append(0)
+	c = get_cost(Entities.Carrot)
+	FL = [num_unlocked(Unlocks.Plant) > 0, NV[4] > 0 or NV[5] > 0, num_unlocked(Unlocks.Trees) > 0, num_unlocked(Unlocks.Carrots) > 0, c[Items.Wood], c[Items.Hay]]
+
+
+NV = []
+FL = []
+
+
+def choose3():
+	# (choose(True), choose(False)) on the needs and flags need_vars() set
+	be = Entities.Grass
+	bo = be
+	bs = sh(num_items(Items.Hay) + PEND[Items.Hay], NV[0], NV[1])
+	so = bs
+	if FL[0]:
+		s = sh(num_items(Items.Wood) + PEND[Items.Wood], NV[2], NV[3])
+		if FL[1]:
+			s2 = sh(num_items(Items.Weird_Substance) + PEND[Items.Weird_Substance], NV[4], NV[5])
+			if s2 > s:
+				s = s2
+		if s > bs:
+			bs = s
+			if FL[2]:
+				be = Entities.Tree
+			else:
+				so = s
+				be = Entities.Bush
+				bo = be
+	if FL[3]:
+		s = sh(num_items(Items.Carrot) + PEND[Items.Carrot], NV[6], NV[7])
+		if s > bs or s > so:
+			if num_items(Items.Wood) >= FL[4] and num_items(Items.Hay) >= FL[5]:
+				if s > bs:
+					be = Entities.Carrot
+				if s > so:
+					bo = Entities.Carrot
+	return (be, bo)
 
 
 YC = {Entities.Grass: 0}
@@ -476,11 +533,6 @@ def tend_fast(c):
 			# one water at planting ripens the tree within a pass on a small farm, and the
 			# soil keeps enough for the next tree as long as it is above WT_LO
 			use_item(Items.Water)
-
-
-# the unlock's own cost while run_plan farms for it: the one-drone loop stops as soon as that is on
-# hand, not when the seeds for the next carrots (in NEED[0]) are too
-RAWC = [None]
 
 
 def tend_wait(c):
@@ -2926,7 +2978,9 @@ def set_need(plan, i):
 	look = {}
 	for j in range(i, min(i + 3, len(plan))):
 		add_cost(look, plan[j][0])
-	return (with_seeds(cur), with_seeds(look))
+	raw = {}
+	add_cost(raw, plan[i][0])
+	return (with_seeds(cur), with_seeds(look), raw)
 
 
 def with_seeds(need):
@@ -2948,10 +3002,12 @@ def opening():
 	while not (num_unlocked(Unlocks.Speed) >= 1 and num_unlocked(Unlocks.Expand) >= 1):
 		if can_harvest():
 			harvest()
-		if num_unlocked(Unlocks.Speed) == 0:
-			buy(Unlocks.Speed)
-		elif num_unlocked(Unlocks.Expand) == 0:
-			buy(Unlocks.Expand)
+			# Speed 1 costs 20 hay, Expand 1 30: try to buy only once that is on hand
+			if num_items(Items.Hay) >= 20:
+				if num_unlocked(Unlocks.Speed) == 0:
+					buy(Unlocks.Speed)
+				elif num_items(Items.Hay) >= 30:
+					buy(Unlocks.Expand)
 	while num_unlocked(Unlocks.Plant) == 0:
 		# grass regrows in 0.5 s, faster than a harvest and a move: stay on one cell
 		if can_harvest():
@@ -2961,6 +3017,31 @@ def opening():
 		while num_unlocked(u[0]) < u[1]:
 			n = get_world_size()
 			w = width()
+			if w == 3:
+				# bushes on two columns, the third stays grass: the bushes' companion when they
+				# want grass, and never visited (2n cells for 2n moves: up a column, across, back)
+				while num_unlocked(u[0]) < u[1]:
+					for k in range(2 * n):
+						e = get_entity_type()
+						if e == Entities.Bush:
+							if can_harvest():
+								harvest()
+								plant(Entities.Bush)
+						else:
+							if e != None:
+								harvest()
+							plant(Entities.Bush)
+						if k == n - 1 or k == 2 * n - 1:
+							# columns 0 and 1, whichever the drone is on
+							if get_pos_x() == 0:
+								move(East)
+							else:
+								move(West)
+							if buy(u[0]):
+								break
+						else:
+							move(North)
+				break
 			for x in range(w):
 				for y in range(n):
 					e = get_entity_type()
@@ -3008,9 +3089,7 @@ def run_plan(plan):
 			item = lacking(u)
 			if item == Items.Hay or item == Items.Wood or item == Items.Carrot:
 				power_check()
-				RAWC[0] = get_cost(u)
 				mixed_round(set_need(plan, i))
-				RAWC[0] = None
 			elif item == Items.Weird_Substance and num_unlocked(Unlocks.Cactus) == 0:
 				power_check()
 				weird_round(get_cost(u)[item])
@@ -3026,8 +3105,8 @@ PLAN = [
 	(Unlocks.Expand, 2),
 	(Unlocks.Carrots, 1),
 	(Unlocks.Speed, 3),
-	(Unlocks.Grass, 2),
 	(Unlocks.Expand, 3),
+	(Unlocks.Grass, 2),
 	(Unlocks.Trees, 1),
 	(Unlocks.Watering, 1),
 	(Unlocks.Trees, 2),
