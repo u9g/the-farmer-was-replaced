@@ -2142,40 +2142,20 @@ def dn_rows(j, d, a0, b0):
 	ah = []
 	wy = []
 	nb = []
-	to = []
-	nx = []
-	nb2 = []
-	cor = []
-	CX = [1, 1, -1, -1]
-	CY = [1, -1, -1, 1]
 	for i in range(j * S // d, (j + 1) * S // d):
 		pairs = []
 		row = []
-		r2 = []
-		q = []
 		for k in range(4):
 			x = PX[i] + DX[k]
 			y = PY[i] + DY[k]
 			if x >= 0 and x < N and y >= 0 and y < N:
-				c = IDX[x][y]
-				pairs.append([(c - i) % S, DIRS[k]])
-				row.append(c)
-				r2.append(c)
+				pairs.append([(IDX[x][y] - i) % S, DIRS[k]])
+				row.append(IDX[x][y])
 			else:
 				row.append(-1)
-				r2.append(S)
-			x = PX[i] + CX[k]
-			y = PY[i] + CY[k]
-			if x >= 0 and x < N and y >= 0 and y < N:
-				q.append(IDX[x][y])
-			else:
-				q.append(S)
 		nb.append(row)
-		nb2.append(r2)
-		cor.append(q)
 		ds = []
 		ws = []
-		ts = []
 		while pairs:
 			best = pairs[0]
 			for p in pairs:
@@ -2184,22 +2164,9 @@ def dn_rows(j, d, a0, b0):
 			pairs.remove(best)
 			ds.append(best[0])
 			ws.append(best[1])
-			ts.append((i + best[0]) % S)
-			if best[0] == 1:
-				nx.append(best[1])
 		ah.append(ds)
 		wy.append(ws)
-		to.append(ts)
-	return [ah, wy, nb, to, nx, nb2, cor]
-
-
-def zeros(n, v):
-	z = [v]
-	while len(z) * 2 <= n:
-		z = z + z
-	if len(z) < n:
-		z = z + z[0:n - len(z)]
-	return z
+	return [ah, wy, nb]
 
 
 def dino_setup():
@@ -2268,6 +2235,39 @@ def dino_setup():
 	if not HALVES:
 		block_setup(N)
 	# the neighbour tables are built by every drone at once, a slice each
+	AHEAD = []
+	WAY = []
+	NB = []
+	for r in all_drones(dn_rows, 0, 0):
+		for row in r[0]:
+			AHEAD.append(row)
+		for row in r[1]:
+			WAY.append(row)
+		for row in r[2]:
+			NB.append(row)
+	TO = []
+	for i in range(S):
+		row = []
+		for d in AHEAD[i]:
+			row.append((i + d) % S)
+		TO.append(row)
+	NEXT = []
+	for i in range(S):
+		ds = AHEAD[i]
+		for k in range(len(ds)):
+			if ds[k] == 1:
+				NEXT.append(WAY[i][k])
+	WALK = []
+	for i in range(2 * S):
+		WALK.append(NEXT[i % S])
+	occ = []
+	hist = []
+	vis = []
+	for i in range(S):
+		occ.append(0)
+		hist.append(0)
+		vis.append(0)
+	occ.append(1000000000)
 	global NB2
 	global COR
 	global MT
@@ -2275,28 +2275,33 @@ def dino_setup():
 	global ORD
 	global vis2
 	global bad
-	AHEAD = []
-	WAY = []
-	NB = []
-	TO = []
-	NEXT = []
+	vis2 = []
+	bad = []
+	for i in range(S + 1):
+		vis2.append(0)
+		bad.append(-5)
 	NB2 = []
 	COR = []
-	for r in all_drones(dn_rows, 0, 0):
-		AHEAD = AHEAD + r[0]
-		WAY = WAY + r[1]
-		NB = NB + r[2]
-		TO = TO + r[3]
-		NEXT = NEXT + r[4]
-		NB2 = NB2 + r[5]
-		COR = COR + r[6]
-	WALK = NEXT + NEXT
-	occ = zeros(S, 0)
-	hist = zeros(S, 0)
-	vis = zeros(S, 0)
-	occ.append(1000000000)
-	vis2 = zeros(S + 1, 0)
-	bad = zeros(S + 1, -5)
+	CX = [1, 1, -1, -1]
+	CY = [1, -1, -1, 1]
+	for i in range(S):
+		r = []
+		q = []
+		for k in range(4):
+			x = PX[i] + DX[k]
+			y = PY[i] + DY[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				r.append(IDX[x][y])
+			else:
+				r.append(S)
+			x = PX[i] + CX[k]
+			y = PY[i] + CY[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				q.append(IDX[x][y])
+			else:
+				q.append(S)
+		NB2.append(r)
+		COR.append(q)
 	MT = []
 	MT2 = []
 	PW = [1, 2, 4, 8]
@@ -2353,41 +2358,12 @@ def dino_setup():
 				ORD.append(o)
 
 
-def roomy(start, low, need):
-	fills[0] += 1
-	f = fills[0]
-	vis[start] = f
-	front = [start]
-	cnt = 1
-	dd = 0
-	while front:
-		dd += 1
-		gone = low + dd - 1
-		ahead = []
-		for c in front:
-			for e in NB[c]:
-				if e >= 0 and vis[e] != f:
-					vis[e] = f
-					o = occ[e]
-					if o < low:
-						ahead.append(e)
-						cnt += 1
-					elif o < gone:
-						return True
-		if cnt >= need:
-			return True
-		front = ahead
-	return False
+NOM = []
 
 
-def safe(c, ch, low, need):
-	for g in NB[c]:
-		if g != ch and g >= 0 and occ[g] >= low:
-			return roomy(c, low, need)
-	return True
-
-
-def chk(c, low, need, bt):
+def chk(c, low, need):
+	# None when moving into c leaves no big enough free side; else the list of c's neighbours
+	# that start a small closed side (to keep out of on the next move)
 	o = NB2[c]
 	m = 0
 	if occ[o[0]] >= low:
@@ -2400,53 +2376,87 @@ def chk(c, low, need, bt):
 		m += 8
 	v = MT[m]
 	if v == 4:
-		return True
+		return alive(c, low, need)
 	if v >= 0:
 		q = COR[c]
 		if v < 4:
 			if occ[q[v]] < low:
-				return True
+				return NOM
 		elif occ[q[v - 10]] < low and occ[q[MT2[m]]] < low:
-			return True
-	return sides(c, o, low, need, bt)
+			return NOM
+	return sides(c, o, low, need)
 
 
-def sides(c, o, low, need, bt):
+def alive(c, low, need):
+	# c has one way on: grow the free cells beyond it breadth first, a cell at distance D taken
+	# once it is free by the time the head could get there (occ < low + D - 1, a step kept for an
+	# apple eaten on the way). Good on need cells, or on a body cell left free in time (the head
+	# can then follow the tail for ever). None when neither, else NOM.
+	fills2[0] += 4
+	f = fills2[0]
+	vis2[c] = f
+	front = [c]
+	cnt = 0
+	lim = low - 1
+	while front:
+		lim += 1
+		ahead = []
+		for x in front:
+			for e in NB2[x]:
+				o = occ[e]
+				if o < lim and vis2[e] != f:
+					if o >= low:
+						return NOM
+					vis2[e] = f
+					ahead.append(e)
+		cnt += len(ahead)
+		if cnt >= need:
+			return NOM
+		front = ahead
+	return None
+
+
+def sides(c, o, low, need):
 	# c splits the free cells around it: grow each side breadth first, a level at a time, until
-	# at most one side is still open; a side is good when it reaches need cells, a body cell that
-	# is gone by then, or another side. Sides that close small are marked bad for the next move.
+	# every side is settled. Sides that meet are one region and are judged together. A region is
+	# good when it reaches need cells or a body cell that is gone by then. Returns None when no
+	# region is good, else the start cells of the sides whose region closed small (every side is
+	# grown to the end: one still open when the others are settled may be a dead end too).
 	global SPLITS
 	SPLITS += 1
 	fills2[0] += 4
 	f = fills2[0]
 	vis2[c] = f
 	fr = []
-	st = []
 	lb = []
 	sc = []
 	for e in o:
 		if occ[e] < low:
 			vis2[e] = f + len(fr) + 1
 			fr.append([e])
-			st.append(0)
 			lb.append(vis2[e])
 			sc.append(e)
 	ns = len(fr)
 	if ns == 0:
 		for e in o:
 			if occ[e] < low + 1:
-				return True
-		return False
+				return NOM
+		return None
+	grp = []
 	cnt = []
+	st = []
 	for i in range(ns):
+		grp.append(i)
 		cnt.append(1)
-	opn = ns
+		st.append(0)
 	dd = 0
-	while opn > 1:
+	opn = True
+	while opn:
 		dd += 1
 		gone = low + dd - 1
 		for i in range(ns):
-			if st[i] == 0:
+			g = grp[i]
+			if st[g] == 0 and len(fr[i]) > 0:
 				me = lb[i]
 				ahead = []
 				for x in fr[i]:
@@ -2458,25 +2468,42 @@ def sides(c, o, low, need, bt):
 								vis2[e] = me
 								ahead.append(e)
 							elif w != me and w != f:
-								st[i] = 1
+								h = grp[w - f - 1]
+								if h != g:
+									for j in range(ns):
+										if grp[j] == h:
+											grp[j] = g
+									cnt[g] += cnt[h]
+									if st[h] == 1:
+										st[g] = 1
 						elif oc < gone and e != c:
-							st[i] = 1
-				cnt[i] += len(ahead)
-				if st[i] == 0:
-					if cnt[i] >= need:
-						st[i] = 1
-					elif len(ahead) == 0:
-						st[i] = 2
-				if st[i] != 0:
-					opn -= 1
+							st[g] = 1
+				cnt[g] += len(ahead)
 				fr[i] = ahead
+		opn = False
+		for g in range(ns):
+			if st[g] == 0 and grp[g] == g:
+				if cnt[g] >= need:
+					st[g] = 1
+				else:
+					live = False
+					for j in range(ns):
+						if grp[j] == g and len(fr[j]) > 0:
+							live = True
+					if live:
+						opn = True
+					else:
+						st[g] = 2
 	good = False
+	bl = []
 	for i in range(ns):
-		if st[i] == 2:
-			bad[sc[i]] = bt
+		if st[grp[i]] == 2:
+			bl.append(sc[i])
 		else:
 			good = True
-	return good
+	if good:
+		return bl
+	return None
 
 
 def plan(ch, ax, ay, t, low, need):
@@ -2496,9 +2523,7 @@ def plan(ch, ax, ay, t, low, need):
 	for var in range(2):
 		if var == 1 and (dx == 0 or dy == 0):
 			return None
-		cells = []
-		olds = []
-		ds = []
+		# every cell free when it is reached, before any split test
 		c = ch
 		ok = True
 		for i in range(1, n + 1):
@@ -2512,25 +2537,59 @@ def plan(ch, ax, ay, t, low, need):
 			else:
 				d = hd
 			c = NB2[c][d]
+			if occ[c] >= low + i - 1:
+				ok = False
+				break
+		if not ok:
+			continue
+		cells = []
+		olds = []
+		ds = []
+		c = ch
+		ok = True
+		nb = None
+		for i in range(1, n + 1):
+			if var == 0:
+				if i <= dx:
+					d = hd
+				else:
+					d = vd
+			elif i <= dy:
+				d = vd
+			else:
+				d = hd
+			c = NB2[c][d]
 			li = low + i - 1
-			if occ[c] >= li or bad[c] == t + i - 1:
+			if occ[c] >= li:
+				ok = False
+				break
+			if i == 1:
+				if bad[c] == t:
+					ok = False
+					break
+			elif c in nb:
 				ok = False
 				break
 			cells.append(c)
 			ds.append(DIRS[d])
 			olds.append(occ[c])
 			occ[c] = t + i
-			if not chk(c, li, need, t + i):
+			nb = chk(c, li, need)
+			if nb == None:
 				ok = False
 				break
 		if ok:
+			if nb != None:
+				for x in nb:
+					bad[x] = t + n
 			return [cells, ds]
 		for j in range(len(cells)):
 			occ[cells[j]] = olds[j]
 	return None
 
 
-def free_step(ch, ax, ay, low, need):
+def free_step(ch, ax, ay, low, need, t):
+	# a step towards the apple that passes chk (else the first free one); returns [dir, marks]
 	dx = ax - PX[ch]
 	dy = ay - PY[ch]
 	h = -1
@@ -2552,12 +2611,137 @@ def free_step(ch, ax, ay, low, need):
 	for e in order:
 		if e >= 0:
 			c = nbs[e]
-			if c >= 0 and occ[c] < low:
+			if c >= 0 and occ[c] < low and bad[c] != t:
 				if fallback < 0:
 					fallback = e
-				if safe(c, ch, low, need):
-					return e
-	return fallback
+				r = chk(c, low, need)
+				if r != None:
+					return [e, r]
+	return [fallback, NOM]
+
+
+HL = 24
+
+
+def leg(ch, ca, t, k):
+	# the free phase's moves from ch to the apple ca at length k, as play() makes them
+	# (a planned path, else greedy steps); writes occ. Returns [cells, dirs, ok].
+	ax = PX[ca]
+	ay = PY[ca]
+	low = t + 1 - k
+	need = k + ROOM
+	pl = plan(ch, ax, ay, t, low, need)
+	if pl != None:
+		pl.append(True)
+		return pl
+	cells = []
+	ds = []
+	while ch != ca:
+		low = t + 1 - k
+		dx = ax - PX[ch]
+		dy = ay - PY[ch]
+		if dx > 0:
+			s = 0
+		elif dx < 0:
+			s = 6
+		else:
+			s = 12
+		if dy < 0:
+			s += 2
+		elif dy == 0:
+			s += 4
+		if abs(dx) < abs(dy):
+			s += 1
+		nbs = NB2[ch]
+		e = -1
+		fb = -1
+		mk = NOM
+		for d in ORD[s]:
+			c = nbs[d]
+			if occ[c] < low and bad[c] != t:
+				if fb < 0:
+					fb = d
+				r = chk(c, low, need)
+				if r != None:
+					e = d
+					mk = r
+					break
+		if e < 0:
+			e = fb
+			if e < 0:
+				return [cells, ds, False]
+		ch = nbs[e]
+		t += 1
+		occ[ch] = t
+		for x in mk:
+			bad[x] = t
+		cells.append(ch)
+		ds.append(DIRS[e])
+	return [cells, ds, True]
+
+
+def fly(tx, ty):
+	# to (tx, ty) the short way round, stepping around the snake, which blocks drones
+	n = SN
+	h = n // 2
+	for i in range(3 * n):
+		x = get_pos_x()
+		y = get_pos_y()
+		if x == tx and y == ty:
+			return True
+		dx = (tx - x) % n
+		dy = (ty - y) % n
+		a = -1
+		b = -1
+		if dx > 0:
+			if dx <= h:
+				a = East
+			else:
+				a = West
+		if dy > 0:
+			if dy <= h:
+				b = North
+			else:
+				b = South
+		if dx < dy:
+			c = a
+			a = b
+			b = c
+		if a != -1 and move(a):
+			continue
+		if b != -1 and move(b):
+			continue
+		for d in DIRS:
+			if move(d):
+				break
+	return get_pos_x() == tx and get_pos_y() == ty
+
+
+def helper(w, x, t, k):
+	# flies to apple x, works out the snake's moves to it (as the drone that sent it did),
+	# reads the next apple off x as soon as it is there, sends the next helper on, and
+	# returns the snake's moves from x to that next apple. The game picks the next apple
+	# again when the snake steps off it, so a next apple on the way to x is not final: None.
+	# None too when the snake's body keeps it from reaching x (the snake may be waiting on x),
+	# and when the snake has ended (its bones came in) before x was an apple.
+	if not fly(PX[x], PY[x]):
+		return [None, None, None, None, None, None]
+	r = leg(w, x, t, k)
+	t += len(r[0])
+	b0 = num_items(Items.Bone)
+	while get_entity_type() != Entities.Apple:
+		if num_items(Items.Bone) != b0:
+			return [None, None, None, None, None, None]
+	nxt = measure()
+	y = IDX[nxt[0]][nxt[1]]
+	if y in r[0]:
+		return [None, None, None, None, None, bad]
+	h = None
+	if k + 2 <= HL:
+		h = spawn_drone(helper, x, y, t, k + 1)
+	r2 = leg(x, y, t, k + 1)
+	return [r2[0], r2[1], r2[2], h, nxt, bad]
+
 
 
 def play():
@@ -2570,6 +2754,7 @@ def play():
 	nxt = measure()
 	for i in range(S):
 		occ[i] = -S - 2
+		bad[i] = -5
 	t = 0
 	occ[ch] = 0
 	hist[0] = ch
@@ -2587,7 +2772,47 @@ def play():
 	SPLITS = 0
 	FALLS = 0
 	tried = -1
-	while k < FREE_LIMIT:
+	global bad
+	if HL >= 2:
+		k = 1
+		ca = IDX[nxt[0]][nxt[1]]
+		h = spawn_drone(helper, ch, ca, t, k)
+		r = leg(ch, ca, t, k)
+		while True:
+			cells = r[0]
+			ds = r[1]
+			for j in range(len(ds)):
+				if not move(ds[j]):
+					done = True
+					break
+				t += 1
+				hist[t % S] = cells[j]
+				occ[cells[j]] = t
+			if done or not r[2]:
+				done = True
+				break
+			ch = ca
+			if get_entity_type() != Entities.Apple:
+				done = True
+				break
+			if h != None:
+				r = wait_for(h)
+				if r[5] != None:
+					bad = r[5]
+			if h == None or r[0] == None:
+				nxt = measure()
+				if k >= HL:
+					break
+				k += 1
+				ca = IDX[nxt[0]][nxt[1]]
+				h = spawn_drone(helper, ch, ca, t, k)
+				r = leg(ch, ca, t, k)
+			else:
+				h = r[3]
+				nxt = r[4]
+				k += 1
+				ca = IDX[nxt[0]][nxt[1]]
+	while k < FREE_LIMIT and not done:
 		if ch == ca:
 			if last:
 				done = True
@@ -2637,14 +2862,16 @@ def play():
 		nbs = NB2[ch]
 		e = -1
 		fb = -1
-		bt = t + 1
+		mk = NOM
 		for d in ORD[s]:
 			c = nbs[d]
 			if occ[c] < low and bad[c] != t:
 				if fb < 0:
 					fb = d
-				if chk(c, low, need, bt):
+				r = chk(c, low, need)
+				if r != None:
 					e = d
+					mk = r
 					break
 		if e < 0:
 			FALLS += 1
@@ -2659,6 +2886,8 @@ def play():
 		t += 1
 		hist[t % S] = ch
 		occ[ch] = t
+		for x in mk:
+			bad[x] = t
 		if ch == ca:
 			if get_entity_type() != Entities.Apple:
 				done = True
@@ -2677,6 +2906,7 @@ def play():
 			ca = IDX[ax][ay]
 		low = t + 1 - k
 		d = 0
+		mk = NOM
 		if lining:
 			lim = (ca - ch) % S
 			room = S - 2 - cum - (k - m)
@@ -2688,10 +2918,13 @@ def play():
 					c = ch + ds[j]
 					if c >= S:
 						c -= S
-					if occ[c] < low and safe(c, ch, low, k + ROOM):
-						d = ds[j]
-						way = WAY[ch][j]
-						break
+					if occ[c] < low and bad[c] != t:
+						r = chk(c, low, k + ROOM)
+						if r != None:
+							d = ds[j]
+							way = WAY[ch][j]
+							mk = r
+							break
 		if d > 0:
 			m += 1
 			cum += d
@@ -2701,7 +2934,9 @@ def play():
 		else:
 			m = 0
 			cum = 0
-			e = free_step(ch, ax, ay, low, k + ROOM)
+			r = free_step(ch, ax, ay, low, k + ROOM, t)
+			e = r[0]
+			mk = r[1]
 			if e < 0:
 				done = True
 				break
@@ -2713,6 +2948,8 @@ def play():
 		t += 1
 		hist[t % S] = ch
 		occ[ch] = t
+		for x in mk:
+			bad[x] = t
 		if ch == ca:
 			if get_entity_type() != Entities.Apple:
 				done = True
