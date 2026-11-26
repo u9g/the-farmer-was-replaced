@@ -1856,6 +1856,64 @@ fn new_scope(function_node: Option<Rc<Node>>, parent: Option<ScopeRef>, variable
 }
 
 thread_local! {
+    /// a function's call scopes that no one holds any more, by the function's node: (how many
+    /// names a fresh one has, the scopes, all reset to unassigned)
+    static SCOPE_POOL: RefCell<FxMap<usize, (usize, Vec<ScopeRef>)>> = RefCell::new(FxMap::default());
+}
+
+/// new_scope for a call of the function `tree`: a pooled one if there is one (the same names in
+/// the same slots, all unassigned), with this call's parent
+#[inline]
+fn call_scope(tree: &Rc<Node>, parent: &Option<ScopeRef>, vars: &[Rc<str>]) -> ScopeRef {
+    let key = Rc::as_ptr(tree) as usize;
+    let pooled = SCOPE_POOL.with(|p| p.borrow_mut().get_mut(&key).and_then(|e| e.1.pop()));
+    if let Some(sc) = pooled {
+        sc.borrow_mut().parent_scope = parent.clone();
+        return sc;
+    }
+    let sc = new_scope(Some(tree.clone()), parent.clone(), vars);
+    let len = sc.borrow().vars.items.len();
+    SCOPE_POOL.with(|p| {
+        p.borrow_mut().entry(key).or_insert((len, Vec::new()));
+    });
+    sc
+}
+
+/// A call scope popped off the call stack: pooled for the next call of its function when nothing
+/// else holds it (no function made in it, no drone copy) and it has just its own names; dropped
+/// otherwise. Pooling drops its values and parent now, as dropping it would.
+fn release_scope(sc: ScopeRef) {
+    if Rc::strong_count(&sc) != 1 {
+        return;
+    }
+    let key = match &sc.borrow().function_node {
+        Some(n) => Rc::as_ptr(n) as usize,
+        None => return,
+    };
+    SCOPE_POOL.with(|p| {
+        let mut p = p.borrow_mut();
+        if let Some(e) = p.get_mut(&key) {
+            let ok = {
+                let mut b = sc.borrow_mut();
+                if b.vars.items.len() == e.0 {
+                    for it in b.vars.items.iter_mut() {
+                        vdrop(std::mem::replace(&mut it.1, V::Unassigned));
+                        it.2 = false;
+                    }
+                    b.parent_scope = None;
+                    true
+                } else {
+                    false
+                }
+            };
+            if ok {
+                e.1.push(sc);
+            }
+        }
+    });
+}
+
+thread_local! {
     /// every scope made by the current run on this thread (see ScopeSweep)
     static SCOPES: RefCell<Vec<std::rc::Weak<RefCell<Scope>>>> = RefCell::new(Vec::new());
 }
@@ -1869,6 +1927,8 @@ fn register_scope(s: ScopeRef) -> ScopeRef {
 struct ScopeSweep;
 impl Drop for ScopeSweep {
     fn drop(&mut self) {
+        let pooled = SCOPE_POOL.with(|p| std::mem::take(&mut *p.borrow_mut()));
+        drop(pooled);
         let scopes = SCOPES.with(|v| std::mem::take(&mut *v.borrow_mut()));
         for w in scopes {
             if let Some(sc) = w.upgrade() {
@@ -6575,7 +6635,7 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                         NK::Function { vars, .. } => vars,
                         _ => &[],
                     };
-                    let scope = new_scope(Some(tree.clone()), func.parent_scope.clone(), vars);
+                    let scope = call_scope(&tree, &func.parent_scope, vars);
                     stm(st).module_state.call_stack.push(scope);
                     push_frame(st)?;
                     vm.pending = Some((func, parameters));
@@ -6918,7 +6978,9 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                     vm.stack.truncate(f.stack_base);
                     vm.iters.truncate(f.iter_base);
                     let s = stm(st);
-                    s.module_state.call_stack.pop();
+                    if let Some(sc) = s.module_state.call_stack.pop() {
+                        release_scope(sc);
+                    }
                     let v = std::mem::replace(&mut s.module_state.return_value, V::None);
                     match f.kind {
                         FrameKind::SpawnRoot => {
@@ -7075,7 +7137,9 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                     vm.iters.truncate(f.iter_base);
                     let s = stm(st);
                     s.module_state.is_expression_static = false;
-                    s.module_state.call_stack.pop();
+                    if let Some(sc) = s.module_state.call_stack.pop() {
+                        release_scope(sc);
+                    }
                     match f.kind {
                         FrameKind::SpawnRoot => {
                             s.module_state.return_value = V::None;
