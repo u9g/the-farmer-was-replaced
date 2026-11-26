@@ -2,10 +2,12 @@
 # Run with run_reset_lb.py (leaderboard_run(Leaderboards.Fastest_Reset, "run_reset", 256)).
 #
 # Opening: tight loops for the first unlocks (grass on 1x1, a 1x3 strip, then bushes for wood).
-# Early game: one drone on a mixed farm. Every cell grows whatever the next few unlocks are
-# shortest of (hay, wood, carrots). Megafarm 1 comes before polyculture: weird substance from a
-# checkerboard of weird trees, then gold from one maze. Once polyculture is bought, crops grow on
-# one checkerboard colour and the other colour holds the companion each crop asks for.
+# Early game: one drone on a mixed farm, pass after pass until the next unlock is affordable.
+# Every column grows the crops the next few unlocks are shortest of, always two types on the
+# two checkerboard colours, since a plant next to the companion it wants gives 5x even before
+# polyculture. Megafarm 1 comes before polyculture: weird substance from a checkerboard of
+# weird trees, then gold from one maze. Once polyculture is bought, crops grow on one
+# checkerboard colour and the other colour holds the companion each crop asks for.
 # After that the script works through PLAN: for each unlock it cannot afford yet it runs a round
 # for the first item it lacks, using every drone (pumpkin field watered for faster growth, sorted
 # cactus field, one maze shared by all drones and mapped by drones splitting at its forks, the
@@ -227,6 +229,8 @@ def tend_plain(c):
 		if c == Entities.Grass:
 			if can_harvest():
 				harvest()
+			if get_ground_type() == Grounds.Soil:
+				till()
 			return
 		harvest()
 	elif e != None:
@@ -235,7 +239,7 @@ def tend_plain(c):
 		harvest()
 	if c == Entities.Grass:
 		if get_ground_type() == Grounds.Soil:
-			plant(Entities.Grass)
+			till()
 		return
 	if c == Entities.Carrot:
 		if get_ground_type() != Grounds.Soil:
@@ -312,22 +316,79 @@ def mixed_job(i, d, need, flags):
 	for k in PEND:
 		PEND[k] = 0
 	n = get_world_size()
-	if width() * n == 1:
-		if can_harvest():
-			harvest()
+	w = width()
+	if w * n == 1:
+		goal = 0
+		if Items.Hay in NEED[0]:
+			goal = NEED[0][Items.Hay]
+		if num_items(Items.Hay) >= goal:
+			goal = num_items(Items.Hay) + 1
+		while num_items(Items.Hay) < goal:
+			if can_harvest():
+				harvest()
 		return 0
-	for x in my_cols(i, d):
-		go(x, 0)
-		ce = choose(True)
-		co = choose(False)
-		if x % 2 == 0:
-			cs = [ce, co]
-		else:
-			cs = [co, ce]
-		for y in range(n):
-			mixed_cell(strip, weird, cs[y % 2])
-			move(North)
-	return 0
+	if POLY or d > 1 or strip or weird:
+		for x in my_cols(i, d):
+			go(x, 0)
+			ce = choose(True)
+			co = choose(False)
+			if ce == co and not POLY and num_unlocked(Unlocks.Plant) > 0:
+				# a mix of crop types lets some plants find their companion (x5 even before polyculture)
+				if ce == Entities.Grass:
+					co = Entities.Bush
+				else:
+					co = Entities.Grass
+			if x % 2 == 0:
+				cs = [ce, co]
+			else:
+				cs = [co, ce]
+			for y in range(n):
+				mixed_cell(strip, weird, cs[y % 2])
+				move(North)
+		return 0
+	# one drone, no polyculture: pass after pass until the current unlock is affordable;
+	# a torus walk (n - 1 steps north per column, then east) visits n * n cells in n * n moves
+	while True:
+		for x in range(w):
+			if get_pos_x() != x:
+				go(x, get_pos_y())
+			ce = choose(True)
+			co = choose(False)
+			if ce == co and not POLY and num_unlocked(Unlocks.Plant) > 0:
+				# a mix of crop types lets some plants find their companion (x5 even before polyculture)
+				if ce == Entities.Grass:
+					co = Entities.Bush
+				else:
+					co = Entities.Grass
+			for k in range(n):
+				if (x + get_pos_y()) % 2 == 0:
+					c = ce
+				else:
+					c = co
+				if w * n <= 3:
+					tend_wait(c)
+				else:
+					tend_plain(c)
+				if k < n - 1 or w == 1:
+					move(North)
+		cur = NEED[0]
+		done = True
+		for it in cur:
+			if num_items(it) < cur[it]:
+				done = False
+		if done:
+			return 0
+		for k in PEND:
+			PEND[k] = 0
+
+
+def tend_wait(c):
+	# small farm, growth-bound: wait for the crop here instead of walking past it
+	e = get_entity_type()
+	if e != None and e != Entities.Grass and e == c:
+		while not can_harvest():
+			pass
+	tend_plain(c)
 
 
 def mixed_round(need):
