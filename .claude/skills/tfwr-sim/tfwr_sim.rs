@@ -34,17 +34,224 @@ panic = "abort"
 // simulate() and leaderboard_run() called from a script (a leaderboard attempt is run from the
 // command line instead: --leaderboard, or give the launcher script), the "feature not unlocked yet" checks on language keywords, and
 // anything that is only visual or audio. The farm starts as a freshly generated field.
-#![feature(coroutines, coroutine_trait)]
 #![allow(dead_code, unused_variables, unused_mut, unused_assignments, non_snake_case, non_upper_case_globals)]
 #![allow(clippy::all)]
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::ops::{Coroutine, CoroutineState};
-use std::pin::Pin;
 use std::rc::Rc;
 
 type R<T> = Result<T, String>;
+
+/// FxHash (rustc's hasher): far cheaper than the default SipHash for the short keys of variable
+/// tables and dict indexes. Only lookups use it; iteration order comes from insertion order.
+#[derive(Default, Clone, Copy)]
+struct Fx(u64);
+impl std::hash::Hasher for Fx {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        let mut b = bytes;
+        while b.len() >= 8 {
+            self.add(u64::from_le_bytes(b[..8].try_into().unwrap()));
+            b = &b[8..];
+        }
+        if b.len() >= 4 {
+            self.add(u32::from_le_bytes(b[..4].try_into().unwrap()) as u64);
+            b = &b[4..];
+        }
+        for &x in b {
+            self.add(x as u64);
+        }
+    }
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.add(i as u64);
+    }
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.add(i as u64);
+    }
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.add(i);
+    }
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.add(i as u64);
+    }
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+impl Fx {
+    #[inline]
+    fn add(&mut self, w: u64) {
+        self.0 = (self.0.rotate_left(5) ^ w).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
+}
+type FxBuild = std::hash::BuildHasherDefault<Fx>;
+type FxMap<K, V> = HashMap<K, V, FxBuild>;
+
+/// Every drone's program runs on a stack of its own, so the interpreter can be plain recursion
+/// that steps out to the scheduler wherever the game's iterators would yield, without a heap
+/// coroutine per syntax node. Windows has fibers for this; elsewhere each drone gets a thread and
+/// the two take turns (correct, only slower).
+mod stacks {
+    #[cfg(windows)]
+    mod imp {
+        use std::cell::Cell;
+        use std::ffi::c_void;
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn ConvertThreadToFiber(param: *mut c_void) -> *mut c_void;
+            fn CreateFiberEx(commit: usize, reserve: usize, flags: u32, start: extern "system" fn(*mut c_void), param: *mut c_void) -> *mut c_void;
+            fn SwitchToFiber(fiber: *mut c_void);
+            fn DeleteFiber(fiber: *mut c_void);
+        }
+        thread_local! {
+            /// the scheduler's own fiber on this thread
+            static MAIN: Cell<*mut c_void> = const { Cell::new(std::ptr::null_mut()) };
+        }
+        struct Start {
+            body: Option<Box<dyn FnOnce()>>,
+            done: Cell<bool>,
+        }
+        pub struct Stack {
+            fiber: *mut c_void,
+            start: *mut Start,
+        }
+        extern "system" fn trampoline(p: *mut c_void) {
+            let start = p as *mut Start;
+            let body = unsafe { (*start).body.take() };
+            if let Some(body) = body {
+                body();
+            }
+            unsafe { (*start).done.set(true) };
+            // A fiber must never return: that would end the thread.
+            loop {
+                suspend();
+            }
+        }
+        impl Stack {
+            pub fn new(body: Box<dyn FnOnce()>) -> Stack {
+                MAIN.with(|m| {
+                    if m.get().is_null() {
+                        let f = unsafe { ConvertThreadToFiber(std::ptr::null_mut()) };
+                        assert!(!f.is_null(), "ConvertThreadToFiber failed");
+                        m.set(f);
+                    }
+                });
+                let start = Box::into_raw(Box::new(Start { body: Some(body), done: Cell::new(false) }));
+                // The interpreter recurses with the script's call depth: reserve a deep stack
+                // (address space only; pages are committed as they are touched).
+                let fiber = unsafe { CreateFiberEx(64 << 10, 256 << 20, 0, trampoline, start as *mut c_void) };
+                assert!(!fiber.is_null(), "CreateFiberEx failed");
+                Stack { fiber, start }
+            }
+            /// Runs the program until it calls suspend() or ends.
+            pub fn resume(&self) {
+                unsafe { SwitchToFiber(self.fiber) };
+            }
+            pub fn done(&self) -> bool {
+                unsafe { (*self.start).done.get() }
+            }
+        }
+        impl Drop for Stack {
+            fn drop(&mut self) {
+                // Whatever an unfinished program still holds on its stack is leaked, not dropped.
+                unsafe {
+                    DeleteFiber(self.fiber);
+                    drop(Box::from_raw(self.start));
+                }
+            }
+        }
+        /// Called by a running program: back to the scheduler.
+        pub fn suspend() {
+            let main = MAIN.with(|m| m.get());
+            unsafe { SwitchToFiber(main) };
+        }
+    }
+
+    #[cfg(not(windows))]
+    mod imp {
+        use std::cell::RefCell;
+        use std::sync::{Arc, Condvar, Mutex};
+        /// whose turn it is: false the scheduler's, true the program's
+        struct Baton {
+            turn: Mutex<(bool, bool)>, // (program's turn, program done)
+            cv: Condvar,
+        }
+        struct SendBox(Box<dyn FnOnce()>);
+        unsafe impl Send for SendBox {}
+        thread_local! {
+            static CURRENT: RefCell<Option<Arc<Baton>>> = const { RefCell::new(None) };
+        }
+        pub struct Stack {
+            baton: Arc<Baton>,
+            thread: Option<std::thread::JoinHandle<()>>,
+        }
+        impl Stack {
+            pub fn new(body: Box<dyn FnOnce()>) -> Stack {
+                let baton = Arc::new(Baton { turn: Mutex::new((false, false)), cv: Condvar::new() });
+                let b = baton.clone();
+                let body = SendBox(body);
+                let thread = std::thread::Builder::new()
+                    .stack_size(256 << 20)
+                    .spawn(move || {
+                        let body = body;
+                        {
+                            let mut t = b.turn.lock().unwrap();
+                            while !t.0 {
+                                t = b.cv.wait(t).unwrap();
+                            }
+                        }
+                        CURRENT.with(|c| *c.borrow_mut() = Some(b.clone()));
+                        (body.0)();
+                        let mut t = b.turn.lock().unwrap();
+                        *t = (false, true);
+                        b.cv.notify_all();
+                    })
+                    .expect("cannot start a drone thread");
+                Stack { baton, thread: Some(thread) }
+            }
+            pub fn resume(&self) {
+                let mut t = self.baton.turn.lock().unwrap();
+                if t.1 {
+                    return;
+                }
+                t.0 = true;
+                self.baton.cv.notify_all();
+                while t.0 {
+                    t = self.baton.cv.wait(t).unwrap();
+                }
+            }
+            pub fn done(&self) -> bool {
+                self.baton.turn.lock().unwrap().1
+            }
+        }
+        impl Drop for Stack {
+            fn drop(&mut self) {
+                // An unfinished program's thread stays parked forever; it holds nothing shared.
+                if self.done() {
+                    if let Some(t) = self.thread.take() {
+                        let _ = t.join();
+                    }
+                }
+            }
+        }
+        pub fn suspend() {
+            let b = CURRENT.with(|c| c.borrow().clone()).expect("suspend outside a drone");
+            let mut t = b.turn.lock().unwrap();
+            t.0 = false;
+            b.cv.notify_all();
+            while !t.0 {
+                t = b.cv.wait(t).unwrap();
+            }
+        }
+    }
+    pub use imp::{suspend, Stack};
+}
 
 /// Small-block allocator: the interpreter makes millions of short-lived allocations per run (one
 /// boxed coroutine per node it evaluates), and the Windows heap spends about half of all run time
@@ -486,14 +693,14 @@ enum Key {
 struct DMap {
     slots: Vec<Option<(V, V)>>,
     free: Vec<usize>,
-    index: HashMap<Key, usize>,
+    index: FxMap<Key, usize>,
     version: u64,
     is_set: bool,
 }
 
 impl DMap {
     fn new(is_set: bool) -> DMap {
-        DMap { slots: Vec::new(), free: Vec::new(), index: HashMap::new(), version: 0, is_set }
+        DMap { slots: Vec::new(), free: Vec::new(), index: FxMap::default(), version: 0, is_set }
     }
     fn len(&self) -> usize {
         self.index.len()
@@ -1368,13 +1575,13 @@ static UNLOCKS: &[UnlockSO] = &[
 // ---------------------------------------------------------------------------------------------
 /// Dictionary<string, (IPyObject val, bool isStatic)> with insertion order kept
 struct Vars {
-    map: HashMap<Rc<str>, usize>,
+    map: FxMap<Rc<str>, usize>,
     items: Vec<(Rc<str>, V, bool)>,
 }
 
 impl Vars {
     fn new() -> Vars {
-        Vars { map: HashMap::new(), items: Vec::new() }
+        Vars { map: FxMap::default(), items: Vec::new() }
     }
     fn len(&self) -> usize {
         self.items.len()
@@ -2644,7 +2851,6 @@ impl From<String> for Ctrl {
 }
 type Res = Result<(), Ctrl>;
 /// One C# IEnumerator<double>: resuming it is MoveNext(), a yield is `yield return`.
-type Co = Pin<Box<dyn Coroutine<(), Yield = (), Return = Res>>>;
 
 #[derive(Clone)]
 enum SE {
@@ -2716,6 +2922,8 @@ struct Shared {
     lb_nodes: Cell<Option<usize>>,
     /// Execution.leaderboardCodeModules
     lb_modules: RefCell<HashSet<String>>,
+    /// every syntax tree the run has parsed (main file and imports)
+    trees: RefCell<Vec<Rc<Node>>>,
 }
 
 /// Execution.RegisterLeaderboardCode: a leaderboard run may hold at most 100,000 syntax nodes,
@@ -2767,7 +2975,13 @@ struct PState {
     current_side_effect: SE,
     current_execute_exception: Option<String>,
     random_random: SysRandom,
-    execution_stack: Vec<Option<Co>>,
+    /// the program, on its own stack; None until the drone's state is set up
+    program: Option<stacks::Stack>,
+    /// ProgramState's execution stack, as a count: 1 for the program, +1 per user function call
+    /// still running; 0 once the program has ended
+    frames: usize,
+    /// resumes in the current PerformExecutionStep (the game stops at 1000)
+    resumes: i32,
     module_cache: HashMap<String, Rc<PyModule>>,
     op_count: f64,
     start_op_count: f64,
@@ -2775,7 +2989,9 @@ struct PState {
     drone_id: i32,
     drone_handle: Option<Rc<DroneHandle>>,
     target_op_count: f64,
-    current_executing_node: Option<Rc<Node>>,
+    /// the node being run, for error reports; the trees it points into are kept alive by
+    /// Shared::trees for the whole run
+    current_executing_node: *const Node,
     /// Set while this drone is asking for the time in the condition of `while get_time() < x: pass`
     /// (second pass onwards): the value of x. Execute uses it to skip the passes that cannot end.
     wait_deadline: Option<f64>,
@@ -2843,7 +3059,9 @@ impl PState {
             current_side_effect: SE::None,
             current_execute_exception: None,
             random_random: SysRandom::new(random.next()),
-            execution_stack: Vec::new(),
+            program: None,
+            frames: 1,
+            resumes: 0,
             module_cache: HashMap::new(),
             op_count,
             start_op_count: op_count,
@@ -2851,7 +3069,7 @@ impl PState {
             drone_id,
             drone_handle: None,
             target_op_count: 0.0,
-            current_executing_node: None,
+            current_executing_node: std::ptr::null(),
             wait_deadline: None,
             spin_loop: false,
             spin_read: None,
@@ -2900,26 +3118,56 @@ fn eb(st: &StRef, node: &Rc<Node>, depth: i32) -> R<()> {
     if depth > 1100 {
         return Err("error_max_stack_size_reached".into());
     }
-    st.borrow_mut().current_executing_node = Some(node.clone());
+    st.borrow_mut().current_executing_node = Rc::as_ptr(node);
     Ok(())
 }
 
-/// ProgramState.PushOntoExecutionStack
-fn push_onto_execution_stack(st: &StRef, co: Co) -> R<()> {
+/// ProgramState.PushOntoExecutionStack, for a user function call
+fn push_frame(st: &StRef) -> R<()> {
     let mut s = st.borrow_mut();
-    if s.execution_stack.len() >= 1101 {
+    if s.frames >= 1101 {
         return Err("error_max_stack_size_reached".into());
     }
-    s.execution_stack.push(Some(co));
+    s.frames += 1;
     Ok(())
+}
+
+/// A point where the game's iterator yields. PerformExecutionStep resumes the program again right
+/// away unless it is past its target op count, has a side effect for the scheduler, or has
+/// already been resumed 1000 times this step; otherwise the drone hands back to the scheduler.
+#[inline]
+fn yp(st: &StRef) {
+    let stop = {
+        let mut s = st.borrow_mut();
+        s.resumes += 1;
+        !(s.op_count <= s.target_op_count) || s.has_side_effect() || s.resumes >= 1000
+    };
+    if stop {
+        stacks::suspend();
+    }
+}
+
+/// How a drone's program ends: ProgramState.PerformExecutionStep's handling of the last iterator.
+fn program_finished(st: &StRef, r: Res) {
+    let mut s = st.borrow_mut();
+    s.frames = 0;
+    if let Err(c) = r {
+        s.current_execute_exception = Some(match c {
+            Ctrl::Break => "error_no_loop_to_break".to_string(),
+            Ctrl::Continue => "error_no_loop_to_continue".to_string(),
+            Ctrl::Return => "error_no_function_to_return_from".to_string(),
+            Ctrl::Err(e) => e,
+        });
+        s.current_side_effect = SE::Error;
+    }
 }
 
 /// ProgramState.PerformExecutionStep
 fn perform_execution_step(st: &StRef, target_op_count: f64) {
-    {
+    let program: *const stacks::Stack = {
         let mut s = st.borrow_mut();
         s.target_op_count = target_op_count;
-        if s.execution_stack.is_empty() {
+        if s.frames == 0 {
             s.current_side_effect = SE::Terminated;
             return;
         }
@@ -2928,55 +3176,19 @@ fn perform_execution_step(st: &StRef, target_op_count: f64) {
             s.last_consumed_op_count += 1.0;
             return;
         }
-    }
-    let mut num = 0;
-    loop {
-        let idx = st.borrow().execution_stack.len();
-        if idx > 0 {
-            let mut co = st.borrow_mut().execution_stack[idx - 1].take().expect("enumerator is already running");
-            match co.as_mut().resume(()) {
-                CoroutineState::Yielded(()) => {
-                    st.borrow_mut().execution_stack[idx - 1] = Some(co);
-                }
-                CoroutineState::Complete(Ok(())) => {
-                    st.borrow_mut().execution_stack.truncate(idx - 1);
-                    continue;
-                }
-                CoroutineState::Complete(Err(c)) => {
-                    let mut s = st.borrow_mut();
-                    s.current_execute_exception = Some(match c {
-                        Ctrl::Break => "error_no_loop_to_break".to_string(),
-                        Ctrl::Continue => "error_no_loop_to_continue".to_string(),
-                        Ctrl::Return => "error_no_function_to_return_from".to_string(),
-                        Ctrl::Err(e) => e,
-                    });
-                    s.current_side_effect = SE::Error;
-                    return;
-                }
-            }
+        s.resumes = 0;
+        match &s.program {
+            Some(p) => p as *const stacks::Stack,
+            None => return,
         }
-        num += 1;
-        let s = st.borrow();
-        if s.execution_stack.is_empty() || !(s.op_count <= target_op_count) || s.has_side_effect() || num >= 1000 {
-            break;
-        }
-    }
+    };
+    // The program borrows the state itself while it runs; no borrow is held across the switch.
+    unsafe { (*program).resume() };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Node.Execute for every node type
 // ---------------------------------------------------------------------------------------------
-macro_rules! run {
-    ($co:expr) => {{
-        let mut c: Co = $co;
-        loop {
-            match c.as_mut().resume(()) {
-                CoroutineState::Yielded(()) => yield,
-                CoroutineState::Complete(r) => break r,
-            }
-        }
-    }};
-}
 
 fn is_literal_node(node: &Rc<Node>) -> Option<V> {
     let mut n = node;
@@ -3058,15 +3270,14 @@ fn is_items_spin(node: &Rc<Node>) -> bool {
     (is_num_items(a) && is_operand(b)) || (is_num_items(b) && is_operand(a))
 }
 
-fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
-    Box::pin(
-        #[coroutine]
-        static move || -> Res {
+fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
+    {
+        {
             match &node.kind {
                 NK::Seq => {
                     let mut elements = Vec::with_capacity(node.slots.len());
                     for slot in node.slots.iter() {
-                        run!(exec(slot.clone(), st.clone(), depth + 1))?;
+                        exec(&slot, st, depth + 1)?;
                         elements.push(rv(&st));
                     }
                     set_rv(&st, V::Seq(Rc::new(elements)));
@@ -3088,19 +3299,19 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     s.module_state.is_expression_static = false;
                     Ok(())
                 }
-                NK::Bracket => run!(exec(node.slots[0].clone(), st.clone(), depth + 1)),
+                NK::Bracket => exec(&node.slots[0], st, depth + 1),
                 NK::Call => {
                     eb(&st, &node, depth)?;
-                    run!(exec(node.slots[0].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[0], st, depth + 1)?;
                     let func = match rv(&st) {
                         V::Func(f) => f,
                         _ => {
-                            st.borrow_mut().current_executing_node = Some(node.clone());
+                            st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                             return Err(Ctrl::Err("error_not_a_function".into()));
                         }
                     };
                     let is_static = st.borrow().module_state.is_expression_static;
-                    run!(exec(node.slots[1].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[1], st, depth + 1)?;
                     let mut parameters: Vec<V> = match rv(&st) {
                         V::Seq(s) => s.to_vec(),
                         _ => Vec::new(),
@@ -3108,10 +3319,10 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     if let Some(m) = &func.method_object {
                         parameters.insert(0, m.clone());
                     }
-                    st.borrow_mut().current_executing_node = Some(node.clone());
+                    st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                     if let Some(tree) = &func.syntax_tree {
                         if check_inc(&st, if is_static { 0.0 } else { OPERATION_OPS }) {
-                            yield;
+                            yp(st);
                         }
                         let vars = match &tree.kind {
                             NK::Function { vars, .. } => vars.clone(),
@@ -3119,24 +3330,26 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                         };
                         let scope = new_scope(Some(tree.clone()), func.parent_scope.clone(), &vars);
                         st.borrow_mut().module_state.call_stack.push(scope);
-                        push_onto_execution_stack(&st, exec_function(tree.clone(), st.clone(), parameters, 0))?;
-                        yield;
-                        return Ok(());
+                        push_frame(st)?;
+                        yp(st);
+                        let r = exec_function(tree, st, parameters, 0);
+                        st.borrow_mut().frames -= 1;
+                        return r;
                     }
                     let mut num = call_builtin(func.binding.unwrap(), parameters, &st)?;
                     if func.is_free && !is_static {
                         num = num.max(OPERATION_OPS);
                     }
                     if check_inc(&st, num) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
                 NK::Unary(op) => {
                     eb(&st, &node, depth)?;
-                    run!(exec(node.slots[0].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[0], st, depth + 1)?;
                     let value = rv(&st);
-                    st.borrow_mut().current_executing_node = Some(node.clone());
+                    st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                     if let V::Func(f) = &value {
                         if op.as_ref() != "not" {
                             return Err(Ctrl::Err(err("error_function_in_operator", &[f.name.to_string(), op.to_string()])));
@@ -3164,19 +3377,19 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                 NK::Binary(op, _) => {
                     let op: &str = op.as_ref();
                     eb(&st, &node, depth)?;
-                    run!(exec(node.slots[0].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[0], st, depth + 1)?;
                     let lhs = rv(&st);
                     if op == "and" && !is_true_value(&lhs)? {
                         set_rv(&st, lhs);
                         if check_inc(&st, OPERATION_OPS) {
-                            yield;
+                            yp(st);
                         }
                         return Ok(());
                     }
                     if op == "or" && is_true_value(&lhs)? {
                         set_rv(&st, lhs);
                         if check_inc(&st, OPERATION_OPS) {
-                            yield;
+                            yp(st);
                         }
                         return Ok(());
                     }
@@ -3187,7 +3400,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                         };
                         let is_static = st.borrow().module_state.is_expression_static;
                         if check_inc(&st, if is_static { 0.0 } else { OPERATION_OPS }) {
-                            yield;
+                            yp(st);
                         }
                         let (v, flag) = match &lhs {
                             V::Module(m) => module_export(m, &member)?,
@@ -3199,9 +3412,9 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                         s.module_state.is_expression_static &= flag;
                         return Ok(());
                     }
-                    run!(exec(node.slots[1].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[1], st, depth + 1)?;
                     let rhs = rv(&st);
-                    st.borrow_mut().current_executing_node = Some(node.clone());
+                    st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                     if op != "and" && op != "or" && op != "." {
                         let f = match (&lhs, &rhs) {
                             (V::Func(f), _) => Some(f.clone()),
@@ -3286,7 +3499,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     };
                     set_rv(&st, result);
                     if check_inc(&st, OPERATION_OPS * steps as f64) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
@@ -3294,10 +3507,10 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     eb(&st, &node, depth)?;
                     let mut operands = Vec::with_capacity(node.slots.len());
                     for slot in node.slots.iter() {
-                        run!(exec(slot.clone(), st.clone(), depth + 1))?;
+                        exec(&slot, st, depth + 1)?;
                         operands.push(rv(&st));
                     }
-                    st.borrow_mut().current_executing_node = Some(node.clone());
+                    st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                     let mut steps: i32 = 0;
                     let mut flag = true;
                     for i in 0..ops.len() {
@@ -3348,7 +3561,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     }
                     set_rv(&st, V::Bool(flag));
                     if check_inc(&st, OPERATION_OPS * steps as f64) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
@@ -3374,7 +3587,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                             if items_spin && !first_loop {
                                 st.borrow_mut().spin_loop = true;
                             }
-                            let cond_result = run!(exec(node.slots[0].clone(), st.clone(), depth + 1));
+                            let cond_result = exec(&node.slots[0], st, depth + 1);
                             {
                                 let mut s = st.borrow_mut();
                                 s.wait_deadline = None;
@@ -3395,57 +3608,52 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                         }
                         if first_loop {
                             if check_inc(&st, OPERATION_OPS) {
-                                yield;
+                                yp(st);
                             }
                             first_loop = false;
                         }
                         if !condition {
                             break;
                         }
-                        let mut body = exec(node.slots[1].clone(), st.clone(), depth + 1);
-                        loop {
-                            match body.as_mut().resume(()) {
-                                CoroutineState::Yielded(()) => yield,
-                                CoroutineState::Complete(Ok(())) => break,
-                                CoroutineState::Complete(Err(Ctrl::Break)) => {
-                                    if !looping {
-                                        return Err(Ctrl::Break);
-                                    }
-                                    return Ok(());
+                        match exec(&node.slots[1], st, depth + 1) {
+                            Ok(()) => {}
+                            Err(Ctrl::Break) => {
+                                if !looping {
+                                    return Err(Ctrl::Break);
                                 }
-                                CoroutineState::Complete(Err(Ctrl::Continue)) => {
-                                    if !looping {
-                                        return Err(Ctrl::Continue);
-                                    }
-                                    break;
-                                }
-                                CoroutineState::Complete(Err(e)) => return Err(e),
+                                return Ok(());
                             }
+                            Err(Ctrl::Continue) => {
+                                if !looping {
+                                    return Err(Ctrl::Continue);
+                                }
+                            }
+                            Err(e) => return Err(e),
                         }
                         if !looping {
                             set_rv(&st, V::None);
                             return Ok(());
                         }
                         eb(&st, &node, depth)?;
-                        yield;
+                        yp(st);
                     }
                     if node.slots.len() > 2 {
-                        run!(exec(node.slots[2].clone(), st.clone(), depth + 1))?;
+                        exec(&node.slots[2], st, depth + 1)?;
                     }
                     set_rv(&st, V::None);
                     Ok(())
                 }
                 NK::For => {
                     eb(&st, &node, depth)?;
-                    run!(exec(node.slots[0].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[0], st, depth + 1)?;
                     let iterable = rv(&st);
                     if !is_enumerable(&iterable) {
-                        st.borrow_mut().current_executing_node = Some(node.clone());
+                        st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                         return Err(Ctrl::Err(err("error_for_requires_iterable", &[nice_el(&iterable)])));
                     }
                     let mut enumerator = PyIter::new(&iterable);
                     if check_inc(&st, OPERATION_OPS) {
-                        yield;
+                        yp(st);
                     }
                     let assign_op: Rc<str> = Rc::from("=");
                     loop {
@@ -3453,16 +3661,11 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                             Some(c) => c,
                             None => break,
                         };
-                        run!(assign(st.clone(), depth, node.slots[2].clone(), current, assign_op.clone()))?;
-                        let mut body = exec(node.slots[1].clone(), st.clone(), depth + 1);
-                        loop {
-                            match body.as_mut().resume(()) {
-                                CoroutineState::Yielded(()) => yield,
-                                CoroutineState::Complete(Ok(())) => break,
-                                CoroutineState::Complete(Err(Ctrl::Break)) => return Ok(()),
-                                CoroutineState::Complete(Err(Ctrl::Continue)) => break,
-                                CoroutineState::Complete(Err(e)) => return Err(e),
-                            }
+                        assign(st, depth, &node.slots[2], current, &assign_op)?;
+                        match exec(&node.slots[1], st, depth + 1) {
+                            Ok(()) | Err(Ctrl::Continue) => {}
+                            Err(Ctrl::Break) => return Ok(()),
+                            Err(e) => return Err(e),
                         }
                         eb(&st, &node, depth)?;
                     }
@@ -3470,10 +3673,10 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                 }
                 NK::Assignment(op) => {
                     eb(&st, &node, depth)?;
-                    run!(exec(node.slots[1].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[1], st, depth + 1)?;
                     let value = rv(&st);
-                    st.borrow_mut().current_executing_node = Some(node.clone());
-                    run!(assign(st.clone(), depth, node.slots[0].clone(), value, op.clone()))?;
+                    st.borrow_mut().current_executing_node = Rc::as_ptr(node);
+                    assign(st, depth, &node.slots[0], value, &op)?;
                     set_rv(&st, V::None);
                     Ok(())
                 }
@@ -3491,7 +3694,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     scope_set_var(&scope, func_name, V::Func(f), *is_static);
                     set_rv(&st, V::None);
                     if check_inc(&st, OPERATION_OPS) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
@@ -3499,46 +3702,46 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                 NK::Return => {
                     eb(&st, &node, depth)?;
                     if !node.slots.is_empty() {
-                        run!(exec(node.slots[0].clone(), st.clone(), depth + 1))?;
+                        exec(&node.slots[0], st, depth + 1)?;
                     } else {
                         set_rv(&st, V::None);
                     }
                     if check_inc(&st, 0.0) {
-                        yield;
+                        yp(st);
                     }
-                    st.borrow_mut().current_executing_node = Some(node.clone());
+                    st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                     Err(Ctrl::Return)
                 }
                 NK::Pass => {
                     eb(&st, &node, depth)?;
                     if check_inc(&st, OPERATION_OPS) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
                 NK::Break => {
                     eb(&st, &node, depth)?;
                     if check_inc(&st, 0.0) {
-                        yield;
+                        yp(st);
                     }
                     Err(Ctrl::Break)
                 }
                 NK::Continue => {
                     eb(&st, &node, depth)?;
                     if check_inc(&st, 0.0) {
-                        yield;
+                        yp(st);
                     }
                     Err(Ctrl::Continue)
                 }
                 NK::Global => {
                     eb(&st, &node, depth)?;
-                    yield;
+                    yp(st);
                     Ok(())
                 }
                 NK::Import { module_names, unpack, unpack_all, vars_to_unpack, is_static } => {
                     eb(&st, &node, depth)?;
                     if check_inc(&st, 0.0) {
-                        yield;
+                        yp(st);
                     }
                     for name in module_names.iter() {
                         let name: &str = name.as_ref();
@@ -3557,6 +3760,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                                 Err(e) => return Err(Ctrl::Err(format!("error_syntax_error_in_import: {}", e))),
                             };
                             let sh = st.borrow().sh.clone();
+                            sh.trees.borrow_mut().push(tree.clone());
                             if let Err(e) = register_leaderboard_code(&sh, name, &tree) {
                                 return Err(Ctrl::Err(e));
                             }
@@ -3576,7 +3780,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                                 is_expression_static: false,
                             };
                             let old = std::mem::replace(&mut st.borrow_mut().module_state, module_state);
-                            let r = run!(exec(tree, st.clone(), depth));
+                            let r = exec(&tree, st, depth);
                             st.borrow_mut().module_state = old;
                             r?;
                             module.fully_initialized.set(true);
@@ -3605,7 +3809,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                 }
                 NK::List => {
                     eb(&st, &node, depth)?;
-                    run!(exec(node.slots[0].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[0], st, depth + 1)?;
                     let elements = match rv(&st) {
                         V::Seq(s) => s.to_vec(),
                         _ => Vec::new(),
@@ -3614,13 +3818,13 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     set_rv(&st, new_list(elements));
                     set_static(&st, false);
                     if check_inc(&st, OPERATION_OPS * (count.max(1) as f64)) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
                 NK::Tuple => {
                     eb(&st, &node, depth)?;
-                    run!(exec(node.slots[0].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[0], st, depth + 1)?;
                     let elements = match rv(&st) {
                         V::Seq(s) => s,
                         _ => Rc::new(Vec::new()),
@@ -3628,13 +3832,13 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     set_rv(&st, V::Tuple(Rc::new(elements.to_vec())));
                     set_static(&st, false);
                     if check_inc(&st, OPERATION_OPS) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
                 NK::Dict => {
                     eb(&st, &node, depth)?;
-                    run!(exec(node.slots[0].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[0], st, depth + 1)?;
                     let elements = match rv(&st) {
                         V::Seq(s) => s,
                         _ => Rc::new(Vec::new()),
@@ -3644,7 +3848,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     while i < elements.len() {
                         let k = &elements[i];
                         if k.is_unhashable() {
-                            st.borrow_mut().current_executing_node = Some(node.clone());
+                            st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                             return Err(Ctrl::Err(err("error_bad_key", &[nice_el(k)])));
                         }
                         dictionary.put(to_key(k)?, k.clone(), elements[i + 1].clone());
@@ -3654,13 +3858,13 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     set_rv(&st, V::Dict(Rc::new(RefCell::new(dictionary))));
                     set_static(&st, false);
                     if check_inc(&st, OPERATION_OPS * (1 + count) as f64) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
                 NK::Set => {
                     eb(&st, &node, depth)?;
-                    run!(exec(node.slots[0].clone(), st.clone(), depth + 1))?;
+                    exec(&node.slots[0], st, depth + 1)?;
                     let elements = match rv(&st) {
                         V::Seq(s) => s,
                         _ => Rc::new(Vec::new()),
@@ -3668,7 +3872,7 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     let mut hash_set = DMap::new(true);
                     for k in elements.iter() {
                         if k.is_unhashable() {
-                            st.borrow_mut().current_executing_node = Some(node.clone());
+                            st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                             return Err(Ctrl::Err(err("error_bad_key", &[nice_el(k)])));
                         }
                         let key = to_key(k)?;
@@ -3681,13 +3885,13 @@ fn exec(node: Rc<Node>, st: StRef, depth: i32) -> Co {
                     set_rv(&st, value);
                     set_static(&st, false);
                     if check_inc(&st, OPERATION_OPS * size.max(1) as f64) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
             }
-        },
-    )
+        }
+    }
 }
 
 /// PyModule.Export
@@ -3699,10 +3903,9 @@ fn module_export(m: &Rc<PyModule>, value: &str) -> R<(V, bool)> {
 }
 
 /// FunctionNode.Execute
-fn exec_function(node: Rc<Node>, st: StRef, mut arguments: Vec<V>, depth: i32) -> Co {
-    Box::pin(
-        #[coroutine]
-        static move || -> Res {
+fn exec_function(node: &Rc<Node>, st: &StRef, mut arguments: Vec<V>, depth: i32) -> Res {
+    {
+        {
             let (param_names, func_name) = match &node.kind {
                 NK::Function { params, name, .. } => (params, name),
                 _ => return Err(Ctrl::Err("not a function".into())),
@@ -3718,7 +3921,7 @@ fn exec_function(node: Rc<Node>, st: StRef, mut arguments: Vec<V>, depth: i32) -
             eb(&st, &node, depth)?;
             let mut i = num_default_values - num;
             while i < num_default_values {
-                run!(exec(node.slots[(i + 1) as usize].clone(), st.clone(), depth + 1))?;
+                exec(&node.slots[(i + 1) as usize], st, depth + 1)?;
                 arguments.push(rv(&st));
                 i += 1;
             }
@@ -3728,29 +3931,23 @@ fn exec_function(node: Rc<Node>, st: StRef, mut arguments: Vec<V>, depth: i32) -
                     scope_set_var(&scope, &param_names[j], arguments[j].clone(), false);
                 }
             }
-            let mut block = exec(node.slots[0].clone(), st.clone(), depth + 1);
-            loop {
-                match block.as_mut().resume(()) {
-                    CoroutineState::Yielded(()) => yield,
-                    CoroutineState::Complete(Ok(())) => break,
-                    CoroutineState::Complete(Err(Ctrl::Break)) => return Err(Ctrl::Err("error_no_loop_to_break".into())),
-                    CoroutineState::Complete(Err(Ctrl::Continue)) => {
-                        return Err(Ctrl::Err("error_no_loop_to_continue".into()))
-                    }
-                    CoroutineState::Complete(Err(Ctrl::Return)) => {
-                        st.borrow_mut().module_state.call_stack.pop();
-                        return Ok(());
-                    }
-                    CoroutineState::Complete(Err(e)) => return Err(e),
+            match exec(&node.slots[0], st, depth + 1) {
+                Ok(()) => {}
+                Err(Ctrl::Break) => return Err(Ctrl::Err("error_no_loop_to_break".into())),
+                Err(Ctrl::Continue) => return Err(Ctrl::Err("error_no_loop_to_continue".into())),
+                Err(Ctrl::Return) => {
+                    st.borrow_mut().module_state.call_stack.pop();
+                    return Ok(());
                 }
+                Err(e) => return Err(e),
             }
             let mut s = st.borrow_mut();
             s.module_state.return_value = V::None;
             s.module_state.is_expression_static = false;
             s.module_state.call_stack.pop();
             Ok(())
-        },
-    )
+        }
+    }
 }
 
 /// AssignmentNode.GetValueToAssign; returns (value, execTime)
@@ -3798,10 +3995,9 @@ fn get_value_to_assign(before: Option<&V>, rhs: &V, op: &str) -> R<(V, f64)> {
 }
 
 /// AssignmentNode.Assign
-fn assign(st: StRef, depth: i32, lhs: Rc<Node>, rhs: V, op: Rc<str>) -> Co {
-    Box::pin(
-        #[coroutine]
-        static move || -> Res {
+fn assign(st: &StRef, depth: i32, lhs: &Rc<Node>, rhs: V, op: &Rc<str>) -> Res {
+    {
+        {
             match &lhs.kind {
                 NK::Value(value) => {
                     let scope = st.borrow().current_scope();
@@ -3809,17 +4005,17 @@ fn assign(st: StRef, depth: i32, lhs: Rc<Node>, rhs: V, op: Rc<str>) -> Co {
                     let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, &op)?;
                     scope_set_var(&scope, value, v, false);
                     if check_inc(&st, OPERATION_OPS * exec_time) {
-                        yield;
+                        yp(st);
                     }
                     Ok(())
                 }
                 NK::Binary(bop, _) => {
-                    run!(exec(lhs.slots[0].clone(), st.clone(), depth + 1))?;
+                    exec(&lhs.slots[0], st, depth + 1)?;
                     if bop.as_ref() == "." {
                         let module = match rv(&st) {
                             V::Module(m) => m,
                             other => {
-                                st.borrow_mut().current_executing_node = Some(lhs.clone());
+                                st.borrow_mut().current_executing_node = Rc::as_ptr(lhs);
                                 return Err(Ctrl::Err(err("error_attribute_on_non_module", &[nice_el(&other)])));
                             }
                         };
@@ -3832,17 +4028,17 @@ fn assign(st: StRef, depth: i32, lhs: Rc<Node>, rhs: V, op: Rc<str>) -> Co {
                         let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, &op)?;
                         module.scope.borrow_mut().vars.set(&value2, v, false);
                         if check_inc(&st, OPERATION_OPS * (exec_time + num)) {
-                            yield;
+                            yp(st);
                         }
                         return Ok(());
                     }
                     if bop.as_ref() == "[]" {
                         let indexable = rv(&st);
                         if !(indexable.is_seq() || matches!(indexable, V::Dict(_))) {
-                            st.borrow_mut().current_executing_node = Some(lhs.clone());
+                            st.borrow_mut().current_executing_node = Rc::as_ptr(lhs);
                             return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(&indexable)])));
                         }
-                        run!(exec(lhs.slots[1].clone(), st.clone(), depth + 1))?;
+                        exec(&lhs.slots[1], st, depth + 1)?;
                         let indices = match rv(&st) {
                             V::Seq(s) => s,
                             _ => Rc::new(Vec::new()),
@@ -3854,11 +4050,11 @@ fn assign(st: StRef, depth: i32, lhs: Rc<Node>, rhs: V, op: Rc<str>) -> Co {
                         let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, &op)?;
                         index_at(&indexable, &indices, &mut steps, Some(v))?;
                         if check_inc(&st, OPERATION_OPS * (steps as f64 + exec_time)) {
-                            yield;
+                            yp(st);
                         }
                         return Ok(());
                     }
-                    st.borrow_mut().current_executing_node = Some(lhs.clone());
+                    st.borrow_mut().current_executing_node = Rc::as_ptr(lhs);
                     Err(Ctrl::Err("error_assign_type_mismatch".into()))
                 }
                 NK::List | NK::Tuple => {
@@ -3875,18 +4071,18 @@ fn assign(st: StRef, depth: i32, lhs: Rc<Node>, rhs: V, op: Rc<str>) -> Co {
                     }
                     let right_values = seq_items(&rhs);
                     if matches!(rhs, V::List(_)) && check_inc(&st, OPERATION_OPS) {
-                        yield;
+                        yp(st);
                     }
                     for i in 0..left_nodes.len() {
-                        run!(assign(st.clone(), depth, left_nodes[i].clone(), right_values[i].clone(), op.clone()))?;
+                        assign(st, depth, &left_nodes[i], right_values[i].clone(), &op)?;
                     }
                     Ok(())
                 }
-                NK::Bracket => run!(assign(st.clone(), depth, lhs.slots[0].clone(), rhs.clone(), op.clone())),
+                NK::Bracket => assign(st, depth, &lhs.slots[0], rhs.clone(), &op),
                 _ => Err(Ctrl::Err("error_assign_type_mismatch".into())),
             }
-        },
-    )
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -4577,6 +4773,8 @@ fn reverse_dir(d: u8) -> u8 {
 // ---------------------------------------------------------------------------------------------
 struct Sim {
     sh: Rc<Shared>,
+    /// skip_busy_waits' list of drones it moves on (index, ops per pass), kept between calls
+    waiting_scratch: Vec<(usize, f64)>,
     // Simulation
     timers: PriorityQueue<Rc<Timer>>,
     current_time: i64,
@@ -4664,6 +4862,7 @@ impl Sim {
             items,
             unlocks: HashMap::new(),
             used_power: 0.0,
+            waiting_scratch: Vec::new(),
             num_speed_upgrades: 0,
             next_uid: 1,
             max_drones_override,
@@ -6656,11 +6855,18 @@ impl Sim {
     }
 
     // ---- Execution --------------------------------------------------------------------------
-    fn add_program_state(&mut self, drone_id: usize, co_builder: &dyn Fn(StRef) -> Co, op_count: f64) -> StRef {
+    fn add_program_state(&mut self, drone_id: usize, program: Box<dyn FnOnce(&StRef) -> Res>, op_count: f64) -> StRef {
         let st = Rc::new(RefCell::new(PState::new(op_count, &mut self.random_random, drone_id as i32, self.sh.clone())));
         register_builtins(&st.borrow().module_state.global_scope.clone());
-        let co = co_builder(st.clone());
-        st.borrow_mut().execution_stack.push(Some(co));
+        // The stack holds the state weakly: the state owns the stack.
+        let weak = Rc::downgrade(&st);
+        let stack = stacks::Stack::new(Box::new(move || {
+            if let Some(st) = weak.upgrade() {
+                let r = program(&st);
+                program_finished(&st, r);
+            }
+        }));
+        st.borrow_mut().program = Some(stack);
         let ex = self.execution.as_mut().unwrap();
         if drone_id >= ex.states.len() {
             ex.states.push(Some(st.clone()));
@@ -6679,7 +6885,7 @@ impl Sim {
             next_execution_time: self.current_time,
             stopped: false,
         });
-        let st = self.add_program_state(0, &|st| exec(tree.clone(), st, 0), 0.0);
+        let st = self.add_program_state(0, Box::new(move |st| exec(&tree, st, 0)), 0.0);
         self.execution.as_mut().unwrap().main_state = Some(st);
         self.paused = false;
         self.finished = false;
@@ -6710,11 +6916,16 @@ impl Sim {
         if self.paused {
             return;
         }
-        let states: Vec<StRef> = self.execution.as_ref().unwrap().states.iter().flatten().cloned().collect();
         let mut limit = num - 1.0;
         // each skipped drone with its ops per pass
-        let mut waiting: Vec<(StRef, f64)> = Vec::new();
-        for s in states.iter() {
+        let mut waiting = std::mem::take(&mut self.waiting_scratch);
+        waiting.clear();
+        let ex = self.execution.as_ref().unwrap();
+        for (si, s) in ex.states.iter().enumerate() {
+            let s = match s {
+                Some(s) => s,
+                None => continue,
+            };
             let b = s.borrow();
             if b.awaited_drone_id >= 0 {
                 continue;
@@ -6728,7 +6939,7 @@ impl Sim {
             {
                 if p > 0.0 && self.items[item_id(item)] == v {
                     drop(b);
-                    waiting.push((s.clone(), p));
+                    waiting.push((si, p));
                     continue;
                 }
             }
@@ -6756,10 +6967,10 @@ impl Sim {
             }
             limit = limit.min(c + 2.0 * j);
             drop(b);
-            waiting.push((s.clone(), 2.0));
+            waiting.push((si, 2.0));
         }
-        for (s, p) in waiting.iter() {
-            let mut b = s.borrow_mut();
+        for (si, p) in waiting.iter() {
+            let mut b = ex.states[*si].as_ref().unwrap().borrow_mut();
             if b.op_count < limit {
                 b.op_count += p * ((limit - b.op_count) / p).ceil();
                 // the skipped passes read the same count, the last of them one pass ago
@@ -6769,6 +6980,7 @@ impl Sim {
                 }
             }
         }
+        self.waiting_scratch = waiting;
     }
 
     /// Execution.Execute
@@ -6781,18 +6993,18 @@ impl Sim {
                 Some(ex) => ex.global_op_count,
                 None => return,
             };
-            let mut i = 0;
-            while i < self.execution.as_ref().unwrap().states.len() {
-                if let Some(s) = self.execution.as_ref().unwrap().states[i].clone() {
+            {
+                // Running a drone's program touches only its own state, never the drone list.
+                let ex = self.execution.as_ref().unwrap();
+                for s in ex.states.iter().flatten() {
                     let run = {
                         let b = s.borrow();
                         !b.has_side_effect() && !(b.op_count > num) && b.awaited_drone_id < 0
                     };
                     if run {
-                        perform_execution_step(&s, num);
+                        perform_execution_step(s, num);
                     }
                 }
-                i += 1;
             }
             self.skip_busy_waits(num, global_op_count);
             let g = self.min_op_count(num);
@@ -6820,18 +7032,15 @@ impl Sim {
                     if num6 >= ex.states.len() || ex.global_op_count > num {
                         break;
                     }
-                    let s = match ex.states[num6].clone() {
-                        Some(s) => s,
-                        None => {
-                            num6 += 1;
-                            continue;
+                    let due = match &ex.states[num6] {
+                        Some(s) => {
+                            let b = s.borrow();
+                            b.awaited_drone_id < 0 && b.has_side_effect() && !(b.op_count > ex.global_op_count)
                         }
-                    };
-                    let due = {
-                        let b = s.borrow();
-                        b.awaited_drone_id < 0 && b.has_side_effect() && !(b.op_count > ex.global_op_count)
+                        None => false,
                     };
                     if due {
+                        let s = ex.states[num6].clone().unwrap();
                         if let Err(e) = self.apply_side_effect(num6) {
                             {
                                 let mut b = s.borrow_mut();
@@ -7186,7 +7395,7 @@ impl Sim {
                     let g = self.execution.as_ref().unwrap().global_op_count;
                     let fnode = function_node.clone();
                     let new_state =
-                        self.add_program_state(num11, &move |s| exec_function(fnode.clone(), s, list2.clone(), 0), g + ACTION_OPS);
+                        self.add_program_state(num11, Box::new(move |s| exec_function(&fnode, s, list2, 0)), g + ACTION_OPS);
                     let vars = match &function_node.kind {
                         NK::Function { vars, .. } => vars.clone(),
                         _ => Vec::new(),
@@ -7201,7 +7410,7 @@ impl Sim {
                         let mut b = new_state.borrow_mut();
                         b.module_state.call_stack.push(scope);
                         b.drone_handle = Some(handle.clone());
-                        b.current_executing_node = st.borrow().current_executing_node.clone();
+                        b.current_executing_node = st.borrow().current_executing_node;
                     }
                     ret = Some(V::Handle(handle));
                     ops = ACTION_OPS;
@@ -7268,9 +7477,9 @@ impl Sim {
             SE::Error => {
                 let (msg, node) = {
                     let b = st.borrow();
-                    (b.current_execute_exception.clone().unwrap_or_else(|| "Unexpected error".into()), b.current_executing_node.clone())
+                    (b.current_execute_exception.clone().unwrap_or_else(|| "Unexpected error".into()), b.current_executing_node)
                 };
-                let place = match node {
+                let place = match unsafe { node.as_ref() } {
                     Some(n) => format!("{}.py line {}", n.file.name, n.file.line_of(n.word_start)),
                     None => "?".into(),
                 };
@@ -7624,6 +7833,7 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
         warnings: RefCell::new(HashMap::new()),
         lb_nodes: Cell::new(cfg.leaderboard.map(|_| 0)),
         lb_modules: RefCell::new(HashSet::new()),
+        trees: RefCell::new(Vec::new()),
     });
     let override_size = match cfg.world_size {
         Some(n) => (n, n),
@@ -7636,6 +7846,7 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     let ticks_per_second = 1e9 / sim.op_duration as f64;
     // Execution's constructor registers the main file's code; too much of it stops the run.
     let code_check = register_leaderboard_code(&sh, &name, &tree);
+    sh.trees.borrow_mut().push(tree.clone());
     sim.start_program_execution(tree);
     if let Err(e) = code_check {
         sim.error = Some(e);
@@ -7865,6 +8076,57 @@ fn run_parallel(cfg: &Config, seeds: &[i32], workers: usize) -> Vec<R<RunResult>
     results.into_iter().map(|m| m.into_inner().unwrap().unwrap_or_else(|| Err("the run did not finish".into()))).collect()
 }
 
+/// Runs cfg with seeds first_seed, first_seed + 1, ... on `workers` threads, each taking the next
+/// run as soon as it finishes one (at most `limit` runs). `accept` sees the results in seed order
+/// and returns false once it needs no more; runs already under way past that point are dropped.
+fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize>, mut accept: impl FnMut(i32, R<RunResult>) -> bool) {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    let next = AtomicUsize::new(0);
+    let stop = AtomicBool::new(false);
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, R<RunResult>)>();
+    std::thread::scope(|scope| {
+        for _ in 0..workers.max(1).min(limit.unwrap_or(usize::MAX).max(1)) {
+            let tx = tx.clone();
+            let (next, stop) = (&next, &stop);
+            let spawned = std::thread::Builder::new().stack_size(256 << 20).spawn_scoped(scope, move || loop {
+                if stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                let job = next.fetch_add(1, Ordering::Relaxed);
+                if limit.map_or(false, |l| job >= l) {
+                    break;
+                }
+                let r = run_once(cfg, first_seed.wrapping_add(job as i32));
+                if tx.send((job, r)).is_err() {
+                    break;
+                }
+            });
+            if let Err(e) = spawned {
+                eprintln!("error: cannot start a worker thread: {}", e);
+                std::process::exit(1);
+            }
+        }
+        drop(tx);
+        let mut pending: std::collections::BTreeMap<usize, R<RunResult>> = std::collections::BTreeMap::new();
+        let mut want = 0usize;
+        let mut accepting = true;
+        for (job, r) in rx.iter() {
+            if !accepting {
+                continue;
+            }
+            pending.insert(job, r);
+            while let Some(r) = pending.remove(&want) {
+                if !accept(first_seed.wrapping_add(want as i32), r) {
+                    accepting = false;
+                    stop.store(true, Ordering::Relaxed);
+                    break;
+                }
+                want += 1;
+            }
+        }
+    });
+}
+
 fn clock(seconds: f64) -> String {
     let ms = (seconds * 1000.0) as i64;
     let (h, m, s, ms) = (ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60, ms % 1000);
@@ -7886,46 +8148,33 @@ fn run_leaderboards(cfgs: &[Config], first_seed: i32, fixed_runs: Option<i32>, w
         let mut runs: Vec<(i32, RunResult)> = Vec::new();
         let mut total = 0.0;
         let mut failure: Option<String> = None;
-        let mut next = 0i32;
-        'attempt: loop {
-            let batch = match fixed_runs {
-                Some(n) => n.max(1) - next,
-                None => workers as i32,
+        let limit = fixed_runs.map(|n| n.max(1) as usize);
+        run_stream(cfg, first_seed, workers, limit, |seed, r| {
+            let r = match r {
+                Ok(r) => r,
+                Err(e) => {
+                    failure = Some(format!("run {} (seed {}): {}", runs.len() + 1, seed, e));
+                    return false;
+                }
             };
-            if batch <= 0 {
-                break;
-            }
-            let seeds: Vec<i32> = (next..next + batch).map(|i| first_seed.wrapping_add(i)).collect();
-            next += batch;
-            for (seed, r) in seeds.iter().zip(run_parallel(cfg, &seeds, workers)) {
-                let r = match r {
-                    Ok(r) => r,
-                    Err(e) => {
-                        failure = Some(format!("run {} (seed {}): {}", runs.len() + 1, seed, e));
-                        break 'attempt;
-                    }
+            total += r.elapsed;
+            let ok = r.lb_success;
+            runs.push((seed, r));
+            if !ok {
+                let (seed, r) = runs.last().unwrap();
+                let why = match &r.error {
+                    Some(e) => e.clone(),
+                    None => format!(
+                        "the script ended at {:.3}s without meeting the goal ({})",
+                        r.elapsed,
+                        lb.goal.iter().map(|(n, g)| format!("{} {} of {}", n, group(r.end_items[item_id(n)]), group(*g))).collect::<Vec<_>>().join(", ")
+                    ),
                 };
-                total += r.elapsed;
-                let ok = r.lb_success;
-                runs.push((*seed, r));
-                if !ok {
-                    let (seed, r) = runs.last().unwrap();
-                    let why = match &r.error {
-                        Some(e) => e.clone(),
-                        None => format!(
-                            "the script ended at {:.3}s without meeting the goal ({})",
-                            r.elapsed,
-                            lb.goal.iter().map(|(n, g)| format!("{} {} of {}", n, group(r.end_items[item_id(n)]), group(*g))).collect::<Vec<_>>().join(", ")
-                        ),
-                    };
-                    failure = Some(format!("run {} (seed {}): {}", runs.len(), seed, why));
-                    break 'attempt;
-                }
-                if fixed_runs.is_none() && total >= LEADERBOARD_TOTAL_SECONDS {
-                    break 'attempt;
-                }
+                failure = Some(format!("run {} (seed {}): {}", runs.len(), seed, why));
+                return false;
             }
-        }
+            !(fixed_runs.is_none() && total >= LEADERBOARD_TOTAL_SECONDS)
+        });
         let n = runs.iter().filter(|(_, r)| r.lb_success).count();
         let times: Vec<f64> = runs.iter().filter(|(_, r)| r.lb_success).map(|(_, r)| r.elapsed).collect();
         let mean = if n > 0 { times.iter().sum::<f64>() / n as f64 } else { 0.0 };
