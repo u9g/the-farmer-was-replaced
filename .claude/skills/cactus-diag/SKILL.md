@@ -72,6 +72,6 @@ does the same comparison against the planner's own figures.
 - The harvest still comes 0.24 s (A) and 0.32 s (B) after the average chunk is done. Chunks that
   only wait for growth have an sd near 0; junction chunks 0.10 to 0.20 s.
 - Junction settles take 0.5 to 0.8 s per call, worst cases 1.1 s.
-- Moves take most of the drones' time: 64 drone-s in round A and 38 in B, against 24 for planting.
+- Moves take most of the drones' time: 64 drone-s in round A and 39 in B, against 24 for planting.
 - Round B starts 0.025 s after the harvest on average (first plant), down from 0.07 s when drone
   k always took chunk k.

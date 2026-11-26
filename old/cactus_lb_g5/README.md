@@ -1,4 +1,4 @@
-g5: generator for `cactus_lb_entry.py` (Leaderboards.Cactus). 7.443 s over a full 968-run attempt
+g5: generator for `cactus_lb_entry.py` (Leaderboards.Cactus). 7.445 s over a full 968-run attempt
 (g3's entry: 7.87 s on the same seeds). Every run meets the goal.
 
     WIDTHS=2,2,2,2,2,3,3,3,3,3,3,3,2,2,2,2,2,2,2 TAPERX=4 JMAX=5 DEPTH=8 AITER=5 DIRS=1 python g5.py ../../cactus_lb_entry.py
@@ -34,7 +34,7 @@ g3.py, lay.py, jlazy.py, spawnmm.py, build_entry.py) and changes the planner and
   per drone on average, 0.68 s for the worst). Now the drones are assigned to the chunks by
   distance over the torus (`linear_sum_assignment` on the planner's own objective) and the
   chunks are cut again for that assignment, a few rounds (`BASSIGN=0` turns it off). About half
-  the drones change chunk; 7.473 -> 7.443 s.
+  the drones change chunk; 7.473 -> 7.445 s.
 
 Measured in the simulator (mean of the run): first harvest 4.70 -> 4.44 s, second round
 3.12 -> 2.94 s.
