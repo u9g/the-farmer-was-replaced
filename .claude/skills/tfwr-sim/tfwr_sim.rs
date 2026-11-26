@@ -8673,19 +8673,15 @@ impl Sim {
         for c in &mut chunks {
             for k in 0..4 {
                 let h = &c[k];
-                let run = h.present && h.awaited_drone_id < 0;
+                let run = h.present & (h.awaited_drone_id < 0);
                 any |= run;
-                if run && h.op_count < m[k] {
-                    m[k] = h.op_count;
-                }
+                m[k] = m[k].min(if run { h.op_count } else { f64::INFINITY });
             }
         }
         for h in chunks.remainder() {
-            let run = h.present && h.awaited_drone_id < 0;
+            let run = h.present & (h.awaited_drone_id < 0);
             any |= run;
-            if run && h.op_count < m[0] {
-                m[0] = h.op_count;
-            }
+            m[0] = m[0].min(if run { h.op_count } else { f64::INFINITY });
         }
         if any { m[0].min(m[1]).min(m[2].min(m[3])) } else { default }
     }
@@ -8795,10 +8791,24 @@ impl Sim {
             {
                 // Running a drone's program touches only its own state, never the drone list.
                 let ex = self.execution.as_ref().unwrap();
-                for i in 0..ex.states.len() {
-                    let h = &ex.hot[i];
-                    if h.present && h.se == SE_NONE && !(h.op_count > num) && h.awaited_drone_id < 0 {
+                let n = ex.states.len();
+                if n <= 64 {
+                    let mut mask = 0u64;
+                    for (i, h) in ex.hot[..n].iter().enumerate() {
+                        let r = h.present & (h.se == SE_NONE) & !(h.op_count > num) & (h.awaited_drone_id < 0);
+                        mask |= (r as u64) << i;
+                    }
+                    while mask != 0 {
+                        let i = mask.trailing_zeros() as usize;
+                        mask &= mask - 1;
                         perform_execution_step(ex.states[i].as_ref().unwrap(), num);
+                    }
+                } else {
+                    for i in 0..n {
+                        let h = &ex.hot[i];
+                        if h.present && h.se == SE_NONE && !(h.op_count > num) && h.awaited_drone_id < 0 {
+                            perform_execution_step(ex.states[i].as_ref().unwrap(), num);
+                        }
                     }
                 }
             }
@@ -8816,23 +8826,42 @@ impl Sim {
                     let ex = self.execution.as_mut().unwrap();
                     let n = ex.states.len();
                     for h in ex.hot[..n].iter_mut() {
-                        if h.present {
-                            // PState::consume_ops
-                            num2 += h.op_count - h.last_consumed_op_count;
-                            h.last_consumed_op_count = h.op_count;
-                        }
+                        // PState::consume_ops (an empty slot keeps op == last, so adds exactly 0)
+                        num2 += h.op_count - h.last_consumed_op_count;
+                        h.last_consumed_op_count = h.op_count;
                     }
                 }
+                let mut due_mask = 0u64;
+                let masked = {
+                    let ex = self.execution.as_ref().unwrap();
+                    let n = ex.states.len();
+                    if n <= 64 {
+                        let g = ex.global_op_count;
+                        for (i, h) in ex.hot[..n].iter().enumerate() {
+                            let d = h.present & (h.awaited_drone_id < 0) & (h.se != SE_NONE) & !(h.op_count > g);
+                            due_mask |= (d as u64) << i;
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                };
                 let mut num6 = 0;
                 loop {
                     let ex = match &self.execution {
                         Some(ex) => ex,
                         None => return,
                     };
-                    if num6 >= ex.states.len() || ex.global_op_count > num {
+                    if masked {
+                        if due_mask == 0 || ex.global_op_count > num {
+                            break;
+                        }
+                        num6 = due_mask.trailing_zeros() as usize;
+                        due_mask &= due_mask - 1;
+                    } else if num6 >= ex.states.len() || ex.global_op_count > num {
                         break;
                     }
-                    let due = {
+                    let due = masked || {
                         let h = &ex.hot[num6];
                         h.present && h.awaited_drone_id < 0 && h.se != SE_NONE && !(h.op_count > ex.global_op_count)
                     };
@@ -9260,7 +9289,9 @@ impl Sim {
                         ex.main_state = None;
                     }
                     ex.states[drone_id] = None;
-                    ex.hot[drone_id].present = false;
+                    let h = &mut ex.hot[drone_id];
+                    h.present = false;
+                    h.last_consumed_op_count = h.op_count;
                     ex.states.iter().all(|s| s.is_none())
                 };
                 if all_done {
