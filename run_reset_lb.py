@@ -1,0 +1,1 @@
+leaderboard_run(Leaderboards.Fastest_Reset, "run_reset", 256)
