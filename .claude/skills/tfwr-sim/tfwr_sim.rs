@@ -6484,6 +6484,27 @@ struct Ent {
 }
 type E = Rc<RefCell<Ent>>;
 
+/// An entity holds its grow timer and the timer holds the entity; when a run's farm goes away,
+/// unlink them so neither keeps the other alive.
+impl Drop for Sim {
+    fn drop(&mut self) {
+        for c in self.cells.iter() {
+            if let Some(e) = &c.entity {
+                if let Ok(mut b) = e.try_borrow_mut() {
+                    b.grow_timer = None;
+                }
+            }
+        }
+        for (t, _) in self.timers.nodes.iter() {
+            if let TimerFn::Grow(e) | TimerFn::CompleteRepositioning(e) = &t.func {
+                if let Ok(mut b) = e.try_borrow_mut() {
+                    b.grow_timer = None;
+                }
+            }
+        }
+    }
+}
+
 fn same(a: &E, b: &E) -> bool {
     Rc::ptr_eq(a, b)
 }
@@ -7500,6 +7521,9 @@ impl Sim {
         let (x, y, class) = {
             let mut b = e.borrow_mut();
             b.is_grown = true;
+            // a grown entity never looks at its timer again (stop_growing skips it); letting go
+            // of it breaks the entity <-> timer cycle
+            b.grow_timer = None;
             (b.x, b.y, b.class)
         };
         // OnFullyGrown
@@ -7792,6 +7816,9 @@ impl Sim {
         };
         if is_growable(class) {
             self.stop_growing(e);
+            // the stopped timer is dropped from the queue when its time comes; the entity need
+            // not hold it (which would keep both alive)
+            e.borrow_mut().grow_timer = None;
         }
         match class {
             EC::Tree => self.update_neighbors(x, y),
