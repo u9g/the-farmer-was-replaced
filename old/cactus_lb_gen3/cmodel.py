@@ -362,7 +362,7 @@ def simulate(g, seed, BOOT=200):
 
 if __name__ == "__main__":
     import os
-    import b9
+    import importlib; b9 = importlib.import_module(os.environ.get("GEN","b9"))
     g = b9.Gen()
     g.plan()
     g.build()

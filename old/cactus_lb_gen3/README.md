@@ -1,6 +1,6 @@
 Generator for `cactus_lb_entry.py` (Leaderboards.Cactus): one 729-cell layout (walls 0 mod 3 with 3-wide strips 9, 10, 12) harvested twice.
 
-    WSPEC=0:9,10,12 CCFLAT=1100 ZB=0.5 python b9.py ../../cactus_lb_entry.py
+    INL=0 BMODE=2 PRET=1 WSPEC=0:9,10,12 CCFLAT=1100 ZB=0.5 python b10.py ../../cactus_lb_entry.py
 
 Each drone plants its chunk with no sorting (deterministic forward pass), then walks back over a
 deferred tail fixing order while the cactus grow: 2-wide pairs by swap, 3-wide middles by `fm`
@@ -8,3 +8,8 @@ deferred tail fixing order while the cactus grow: 2-wide pairs by swap, 3-wide m
 Cells before the tail are fixed inline at plant time. Phase A ends with a water signal per drone,
 phase B with the drone count. `cmodel.py` is a tick-level concurrent model of the generated
 program (races, growth, harvest pop) used to tune the plan: `python cmodel.py 30`.
+
+`b10.py` extends `b9.py`: `PRET=1` walks each drone toward its phase-B start during its idle time
+at the end of phase A, and `BMODE=2` assigns phase-B chunks to drones counting only the travel that
+does not fit in that idle time. `INL=1` (off by default) fixes junctions inline once their
+neighbourhood is planted. Run the model with `GEN=b10 python cmodel.py 12`.
