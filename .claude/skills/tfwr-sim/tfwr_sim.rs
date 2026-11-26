@@ -5247,7 +5247,27 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         _ => unreachable!(),
                     };
                     let at = vm.stack.len() - node.slots.len();
-                    let (flag, steps) = compare_values(ops_t, cops, &vm.stack[at..])?;
+                    // two numbers, one ordinary operator: one step (deep_compare / py_equals)
+                    let fast = match (cops.len(), &vm.stack[at..]) {
+                        (1, [V::Num(x), V::Num(y)]) => {
+                            let (x, y) = (*x, *y);
+                            let c = if x > y { 1 } else if x < y { -1 } else { 0 };
+                            match cops[0] {
+                                COp::Eq => Some(x == y),
+                                COp::Ne => Some(x != y),
+                                COp::Ge => Some(c >= 0),
+                                COp::Le => Some(c <= 0),
+                                COp::Gt => Some(c > 0),
+                                COp::Lt => Some(c < 0),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    };
+                    let (flag, steps) = match fast {
+                        Some(f) => (f, 1),
+                        None => compare_values(ops_t, cops, &vm.stack[at..])?,
+                    };
                     vm.stack.truncate(at);
                     vm.stack.push(V::Bool(flag));
                     if charge(st, OPERATION_OPS * steps as f64) {
