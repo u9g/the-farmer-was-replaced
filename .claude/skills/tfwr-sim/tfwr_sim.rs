@@ -7893,6 +7893,50 @@ fn not_above(ops: &[f64], x: f64) -> u64 {
 #[inline(always)]
 fn masked_min(ops: &[f64], mask: u64) -> f64 {
     #[cfg(target_arch = "x86_64")]
+    {
+        if std::arch::is_x86_feature_detected!("avx2") {
+            return unsafe { masked_min_avx2(ops, mask) };
+        }
+    }
+    masked_min_sse2(ops, mask)
+}
+
+/// masked_min, four lanes at a time
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn masked_min_avx2(ops: &[f64], mask: u64) -> f64 {
+    use std::arch::x86_64::*;
+    let inf = _mm256_set1_pd(f64::INFINITY);
+    let bits = _mm256_set_epi64x(8, 4, 2, 1);
+    let (mut m0, mut m1) = (inf, inf);
+    let n = ops.len();
+    let mut i = 0;
+    while i + 8 <= n {
+        let a = _mm256_cmpeq_epi64(_mm256_and_si256(_mm256_set1_epi64x((mask >> i) as i64), bits), bits);
+        let b = _mm256_cmpeq_epi64(_mm256_and_si256(_mm256_set1_epi64x((mask >> (i + 4)) as i64), bits), bits);
+        let va = _mm256_loadu_pd(ops.as_ptr().add(i));
+        let vb = _mm256_loadu_pd(ops.as_ptr().add(i + 4));
+        m0 = _mm256_min_pd(m0, _mm256_blendv_pd(inf, va, _mm256_castsi256_pd(a)));
+        m1 = _mm256_min_pd(m1, _mm256_blendv_pd(inf, vb, _mm256_castsi256_pd(b)));
+        i += 8;
+    }
+    let m = _mm256_min_pd(m0, m1);
+    let lo = _mm256_castpd256_pd128(m);
+    let hi = _mm256_extractf128_pd(m, 1);
+    let m2 = _mm_min_pd(lo, hi);
+    let mut out = _mm_cvtsd_f64(m2).min(_mm_cvtsd_f64(_mm_unpackhi_pd(m2, m2)));
+    while i < n {
+        if mask >> i & 1 != 0 {
+            out = out.min(ops[i]);
+        }
+        i += 1;
+    }
+    out
+}
+
+#[inline(always)]
+fn masked_min_sse2(ops: &[f64], mask: u64) -> f64 {
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         use std::arch::x86_64::*;
         // lane masks for two bits
@@ -8019,6 +8063,8 @@ struct Sim {
     max_drones_override: Option<i32>,
     // GridManager
     cells: Vec<GridCell>,
+    /// cells whose water_volume is not 0 (water_decay skips a dry farm)
+    wet_cells: usize,
     wx: i32,
     wy: i32,
     size_limit: i32,
@@ -8084,6 +8130,7 @@ impl Sim {
             next_uid: 1,
             max_drones_override,
             cells: Vec::new(),
+            wet_cells: 0,
             wx: 0,
             wy: 0,
             size_limit: 0,
@@ -8630,6 +8677,7 @@ impl Sim {
                 }
             }
         }
+        self.wet_cells = self.cells.iter().filter(|c| c.water_volume != 0.0).count();
         self.clear_grid();
     }
 
@@ -8649,6 +8697,14 @@ impl Sim {
         let i = self.idx(x, y);
         let before = self.cells[i].water_volume;
         self.cells[i].water_volume = volume.clamp(0.0, 1.0);
+        let after = self.cells[i].water_volume;
+        if (before != 0.0) != (after != 0.0) {
+            if after != 0.0 {
+                self.wet_cells += 1;
+            } else {
+                self.wet_cells -= 1;
+            }
+        }
         if self.cells[i].water_volume != before {
             if let Some(e) = self.cells[i].entity.clone() {
                 self.update_farm_object(&e);
@@ -8658,7 +8714,7 @@ impl Sim {
 
     fn water_decay(&mut self) {
         // A dry cell stays dry (0 * 0.99 is 0): with no water anywhere only the draws matter.
-        if self.cells.iter().all(|c| c.water_volume == 0.0) {
+        if self.wet_cells == 0 {
             self.random_various.advance((self.wx * self.wy) as usize);
             self.start_timer(TimerFn::WaterDecay, dur_from_seconds(0.1));
             return;
