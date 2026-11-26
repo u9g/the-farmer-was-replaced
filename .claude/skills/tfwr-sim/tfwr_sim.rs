@@ -1692,7 +1692,34 @@ fn new_scope(function_node: Option<Rc<Node>>, parent: Option<ScopeRef>, variable
     for n in variable_names {
         vars.set_interned(n, V::Unassigned, false);
     }
-    Rc::new(RefCell::new(Scope { function_node, parent_scope: parent, vars }))
+    register_scope(Rc::new(RefCell::new(Scope { function_node, parent_scope: parent, vars })))
+}
+
+thread_local! {
+    /// every scope made by the current run on this thread (see ScopeSweep)
+    static SCOPES: RefCell<Vec<std::rc::Weak<RefCell<Scope>>>> = RefCell::new(Vec::new());
+}
+fn register_scope(s: ScopeRef) -> ScopeRef {
+    SCOPES.with(|v| v.borrow_mut().push(Rc::downgrade(&s)));
+    s
+}
+/// A function value holds the scope it was defined in, which holds the function: such cycles
+/// would keep every run's scopes (and all they hold) alive for good. When a run is over, this
+/// empties every scope it made, which breaks them.
+struct ScopeSweep;
+impl Drop for ScopeSweep {
+    fn drop(&mut self) {
+        let scopes = SCOPES.with(|v| std::mem::take(&mut *v.borrow_mut()));
+        for w in scopes {
+            if let Some(sc) = w.upgrade() {
+                let (vars, parent, f) = {
+                    let mut b = sc.borrow_mut();
+                    (std::mem::replace(&mut b.vars, Vars::new()), b.parent_scope.take(), b.function_node.take())
+                };
+                drop((vars, parent, f));
+            }
+        }
+    }
 }
 
 /// Scope.SetVar
@@ -1816,11 +1843,11 @@ fn scope_shell(s: &ScopeRef, copies: &mut Copies) -> ScopeRef {
     if let Some(c) = copies.scopes.get(&p) {
         return c.clone();
     }
-    let ns = Rc::new(RefCell::new(Scope {
+    let ns = register_scope(Rc::new(RefCell::new(Scope {
         function_node: s.borrow().function_node.clone(),
         parent_scope: None,
         vars: Vars::new(),
-    }));
+    })));
     copies.scopes.insert(p, ns.clone());
     ns
 }
@@ -9715,6 +9742,8 @@ struct RunResult {
 }
 
 fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
+    // dropped last, once everything else of the run is gone
+    let _sweep = ScopeSweep;
     let name = cfg.script.file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string();
     let code = std::fs::read_to_string(&cfg.script).map_err(|e| format!("cannot read {}: {}", cfg.script.display(), e))?;
     let tree = parse_source(&name, &code)?;
