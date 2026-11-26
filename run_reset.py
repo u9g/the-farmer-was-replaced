@@ -1843,20 +1843,40 @@ def dn_rows(j, d, a0, b0):
 	ah = []
 	wy = []
 	nb = []
+	to = []
+	nx = []
+	nb2 = []
+	cor = []
+	CX = [1, 1, -1, -1]
+	CY = [1, -1, -1, 1]
 	for i in range(j * S // d, (j + 1) * S // d):
 		pairs = []
 		row = []
+		r2 = []
+		q = []
 		for k in range(4):
 			x = PX[i] + DX[k]
 			y = PY[i] + DY[k]
 			if x >= 0 and x < N and y >= 0 and y < N:
-				pairs.append([(IDX[x][y] - i) % S, DIRS[k]])
-				row.append(IDX[x][y])
+				c = IDX[x][y]
+				pairs.append([(c - i) % S, DIRS[k]])
+				row.append(c)
+				r2.append(c)
 			else:
 				row.append(-1)
+				r2.append(S)
+			x = PX[i] + CX[k]
+			y = PY[i] + CY[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				q.append(IDX[x][y])
+			else:
+				q.append(S)
 		nb.append(row)
+		nb2.append(r2)
+		cor.append(q)
 		ds = []
 		ws = []
+		ts = []
 		while pairs:
 			best = pairs[0]
 			for p in pairs:
@@ -1865,9 +1885,22 @@ def dn_rows(j, d, a0, b0):
 			pairs.remove(best)
 			ds.append(best[0])
 			ws.append(best[1])
+			ts.append((i + best[0]) % S)
+			if best[0] == 1:
+				nx.append(best[1])
 		ah.append(ds)
 		wy.append(ws)
-	return [ah, wy, nb]
+		to.append(ts)
+	return [ah, wy, nb, to, nx, nb2, cor]
+
+
+def zeros(n, v):
+	z = [v]
+	while len(z) * 2 <= n:
+		z = z + z
+	if len(z) < n:
+		z = z + z[0:n - len(z)]
+	return z
 
 
 def dino_setup():
@@ -1936,39 +1969,6 @@ def dino_setup():
 	if not HALVES:
 		block_setup(N)
 	# the neighbour tables are built by every drone at once, a slice each
-	AHEAD = []
-	WAY = []
-	NB = []
-	for r in all_drones(dn_rows, 0, 0):
-		for row in r[0]:
-			AHEAD.append(row)
-		for row in r[1]:
-			WAY.append(row)
-		for row in r[2]:
-			NB.append(row)
-	TO = []
-	for i in range(S):
-		row = []
-		for d in AHEAD[i]:
-			row.append((i + d) % S)
-		TO.append(row)
-	NEXT = []
-	for i in range(S):
-		ds = AHEAD[i]
-		for k in range(len(ds)):
-			if ds[k] == 1:
-				NEXT.append(WAY[i][k])
-	WALK = []
-	for i in range(2 * S):
-		WALK.append(NEXT[i % S])
-	occ = []
-	hist = []
-	vis = []
-	for i in range(S):
-		occ.append(0)
-		hist.append(0)
-		vis.append(0)
-	occ.append(1000000000)
 	global NB2
 	global COR
 	global MT
@@ -1976,33 +1976,28 @@ def dino_setup():
 	global ORD
 	global vis2
 	global bad
-	vis2 = []
-	bad = []
-	for i in range(S + 1):
-		vis2.append(0)
-		bad.append(-5)
+	AHEAD = []
+	WAY = []
+	NB = []
+	TO = []
+	NEXT = []
 	NB2 = []
 	COR = []
-	CX = [1, 1, -1, -1]
-	CY = [1, -1, -1, 1]
-	for i in range(S):
-		r = []
-		q = []
-		for k in range(4):
-			x = PX[i] + DX[k]
-			y = PY[i] + DY[k]
-			if x >= 0 and x < N and y >= 0 and y < N:
-				r.append(IDX[x][y])
-			else:
-				r.append(S)
-			x = PX[i] + CX[k]
-			y = PY[i] + CY[k]
-			if x >= 0 and x < N and y >= 0 and y < N:
-				q.append(IDX[x][y])
-			else:
-				q.append(S)
-		NB2.append(r)
-		COR.append(q)
+	for r in all_drones(dn_rows, 0, 0):
+		AHEAD = AHEAD + r[0]
+		WAY = WAY + r[1]
+		NB = NB + r[2]
+		TO = TO + r[3]
+		NEXT = NEXT + r[4]
+		NB2 = NB2 + r[5]
+		COR = COR + r[6]
+	WALK = NEXT + NEXT
+	occ = zeros(S, 0)
+	hist = zeros(S, 0)
+	vis = zeros(S, 0)
+	occ.append(1000000000)
+	vis2 = zeros(S + 1, 0)
+	bad = zeros(S + 1, -5)
 	MT = []
 	MT2 = []
 	PW = [1, 2, 4, 8]
@@ -2652,6 +2647,10 @@ def farm(item, amount):
 		if num_items(Items.Weird_Substance) < s_need:
 			farm(Items.Weird_Substance, s_need)
 		else:
+			# the maze drones spend about one power a second each: make sure it lasts the round
+			pw = min(max_drones(), n * n) * (min(finds, 600) * 0.22 + 12)
+			if num_unlocked(Unlocks.Sunflowers) > 0 and num_items(Items.Power) < pw:
+				power_round()
 			maze_round(n, amount)
 	elif item == Items.Bone:
 		ac = 2 * lvl_mult(Unlocks.Dinosaurs) * get_world_size() * get_world_size()
