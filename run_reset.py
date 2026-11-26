@@ -1255,6 +1255,39 @@ vis = []
 fills = [0]
 
 
+def dn_rows(j, d, a0, b0):
+	N = SN
+	S = SS
+	ah = []
+	wy = []
+	nb = []
+	for i in range(j * S // d, (j + 1) * S // d):
+		pairs = []
+		row = []
+		for k in range(4):
+			x = PX[i] + DX[k]
+			y = PY[i] + DY[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				pairs.append([(IDX[x][y] - i) % S, DIRS[k]])
+				row.append(IDX[x][y])
+			else:
+				row.append(-1)
+		nb.append(row)
+		ds = []
+		ws = []
+		while pairs:
+			best = pairs[0]
+			for p in pairs:
+				if p[0] > best[0]:
+					best = p
+			pairs.remove(best)
+			ds.append(best[0])
+			ws.append(best[1])
+		ah.append(ds)
+		wy.append(ws)
+	return [ah, wy, nb]
+
+
 def dino_setup():
 	global SN
 	global SS
@@ -1299,44 +1332,23 @@ def dino_setup():
 		IDX[0][y] = i
 		PX.append(0)
 		PY.append(y)
+	# the neighbour tables are built by every drone at once, a slice each
 	AHEAD = []
 	WAY = []
-	for i in range(S):
-		pairs = []
-		for k in range(4):
-			x = PX[i] + DX[k]
-			y = PY[i] + DY[k]
-			if x >= 0 and x < N and y >= 0 and y < N:
-				pairs.append([(IDX[x][y] - i) % S, DIRS[k]])
-		ds = []
-		ws = []
-		while pairs:
-			best = pairs[0]
-			for p in pairs:
-				if p[0] > best[0]:
-					best = p
-			pairs.remove(best)
-			ds.append(best[0])
-			ws.append(best[1])
-		AHEAD.append(ds)
-		WAY.append(ws)
+	NB = []
+	for r in all_drones(dn_rows, 0, 0):
+		for row in r[0]:
+			AHEAD.append(row)
+		for row in r[1]:
+			WAY.append(row)
+		for row in r[2]:
+			NB.append(row)
 	NEXT = []
 	for i in range(S):
 		ds = AHEAD[i]
 		for k in range(len(ds)):
 			if ds[k] == 1:
 				NEXT.append(WAY[i][k])
-	NB = []
-	for i in range(S):
-		row = []
-		for k in range(4):
-			x = PX[i] + DX[k]
-			y = PY[i] + DY[k]
-			if x >= 0 and x < N and y >= 0 and y < N:
-				row.append(IDX[x][y])
-			else:
-				row.append(-1)
-		NB.append(row)
 	WALK = []
 	for i in range(2 * S):
 		WALK.append(NEXT[i % S])
