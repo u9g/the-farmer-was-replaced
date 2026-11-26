@@ -662,6 +662,8 @@ struct PyFunc {
     syntax_tree: Option<Rc<Node>>,
     parent_scope: Option<ScopeRef>,
     binding: Option<&'static str>,
+    /// the builtin's index in FUNCTION_LIST (u8::MAX for a user function)
+    bidx: u8,
     method_object: Option<V>,
     is_free: bool,
 }
@@ -1490,6 +1492,7 @@ fn deep_copy(v: &V, copies: &mut Copies) -> V {
                 syntax_tree: f.syntax_tree.clone(),
                 parent_scope: parent,
                 binding: f.binding,
+                bidx: f.bidx,
                 method_object,
                 is_free: f.is_free,
             }));
@@ -3285,14 +3288,82 @@ static FUNCTION_LIST: &[(&str, bool)] = &[
     ("append", false), ("add", false), ("remove", false), ("pop", false), ("insert", false),
 ];
 
+/// each builtin's index in FUNCTION_LIST (PyFunc::bidx)
+const B_HARVEST: u8 = 0;
+const B_CAN_HARVEST: u8 = 1;
+const B_SWAP: u8 = 2;
+const B_RANGE: u8 = 3;
+const B_PLANT: u8 = 4;
+const B_MOVE: u8 = 5;
+const B_CAN_MOVE: u8 = 6;
+const B_TILL: u8 = 7;
+const B_GET_POS_X: u8 = 8;
+const B_GET_POS_Y: u8 = 9;
+const B_GET_POS_Z: u8 = 10;
+const B_GET_WORLD_SIZE: u8 = 11;
+const B_GET_ENTITY_TYPE: u8 = 12;
+const B_GET_GROUND_TYPE: u8 = 13;
+const B_GET_TIME: u8 = 14;
+const B_GET_TICK_COUNT: u8 = 15;
+const B_USE_ITEM: u8 = 16;
+const B_PLACE: u8 = 17;
+const B_GET_WATER: u8 = 18;
+const B_DO_A_FLIP: u8 = 19;
+const B_CHANGE_HAT: u8 = 20;
+const B_PRINT: u8 = 21;
+const B_QUICK_PRINT: u8 = 22;
+const B_LEN: u8 = 23;
+const B_NUM_ITEMS: u8 = 24;
+const B_GET_COST: u8 = 25;
+const B_CLEAR: u8 = 26;
+const B_GET_COMPANION: u8 = 27;
+const B_UNLOCK: u8 = 28;
+const B_NUM_UNLOCKED: u8 = 29;
+const B_LEADERBOARD_RUN: u8 = 30;
+const B_MEASURE: u8 = 31;
+const B_MIN: u8 = 32;
+const B_MAX: u8 = 33;
+const B_ABS: u8 = 34;
+const B_STR: u8 = 35;
+const B_RANDOM: u8 = 36;
+const B_SIMULATE: u8 = 37;
+const B_LIST: u8 = 38;
+const B_SET: u8 = 39;
+const B_DICT: u8 = 40;
+const B_SET_EXECUTION_SPEED: u8 = 41;
+const B_SET_WORLD_SIZE: u8 = 42;
+const B_SPAWN_DRONE: u8 = 43;
+const B_NUM_DRONES: u8 = 44;
+const B_MAX_DRONES: u8 = 45;
+const B_WAIT_FOR: u8 = 46;
+const B_HAS_FINISHED: u8 = 47;
+const B_PET_THE_PIGGY: u8 = 48;
+const B_TAP: u8 = 49;
+const B_DIG: u8 = 50;
+const B_GET_HARDNESS: u8 = 51;
+const B_GET_STABILITY: u8 = 52;
+const B_PROSPECT_IRON: u8 = 53;
+const B_PROSPECT_QUARTZ: u8 = 54;
+const B_PUSH: u8 = 55;
+const B_CAN_PUSH: u8 = 56;
+const B_JUMP: u8 = 57;
+const B_HOVER: u8 = 58;
+const B_GET_HOVER: u8 = 59;
+const B_APPEND: u8 = 60;
+const B_ADD: u8 = 61;
+const B_REMOVE: u8 = 62;
+const B_POP: u8 = 63;
+const B_INSERT: u8 = 64;
+
 fn is_builtin_name(name: &str) -> bool {
     FUNCTION_LIST.iter().any(|(n, _)| *n == name)
 }
 
 /// The global scope every ProgramState and module starts with: __name__ plus all builtins as statics.
 fn register_builtins(scope: &ScopeRef) {
-    for (name, is_free) in FUNCTION_LIST.iter() {
+    for (i, (name, is_free)) in FUNCTION_LIST.iter().enumerate() {
         let f = Rc::new(PyFunc {
+            bidx: i as u8,
             name: Rc::from(*name),
             syntax_tree: None,
             parent_scope: None,
@@ -3632,7 +3703,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Ev {
                     // scheduler when it applies the side effect. One that sets none leaves the
                     // argument list there, as in the game.
                     stm(st).module_state.return_value = args;
-                    let mut num = call_builtin(func.binding.unwrap(), parameters, &st)?;
+                    let mut num = call_builtin(func.bidx, &parameters, &st)?;
                     if func.is_free && !is_static {
                         num = num.max(OPERATION_OPS);
                     }
@@ -3761,6 +3832,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Ev {
                                     syntax_tree: f.syntax_tree.clone(),
                                     parent_scope: f.parent_scope.clone(),
                                     binding: f.binding,
+                                    bidx: f.bidx,
                                     method_object: Some(lhs.clone()),
                                     is_free: f.is_free,
                                 }))
@@ -3971,6 +4043,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Ev {
                         syntax_tree: Some(node.slots[0].clone()),
                         parent_scope: Some(scope.clone()),
                         binding: None,
+                        bidx: u8::MAX,
                         method_object: None,
                         is_free: false,
                     });
@@ -5127,10 +5200,18 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         NK::Assignment(op) => op,
                         _ => unreachable!(),
                     };
-                    let scope = cur_scope!(st);
-                    let before = if op.as_ref() == "=" { None } else { Some(scope_evaluate(&scope, value)?.0) };
-                    let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
-                    scope_set_var(&scope, value, v, false);
+                    let s = stm(st);
+                    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+                    let exec_time = if op.as_ref() == "=" {
+                        // get_value_to_assign for "=": the value itself, no time
+                        scope_set_var(scope, value, rhs, false);
+                        0.0
+                    } else {
+                        let before = scope_evaluate(scope, value)?.0;
+                        let (v, exec_time) = get_value_to_assign(Some(&before), &rhs, op)?;
+                        scope_set_var(scope, value, v, false);
+                        exec_time
+                    };
                     if charge(st, OPERATION_OPS * exec_time) {
                         stop!(pc);
                     }
@@ -5142,6 +5223,34 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     }
                     let is_static = stm(st).module_state.is_expression_static;
                     vm.stack.push(V::Bool(is_static));
+                }
+                Op::CallA(n, argc) if argc != u32::MAX && {
+                    let base = vm.stack.len() - argc as usize;
+                    matches!(&vm.stack[base - 2], V::Func(f) if f.syntax_tree.is_none() && f.method_object.is_none() && f.bidx != B_TAP)
+                } => {
+                    // a builtin with its arguments on the stack: called on them in place
+                    let base = vm.stack.len() - argc as usize;
+                    let func = match std::mem::replace(&mut vm.stack[base - 2], V::None) {
+                        V::Func(f) => f,
+                        _ => unreachable!(),
+                    };
+                    let is_static = matches!(vm.stack[base - 1], V::Bool(true));
+                    stm(st).current_executing_node = n;
+                    stm(st).module_state.return_value = V::None;
+                    let r = call_builtin(func.bidx, &vm.stack[base..], st);
+                    vm.stack.truncate(base - 2);
+                    let mut num = r?;
+                    if func.is_free && !is_static {
+                        num = num.max(OPERATION_OPS);
+                    }
+                    pc += 2;
+                    if charge(st, num) {
+                        stop!(pc);
+                    }
+                    // TakeRv
+                    let v = std::mem::replace(&mut stm(st).module_state.return_value, V::None);
+                    vm.stack.push(v);
+                    pc += 1;
                 }
                 Op::CallA(n, argc) => {
                     let args = if argc == u32::MAX {
@@ -5158,7 +5267,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     // The builtin `tap` sets no result, so its call's value is the argument list
                     // left in returnValue; every other builtin sets one (directly or when its side
                     // effect is applied), so for them the list need not be kept.
-                    let keep_args = func.syntax_tree.is_none() && func.binding == Some("tap");
+                    let keep_args = func.syntax_tree.is_none() && func.bidx == B_TAP;
                     let mut parameters: Vec<V> = match args {
                         V::Seq(s) if !keep_args => Rc::try_unwrap(s).unwrap_or_else(|s| s.to_vec()),
                         V::Seq(ref s) => s.to_vec(),
@@ -5179,7 +5288,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         // the scheduler when it applies the side effect. One that sets none leaves the
                         // argument list there, as in the game.
                         stm(st).module_state.return_value = args;
-                        let mut num = call_builtin(func.binding.unwrap(), parameters, st)?;
+                        let mut num = call_builtin(func.bidx, &parameters, st)?;
                         if func.is_free && !is_static {
                             num = num.max(OPERATION_OPS);
                         }
@@ -5643,6 +5752,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         syntax_tree: Some(node.slots[0].clone()),
                         parent_scope: Some(scope.clone()),
                         binding: None,
+                        bidx: u8::MAX,
                         method_object: None,
                         is_free: false,
                     });
@@ -6041,6 +6151,7 @@ fn binary_value(op: &str, bop: BOp, lhs: V, rhs: V) -> R<(V, i32)> {
                     syntax_tree: f.syntax_tree.clone(),
                     parent_scope: f.parent_scope.clone(),
                     binding: f.binding,
+                    bidx: f.bidx,
                     method_object: Some(lhs.clone()),
                     is_free: f.is_free,
                 }))
@@ -6166,8 +6277,9 @@ fn opt_dir(parameters: &[V], function: &str) -> R<Option<u8>> {
     Ok(Some(arg_dir(parameters, 0, function)?))
 }
 
-fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
-    let p = &parameters;
+fn call_builtin(bidx: u8, parameters: &[V], st: &StRef) -> R<f64> {
+    let name: &'static str = FUNCTION_LIST[bidx as usize].0;
+    let p = parameters;
     let side = |se: SE| -> R<f64> {
         st.borrow_mut().set_se(se);
         Ok(0.0)
@@ -6176,34 +6288,34 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
         st.borrow_mut().module_state.return_value = v;
         Ok(ops)
     };
-    match name {
-        "do_a_flip" => {
+    match bidx {
+        B_DO_A_FLIP => {
             no_params(p, name)?;
             side(SE::DoAFlip)
         }
-        "pet_the_piggy" => {
+        B_PET_THE_PIGGY => {
             no_params(p, name)?;
             side(SE::PetThePiggy)
         }
-        "tap" => {
+        B_TAP => {
             no_params(p, name)?;
             let secs = dur_seconds(st.borrow().sh.op_duration_ns.get());
             Ok((0.1 / secs).floor())
         }
-        "print" => {
+        B_PRINT => {
             let s = p.iter().map(nice).collect::<Vec<_>>().join(" ");
             side(SE::Print(s))
         }
-        "quick_print" => {
+        B_QUICK_PRINT => {
             let s = p.iter().map(nice).collect::<Vec<_>>().join(" ");
             st.borrow().sh.log(&s);
             ret(V::None, 0.0)
         }
-        "change_hat" => {
+        B_CHANGE_HAT => {
             correct_count(p, 1, name)?;
             side(SE::ChangeHat(arg_const(p, 0, NS_HATS, name)?))
         }
-        "min" | "max" => {
+        B_MIN | B_MAX => {
             let is_max = name == "max";
             let key = if is_max { "error_wrong_use_of_max" } else { "error_wrong_use_of_min" };
             if p.is_empty() {
@@ -6215,7 +6327,7 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
                 }
                 enumerate(&p[0])
             } else {
-                p.clone()
+                p.to_vec()
             };
             if items.is_empty() {
                 return Err(err(key, &[nice_el(&p[0])]));
@@ -6229,31 +6341,31 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             }
             ret(best, OPERATION_OPS * steps.max(1) as f64)
         }
-        "abs" => {
+        B_ABS => {
             correct_count(p, 1, name)?;
             ret(V::Num(arg_num(p, 0, name)?.abs()), OPERATION_OPS)
         }
-        "swap" => {
+        B_SWAP => {
             correct_count(p, 1, name)?;
             side(SE::Swap(arg_dir(p, 0, name)?))
         }
-        "harvest" => {
+        B_HARVEST => {
             no_params(p, name)?;
             side(SE::Harvest)
         }
-        "can_harvest" => {
+        B_CAN_HARVEST => {
             no_params(p, name)?;
             side(SE::CanHarvest)
         }
-        "plant" => {
+        B_PLANT => {
             correct_count(p, 1, name)?;
             side(SE::Plant(arg_const(p, 0, NS_ENTITIES, name)?))
         }
-        "till" => {
+        B_TILL => {
             no_params(p, name)?;
             side(SE::Till)
         }
-        "use_item" => {
+        B_USE_ITEM => {
             let num;
             if p.len() == 1 {
                 num = 1;
@@ -6268,30 +6380,30 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             }
             side(SE::UseItem(item, num))
         }
-        "get_water" => {
+        B_GET_WATER => {
             no_params(p, name)?;
             side(SE::GetWater)
         }
-        "move" => {
+        B_MOVE => {
             correct_count(p, 1, name)?;
             side(SE::Move(arg_dir(p, 0, name)?))
         }
-        "can_move" => {
+        B_CAN_MOVE => {
             correct_count(p, 1, name)?;
             side(SE::CanMove(arg_dir(p, 0, name)?))
         }
-        "get_entity_type" => side(SE::GetEntityType(opt_dir(p, name)?)),
-        "get_ground_type" => side(SE::GetGroundType(opt_dir(p, name)?)),
-        "measure" => side(SE::Measure(opt_dir(p, name)?)),
-        "get_pos_z" => {
+        B_GET_ENTITY_TYPE => side(SE::GetEntityType(opt_dir(p, name)?)),
+        B_GET_GROUND_TYPE => side(SE::GetGroundType(opt_dir(p, name)?)),
+        B_MEASURE => side(SE::Measure(opt_dir(p, name)?)),
+        B_GET_POS_Z => {
             opt_dir(p, name)?;
             side(SE::GetPosZ)
         }
-        "get_time" => {
+        B_GET_TIME => {
             no_params(p, name)?;
             side(SE::GetTime)
         }
-        "get_tick_count" => {
+        B_GET_TICK_COUNT => {
             no_params(p, name)?;
             let v = {
                 let s = st.borrow();
@@ -6299,24 +6411,24 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             };
             ret(V::Num(v), 0.0)
         }
-        "random" => {
+        B_RANDOM => {
             no_params(p, name)?;
             let v = st.borrow_mut().random_random.next_double();
             ret(V::Num(v), OPERATION_OPS)
         }
-        "get_pos_x" => {
+        B_GET_POS_X => {
             no_params(p, name)?;
             side(SE::GetPosX)
         }
-        "get_pos_y" => {
+        B_GET_POS_Y => {
             no_params(p, name)?;
             side(SE::GetPosY)
         }
-        "get_world_size" => {
+        B_GET_WORLD_SIZE => {
             no_params(p, name)?;
             side(SE::GetWorldSize)
         }
-        "range" => {
+        B_RANGE => {
             let (start, end, step);
             if p.len() >= 3 {
                 correct_count(p, 3, name)?;
@@ -6338,7 +6450,7 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             }
             ret(V::Range(start, end, step), OPERATION_OPS)
         }
-        "len" => {
+        B_LEN => {
             correct_count(p, 1, name)?;
             let n = match &p[0] {
                 V::Dict(d) | V::Set(d) => d.borrow().len(),
@@ -6347,11 +6459,11 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             };
             ret(V::Num(n as f64), OPERATION_OPS)
         }
-        "num_items" => {
+        B_NUM_ITEMS => {
             correct_count(p, 1, name)?;
             side(SE::NumItems(arg_const(p, 0, NS_ITEMS, name)?))
         }
-        "get_cost" => {
+        B_GET_COST => {
             if !p.is_empty() && matches!(p[0], V::Const(NS_UNLOCKS, _)) {
                 if p.len() == 1 {
                     side(SE::GetCost(p[0].clone(), None))
@@ -6366,19 +6478,19 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
                 side(SE::GetCost(p[0].clone(), None))
             }
         }
-        "get_companion" => {
+        B_GET_COMPANION => {
             no_params(p, name)?;
             side(SE::GetCompanion)
         }
-        "clear" => {
+        B_CLEAR => {
             no_params(p, name)?;
             side(SE::Clear)
         }
-        "unlock" => {
+        B_UNLOCK => {
             correct_count(p, 1, name)?;
             side(SE::Unlock(arg_const(p, 0, NS_UNLOCKS, name)?))
         }
-        "num_unlocked" => {
+        B_NUM_UNLOCKED => {
             correct_count(p, 1, name)?;
             match &p[0] {
                 V::Const(ns, _) if *ns == NS_UNLOCKS || *ns == NS_ITEMS || *ns == NS_HATS || *ns == NS_ENTITIES => {
@@ -6387,14 +6499,14 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
                 v => Err(wrong_args(0, name, v)),
             }
         }
-        "str" => {
+        B_STR => {
             if p.is_empty() {
                 return ret(new_str(""), OPERATION_OPS);
             }
             correct_count(p, 1, name)?;
             ret(new_str(&nice(&p[0])), OPERATION_OPS)
         }
-        "list" => {
+        B_LIST => {
             if p.is_empty() {
                 return ret(new_list(Vec::new()), OPERATION_OPS);
             }
@@ -6409,7 +6521,7 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             let n = items.len();
             ret(new_list(items), OPERATION_OPS * (1 + n) as f64)
         }
-        "set" => {
+        B_SET => {
             if p.is_empty() {
                 return ret(V::Set(Rc::new(RefCell::new(DMap::new(true)))), OPERATION_OPS);
             }
@@ -6433,7 +6545,7 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             let n = set.len();
             ret(V::Set(Rc::new(RefCell::new(set))), OPERATION_OPS * (1 + n) as f64)
         }
-        "dict" => {
+        B_DICT => {
             if p.is_empty() {
                 return ret(V::Dict(Rc::new(RefCell::new(DMap::new(false)))), OPERATION_OPS);
             }
@@ -6449,15 +6561,15 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             let n = copy.len();
             ret(V::Dict(Rc::new(RefCell::new(copy))), OPERATION_OPS * (1 + 2 * n) as f64)
         }
-        "set_execution_speed" => {
+        B_SET_EXECUTION_SPEED => {
             correct_count(p, 1, name)?;
             side(SE::SetExecutionSpeed(arg_num(p, 0, name)?))
         }
-        "set_world_size" => {
+        B_SET_WORLD_SIZE => {
             correct_count(p, 1, name)?;
             side(SE::SetWorldSize(arg_num(p, 0, name)?))
         }
-        "spawn_drone" => {
+        B_SPAWN_DRONE => {
             match p.first() {
                 Some(V::Func(f)) => {
                     if f.syntax_tree.is_none() {
@@ -6467,9 +6579,9 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
                 Some(v) => return Err(wrong_args(0, name, v)),
                 None => return Err(err("error_wrong_number_args", &["spawn_drone()".into(), "1".into(), "()".into()])),
             }
-            side(SE::SpawnDrone(parameters.clone()))
+            side(SE::SpawnDrone(parameters.to_vec()))
         }
-        "wait_for" | "has_finished" => {
+        B_WAIT_FOR | B_HAS_FINISHED => {
             correct_count(p, 1, name)?;
             let h = match &p[0] {
                 V::Handle(h) => h.clone(),
@@ -6477,15 +6589,15 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             };
             side(if name == "wait_for" { SE::Await(h) } else { SE::HasFinished(h) })
         }
-        "num_drones" => {
+        B_NUM_DRONES => {
             no_params(p, name)?;
             side(SE::NumDrones)
         }
-        "max_drones" => {
+        B_MAX_DRONES => {
             no_params(p, name)?;
             side(SE::MaxDrones)
         }
-        "append" => {
+        B_APPEND => {
             correct_count(p, 2, name)?;
             match &p[0] {
                 V::List(l) => l.borrow_mut().push(p[1].clone()),
@@ -6493,7 +6605,7 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             }
             ret(V::None, OPERATION_OPS)
         }
-        "add" => {
+        B_ADD => {
             correct_count(p, 2, name)?;
             let set = match &p[0] {
                 V::Set(s) => s.clone(),
@@ -6508,7 +6620,7 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             }
             ret(V::None, OPERATION_OPS * py_size(&p[1]) as f64)
         }
-        "remove" => {
+        B_REMOVE => {
             if let Some(V::List(l)) = p.first() {
                 correct_count(p, 2, name)?;
                 let mut steps = 0;
@@ -6539,7 +6651,7 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             }
             Err(err("error_remove_on_non_list_or_set", &[nice_el(p.first().unwrap_or(&V::None))]))
         }
-        "pop" => {
+        B_POP => {
             if let Some(V::List(l)) = p.first() {
                 let mut num: i64 = -1;
                 if p.len() > 1 {
@@ -6568,7 +6680,7 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             }
             Err(err("error_pop_on_non_dict_or_list", &[nice_el(p.first().unwrap_or(&V::None))]))
         }
-        "insert" => {
+        B_INSERT => {
             correct_count(p, 3, name)?;
             let l = match &p[0] {
                 V::List(l) => l.clone(),
@@ -6586,8 +6698,8 @@ fn call_builtin(name: &'static str, parameters: Vec<V>, st: &StRef) -> R<f64> {
             l.borrow_mut().insert(num as usize, p[2].clone());
             ret(V::None, result)
         }
-        "place" | "leaderboard_run" | "simulate" | "dig" | "get_hardness" | "get_stability" | "prospect_iron"
-        | "prospect_quartz" | "push" | "can_push" | "jump" | "hover" | "get_hover" => side(SE::NotPorted(name)),
+        B_PLACE | B_LEADERBOARD_RUN | B_SIMULATE | B_DIG | B_GET_HARDNESS | B_GET_STABILITY | B_PROSPECT_IRON
+        | B_PROSPECT_QUARTZ | B_PUSH | B_CAN_PUSH | B_JUMP | B_HOVER | B_GET_HOVER => side(SE::NotPorted(name)),
         _ => Err(err("error_name_not_defined", &[name.to_string()])),
     }
 }
