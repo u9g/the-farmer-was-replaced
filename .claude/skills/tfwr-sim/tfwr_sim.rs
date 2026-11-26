@@ -2120,8 +2120,9 @@ impl TokenStream {
 
 /// Tokenizer.Tokenize; the regex alternatives are matched by hand in the same order.
 fn tokenize(code: &str) -> R<TokenStream> {
-    let text: Vec<char> = code.replace('\u{0B}', "\n").chars().collect();
-    let mut stream = TokenStream { tokens: VecDeque::new(), last_string_index: 0 };
+    let mut text: Vec<char> = Vec::with_capacity(code.len());
+    text.extend(code.chars().map(|c| if c == '\u{0B}' { '\n' } else { c }));
+    let mut stream = TokenStream { tokens: VecDeque::with_capacity(code.len() / 3 + 16), last_string_index: 0 };
     stream.add(Token { ty: TT::NewLine, value: "\n".into(), start: 0 });
     let n = text.len();
     let mut num = 0usize;
@@ -2137,14 +2138,22 @@ fn tokenize(code: &str) -> R<TokenStream> {
     };
     // CONSTANT_TOKENS as chars, tried in the same order
     let consts: Vec<(Vec<char>, bool, TT)> = CONSTANT_TOKENS.iter().map(|(t, b, ty)| (t.chars().collect(), *b, *ty)).collect();
+    // the ones starting with each ASCII character, in that order (they all start with one)
+    let mut by_first: Vec<Vec<usize>> = vec![Vec::new(); 128];
+    for (i, (t, _, _)) in consts.iter().enumerate() {
+        by_first[t[0] as usize].push(i);
+    }
+    let none: Vec<usize> = Vec::new();
     let boundary = |pos: usize| -> bool {
         // \b after a word character
         pos >= n || !is_word(text[pos])
     };
     'outer: while num < n {
-        for (t, needs_boundary, ty) in consts.iter() {
+        let first = text[num] as usize;
+        for &ci in (if first < 128 { &by_first[first] } else { &none }).iter() {
+            let (t, needs_boundary, ty) = &consts[ci];
             let len = t.len();
-            if text[num] != t[0] || num + len > n || text[num..num + len] != t[..] {
+            if num + len > n || text[num..num + len] != t[..] {
                 continue;
             }
             if *needs_boundary && num + len < n {
