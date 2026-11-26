@@ -69,19 +69,27 @@ def model_costs(R, order, till, seeds=60, seed=7):
     return [t / seeds for t in tot]
 
 
+OKCUT = {}
+
+
 def split(costs, starts_fn, T, order):
+    ok = OKCUT.get(id(order))
     chunks = []
     p = 0
     while p < len(order):
         c = starts_fn(len(chunks), order[p])
         q = p
+        last_ok = None
         while q < len(order):
             c += costs[q]
             q += 1
-            if c > T:
-                break
-        chunks.append((p, q))
-        p = q
+            if q == len(order) or ok is None or ok[q]:
+                if c <= T or last_ok is None:
+                    last_ok = q
+                if c > T:
+                    break
+        chunks.append((p, last_ok))
+        p = last_ok
     return chunks
 
 
@@ -94,11 +102,13 @@ def best_split(costs, starts_fn, order):
         else:
             lo = T
     ch = split(costs, starts_fn, hi, order)
+    ok = OKCUT.get(id(order))
     while len(ch) < ND:
         # split the longest chunk
         k = max(range(len(ch)), key=lambda i: ch[i][1] - ch[i][0])
         p, q = ch[k]
-        m = (p + q) // 2
+        cand = [m for m in range(p + 1, q) if ok is None or ok[m]]
+        m = min(cand, key=lambda m: abs(m - (p + q) / 2))
         ch[k:k + 1] = [(p, m), (m, q)]
     return ch, hi
 
@@ -134,7 +144,8 @@ def nbr_table(R, cells, owner_of, me):
         ups = []
         dns = []
         for d, n in nb(c, R):
-            f = 1 if owner_of.get(n) != me else 0
+            o = owner_of.get(n)
+            f = 0 if o == me else 1
             ent = [Dr(d), pidx(n), f, Dr(OPP[d])]
             (ups if d in UPD else dns).extend(ent)
         tab[pidx(c)] = [ups, dns]
@@ -153,6 +164,30 @@ def emit(out, A, B, extra):
     for k, v in extra["consts"].items():
         src = src.replace("#%s#" % k, str(v))
     open(out, "w").write(src)
+
+
+def safe_cuts(R, order):
+    from lay import is_mid
+    idx = {c: i for i, c in enumerate(order)}
+    n = len(order)
+    cross = [0] * (n + 1)
+    for c in order:
+        i = idx[c]
+        for d, m in nb(c, R):
+            j = idx[m]
+            if i < j:
+                for q in range(i + 1, j + 1):
+                    cross[q] += 1
+
+    def plain(c):
+        return not is_mid(c, R) and all(not is_mid(m, R) for d, m in nb(c, R))
+
+    ok = [False] * (n + 1)
+    for q in range(1, n):
+        a, b = order[q - 1], order[q]
+        ok[q] = cross[q] == 1 and mdist(a, b) == 1 and plain(a) and plain(b)
+    print("safe cuts", sum(ok), file=sys.stderr)
+    return ok
 
 
 def spawn_plan(starts, origin):
@@ -209,6 +244,9 @@ def table_for(cells, R, own, me):
     return nbr_table(R, sorted(T), own, me)
 
 
+import os
+
+
 def main():
     out = sys.argv[1]
     kB = int(sys.argv[2]) if len(sys.argv) > 2 else 5
@@ -221,6 +259,8 @@ def main():
     print("A", len(RA), "B", len(RB), "check", 32 * (len(RA) ** 2 + len(RB) ** 2), file=sys.stderr)
     cA = model_costs(RA, oA, True)
     cB = model_costs(RB, oB, False)
+
+
     if calib:
         C = json.load(open(calib))
         for i, c in enumerate(oA):
@@ -242,6 +282,13 @@ def main():
     o2, plans = spawn_plan(tuple(starts), origin)
     print("TA", round(TA, 3), "sum start", round(sum(o2) * ACT, 2), "max start", round(max(o2) * ACT, 2), file=sys.stderr)
     chB, TB = best_split(cB, lambda k, p: 0.0, oB)
+    import os
+    if os.environ.get("BOUNDS"):
+        Bd_ = json.load(open(os.environ["BOUNDS"]))
+        chA = [tuple(x) for x in Bd_["chA"]]
+        chB = [tuple(x) for x in Bd_["chB"]]
+        starts = [oA[p] for p, q in chA]
+        o2, plans = spawn_plan(tuple(starts), origin)
     print("TB", round(TB, 3), file=sys.stderr)
     ownA = {}
     for k, (p, q) in enumerate(chA):
@@ -292,7 +339,8 @@ def main():
         steps, L = route(c, j)
         mvb = [[]] + [path_moves(bcells[i - 1], bcells[i]) for i in range(1, len(bcells))]
         tabB = table_for(bcells, RB, ownB, j)
-        Bd.append([[pidx(x) for x in bcells], mvb, tabB, steps])
+        rvb = [path_moves(bcells[i + 1], bcells[i]) for i in range(len(bcells) - 1)] + [[]]
+        Bd.append([[pidx(x) for x in bcells], mvb, tabB, steps, rvb])
     json.dump({"oA": [pidx(c) for c in oA], "oB": [pidx(c) for c in oB], "chA": chA, "chB": chB, "cA": cA, "cB": cB, "asg": asg, "hv": hv, "starts": [BOOT + o * ACT for o in o2]}, open(out + ".json", "w"))
     # launch plans: plans[c] = [[moves, lo, hi]...]; after them the drone travels to its first cell
     LP = []
@@ -314,7 +362,8 @@ def main():
     sim_plan(0, origin)
     for c in range(ND):
         A[c][1][0] = path_moves(endpos[c], oA[chA[c][0]])
-    emit(out, A, Bd, {"template": "template.py", "consts": {"NA": len(RA), "NB": len(RB), "HV": hv, "LP": lit(LP)}})
+    emit(out, A, Bd, {"template": "template.py", "consts": {"NA": len(RA), "NB": len(RB), "HV": hv, "LP": lit(LP), "KD": os.environ.get("KD", "20")}})
 
 
-main()
+if __name__ == "__main__":
+    main()

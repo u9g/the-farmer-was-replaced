@@ -4,6 +4,7 @@ GROW = 1.0001
 NA = #NA#
 NB = #NB#
 HV = #HV#
+KD = #KD#
 
 #DATA#
 
@@ -38,7 +39,9 @@ def need(q, up, T, V):
 
 
 def settle(p, T, V):
-	while True:
+	cap = 0
+	while cap < 40:
+		cap += 1
 		v = measure()
 		V[p] = v
 		e = T[p]
@@ -47,53 +50,60 @@ def settle(p, T, V):
 		k = 0
 		n = len(L)
 		while k < n:
-			d = L[k]
-			w = measure(d)
-			if w != None:
-				q = L[k + 1]
-				V[q] = w
-				if v > w:
-					swap(d)
-					V[p] = w
-					V[q] = v
-					if need(q, True, T, V):
-						move(d)
-						settle(q, T, V)
-						move(L[k + 3])
-					hit = True
-					k = n
+			if True:
+				d = L[k]
+				w = measure(d)
+				if w != None:
+					q = L[k + 1]
+					V[q] = w
+					if v > w:
+						swap(d)
+						V[p] = w
+						V[q] = v
+						if need(q, True, T, V):
+							move(d)
+							settle(q, T, V)
+							move(L[k + 3])
+						hit = True
+						k = n
 			k += 4
 		if not hit:
 			L = e[1]
 			k = 0
 			n = len(L)
 			while k < n:
-				d = L[k]
-				w = measure(d)
-				if w != None:
-					q = L[k + 1]
-					V[q] = w
-					if v < w:
-						swap(d)
-						V[p] = w
-						V[q] = v
-						if need(q, False, T, V):
-							move(d)
-							settle(q, T, V)
-							move(L[k + 3])
-						hit = True
-						k = n
+				if True:
+					d = L[k]
+					w = measure(d)
+					if w != None:
+						q = L[k + 1]
+						V[q] = w
+						if v < w:
+							swap(d)
+							V[p] = w
+							V[q] = v
+							if need(q, False, T, V):
+								move(d)
+								settle(q, T, V)
+								move(L[k + 3])
+							hit = True
+							k = n
 				k += 4
 		if not hit:
 			return
 
 
-def run(d, fresh):
+def run(d, fresh, kd):
 	P = d[0]
 	M = d[1]
 	T = d[2]
 	V = {}
-	for i in range(len(P)):
+	n = len(P)
+	if kd > n - 8:
+		kd = n - 8
+	if kd < 0:
+		kd = 0
+	for i in range(n):
 		for m in M[i]:
 			move(m)
 		if fresh:
@@ -101,7 +111,17 @@ def run(d, fresh):
 		elif get_entity_type() != None:
 			harvest()
 		plant(Entities.Cactus)
-		settle(P[i], T, V)
+		if i < n - kd:
+			settle(P[i], T, V)
+	if kd > 0:
+		R = d[4]
+		i = n - 1
+		while i >= n - kd:
+			if i < n - 1:
+				for m in R[i]:
+					move(m)
+			settle(P[i], T, V)
+			i -= 1
 
 
 def pretill(db):
@@ -145,12 +165,12 @@ def recover(c, bar):
 	clearchunk(db)
 	travel(db[0][0])
 	wait_until(bar)
-	run(db, False)
+	run(db, False, KD)
 
 
 def worker(c):
 	da = FA[c]()
-	run(da, True)
+	run(da, True, 0)
 	db = FB[c]()
 	pump = PUMP0 - SEED_COST * NA
 	if c == HV:
@@ -163,7 +183,7 @@ def worker(c):
 		pretill(db)
 		while num_items(Items.Cactus) <= 0:
 			pass
-	run(db, False)
+	run(db, False, KD)
 	if c != HV:
 		return
 	while True:
