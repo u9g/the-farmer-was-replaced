@@ -6127,11 +6127,12 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     push_or_store!(v);
                 }
                 Op::CallA(n, argc) => {
-                    let args = if argc == u32::MAX {
-                        vm.stack.pop().unwrap()
+                    // the arguments: a list taken off the stack, or one value holding them
+                    let (listed, args) = if argc == u32::MAX {
+                        (None, vm.stack.pop().unwrap())
                     } else {
                         let at = vm.stack.len() - argc as usize;
-                        V::Seq(Rc::new(vm.stack.split_off(at)))
+                        (Some(vm.stack.split_off(at)), V::None)
                     };
                     let is_static = matches!(vm.stack.pop(), Some(V::Bool(true)));
                     let func = match vm.stack.pop() {
@@ -6142,9 +6143,10 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     // left in returnValue; every other builtin sets one (directly or when its side
                     // effect is applied), so for them the list need not be kept.
                     let keep_args = func.syntax_tree.is_none() && func.bidx == B_TAP;
-                    let mut parameters: Vec<V> = match args {
-                        V::Seq(s) if !keep_args => Rc::try_unwrap(s).unwrap_or_else(|s| s.to_vec()),
-                        V::Seq(ref s) => s.to_vec(),
+                    let mut parameters: Vec<V> = match (listed, args) {
+                        (Some(v), _) => v,
+                        (None, V::Seq(s)) if !keep_args => Rc::try_unwrap(s).unwrap_or_else(|s| s.to_vec()),
+                        (None, V::Seq(ref s)) => s.to_vec(),
                         _ => Vec::new(),
                     };
                     let args = if keep_args { V::Seq(Rc::new(parameters.clone())) } else { V::None };
@@ -6279,7 +6281,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                             steps = 1;
                             v
                         }
-                        None => index_at(&lhs, std::slice::from_ref(&idx), &mut steps, None)?,
+                        None => index_get1(&lhs, &idx, &mut steps)?,
                     };
                     vdrop(idx);
                     drop(lhs);
@@ -6327,7 +6329,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                             steps = 1;
                             v
                         }
-                        None => index_at(lhs, std::slice::from_ref(idx), &mut steps, None)?,
+                        None => index_get1(lhs, idx, &mut steps)?,
                     };
                     // (on the stack only if the drone stops here; the store takes it directly otherwise)
                     if charge(st, OPERATION_OPS * steps as f64) {
@@ -6428,7 +6430,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                             steps = 1;
                             v
                         }
-                        None => index_at(lhs, std::slice::from_ref(idx), &mut steps, None)?,
+                        None => index_get1(lhs, idx, &mut steps)?,
                     };
                     vm.stack.push(result);
                     if charge(st, OPERATION_OPS * steps as f64) {
@@ -7336,6 +7338,23 @@ fn fused_operand(st: &StRef, code: &Code, o: Opnd, depth_off: u32) -> R<V> {
         }
         Opnd::Stack => unreachable!(),
     }
+}
+
+/// index_at's read of one index; a dict and a number key looked up directly
+#[inline(always)]
+fn index_get1(target: &V, idx: &V, steps: &mut i32) -> R<V> {
+    if let (V::Dict(d), V::Num(x)) = (target, idx) {
+        // to_key and py_size of a number
+        let key = Key::Num(if *x == 0.0 { 0 } else { x.to_bits() });
+        return match d.borrow().get(&key) {
+            Some(v) => {
+                *steps = 1;
+                Ok(v)
+            }
+            None => Err(err("error_key", &[nice_el(idx)])),
+        };
+    }
+    index_at(target, std::slice::from_ref(idx), steps, None)
 }
 
 /// StoreIndex's work for `indexable[idx] op= rhs` (one index): the ops it costs
