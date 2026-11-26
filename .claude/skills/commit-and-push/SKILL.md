@@ -21,6 +21,17 @@ first. No branch and no PR.
 4. `git push`. If it is rejected, `git pull --rebase` and push again.
 5. Tell the user the commit link: `https://github.com/u9g/the-farmer-was-replaced/commit/<sha>`.
 
+## After an optimization: improve the tfwr-sim helpers
+
+When the change is a speedup you found (a script runs faster, a reset run finishes sooner), ask
+yourself what tool would have pointed you at it sooner. If one would have, and it makes sense
+to build, add it to the tfwr-sim skill's what-if / profiler / optimization helpers
+(`--profile`, `--whatif`, `--tweak` in `.claude/skills/tfwr-sim/tfwr_sim.rs`). That could be a
+new `--whatif` variant, a new `--profile` breakdown or a new `--tweak` rule. Document it in
+`.claude/skills/tfwr-sim/SKILL.md` and commit it with the optimization or right after it. Skip
+this when the speedup was obvious without a tool, or when the tool would only ever fit this one
+case.
+
 ## save.json
 
 Never commit or push `save.json`; the user does not want it published. It is in `.gitignore`.
