@@ -1859,7 +1859,7 @@ fn scope_lookup_cached(scope: &ScopeRef, key: usize, c: u64) -> Option<(V, bool)
     let idx = (c >> 8) as usize;
     let mut s: &Scope = unsafe { &*scope.as_ptr() };
     for _ in 0..hops {
-        if s.vars.bloom & bit != 0 {
+        if s.vars.bloom & bit != 0 && s.vars.find(key).is_some() {
             return None;
         }
         match &s.parent_scope {
@@ -6390,7 +6390,7 @@ fn scope_slot_store_cached(scope: &ScopeRef, key: usize, c: u64) -> *mut (Rc<str
     let idx = (c >> 8) as usize;
     let mut s: &mut Scope = unsafe { &mut *scope.as_ptr() };
     for _ in 0..hops {
-        if s.vars.bloom & bit != 0 {
+        if s.vars.bloom & bit != 0 && s.vars.find(key).is_some() {
             return std::ptr::null_mut();
         }
         match &s.parent_scope {
@@ -6434,7 +6434,8 @@ fn scope_slot_cached(scope: &ScopeRef, key: usize, c: u64) -> *const (Rc<str>, V
     let idx = (c >> 8) as usize;
     let mut s: &Scope = unsafe { &*scope.as_ptr() };
     for _ in 0..hops {
-        if s.vars.bloom & bit != 0 {
+        // a set filter bit may be another name's: only the name itself here spoils the cache
+        if s.vars.bloom & bit != 0 && s.vars.find(key).is_some() {
             return std::ptr::null();
         }
         match &s.parent_scope {
