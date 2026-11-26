@@ -5312,9 +5312,16 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     };
                     let s = stm(st);
                     let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
-                    let (v, is_static) = scope_lookup(scope, name, Some(&node.lookup))?;
-                    s.module_state.is_expression_static = is_static;
-                    vm.stack.push(v);
+                    let e = scope_slot_cached(scope, name_key(name), node.lookup.get());
+                    if !e.is_null() {
+                        let e = unsafe { &*e };
+                        s.module_state.is_expression_static = e.2;
+                        vm.stack.push(e.1.clone());
+                    } else {
+                        let (v, is_static) = scope_lookup_search(scope, name, Some(&node.lookup))?;
+                        s.module_state.is_expression_static = is_static;
+                        vm.stack.push(v);
+                    }
                 }
                 Op::Lit(n, d, k) => {
                     eb!(n, d);
@@ -5339,13 +5346,29 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     };
                     let s = stm(st);
                     let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
-                    let (v, is_static) = scope_lookup(scope, name, Some(&node.lookup))?;
+                    let e = scope_slot_cached(scope, name_key(name), node.lookup.get());
+                    let is_static = if !e.is_null() {
+                        let e = unsafe { &*e };
+                        match &e.1 {
+                            V::Func(f) => vm.stack.push(V::Func(f.clone())),
+                            _ => {
+                                s.module_state.is_expression_static = e.2;
+                                s.current_executing_node = cn;
+                                return Err(Ctrl::Err("error_not_a_function".into()));
+                            }
+                        }
+                        e.2
+                    } else {
+                        let (v, is_static) = scope_lookup_search(scope, name, Some(&node.lookup))?;
+                        if !matches!(v, V::Func(_)) {
+                            s.module_state.is_expression_static = is_static;
+                            s.current_executing_node = cn;
+                            return Err(Ctrl::Err("error_not_a_function".into()));
+                        }
+                        vm.stack.push(v);
+                        is_static
+                    };
                     s.module_state.is_expression_static = is_static;
-                    if !matches!(v, V::Func(_)) {
-                        s.current_executing_node = cn;
-                        return Err(Ctrl::Err("error_not_a_function".into()));
-                    }
-                    vm.stack.push(v);
                     vm.stack.push(V::Bool(is_static));
                 }
                 Op::StoreAssign(an, ln) => {
