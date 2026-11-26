@@ -1,6 +1,6 @@
 ---
 name: cactus-diag
-description: Find where a cactus leaderboard run (two sorted harvests, many drones) loses time. Traces every action of every drone with a diagnostic copy of the tfwr simulator and reports which drone and routine set each harvest time, what its tail spent its time on, whether a harvest waited on growth or on fixes, per-junction settle times over many seeds, and cells two drones swapped close together. Use before changing cactus_lb_entry.py or its generators, to pick a target.
+description: Find where a cactus leaderboard run (two sorted harvests, many drones) loses time. Traces every action of every drone with a diagnostic copy of the tfwr simulator and reports which drone and routine set each harvest time, what its tail spent its time on, whether a harvest waited on growth or on fixes, when each chunk's drone is done over many seeds (which chunks are late every run, which only vary), per-junction settle times, and cells two drones swapped close together. Use before changing cactus_lb_entry.py or its generators, to pick a target.
 ---
 
 # Cactus run diagnostics
@@ -37,7 +37,8 @@ One run (`TRACE.tsv ENTRY.py`), per round (A = up to the first harvest, B = up t
   last plant;
 - the time the last cactus grew, and whether the harvest was bound by GROWTH or by FIX WORK (and
   which drone and routine);
-- the latest drones: simulator drone id, the `fa<N>`/`fb<N>` routine it ran (the chunk), arrival
+- the latest drones: simulator drone id, the routine it ran (the chunk: `w<N>` in a g5 entry,
+  `fa<N>`/`fb<N>` in a g3 one), arrival
   (first plant), last plant, work end, and the tail after the last plant split into move, swap,
   spin (a read repeated on the same line), read and use, and by function (jf, fmc, ...);
 - all drones' time booked by kind (drone-seconds), and with `--drone K` one drone's time by function.
@@ -49,12 +50,26 @@ Also: swaps by two different drones on one cell less than 0.1 s apart (possible 
 `--summary` over many seeds: how often each routine set each harvest, how far the slowest drone
 was behind the mean, and every junction settle (`jf` call) with its mean and worst duration.
 
-## Findings for the shipped entry (g3, 7.865 s), 24 seeds
+`--chunks` over many seeds, per round and per chunk: the drone's last plant, when it is done (fix
+work finished and its last cactus grown; in round A the moment it signals), the sd of that over
+the seeds, and in how many runs it was the latest. A harvest waits for the latest drone, so read
+it two ways:
 
-- Neither harvest waits on growth. Both are bound by fix work in one drone's tail. The slowest
-  drone finishes 0.23 s (A) and 0.36 s (B) after the mean.
-- The drone that sets the harvest changes from seed to seed. That points to variance in tail
-  work, not one bad chunk.
-- Junction settles take 0.52 s per call (4-cell junctions) and 0.77 s (the two 5-cell junctions,
-  chunks 18 and 22), with worst cases near 1.08 s. A one-seed look at chunk 22 found 1.12 s.
-- Moves dominate all drones' time: 67 drone-s in round A and 48 in B, against 24 for planting.
+- a chunk whose mean is above the others (marked) is late in every run: the planner's cost for it
+  is wrong, or it waits on another drone. Look at that chunk with the one-run report.
+- a chunk with a wide sd is late only sometimes; many of those push the harvest past every mean.
+
+Start here. On the g3 entry it showed three chunks done 1 s before the rest and six always late,
+and in a balanced plan the two end chunks stuck 0.35 s behind a neighbour's last plant, which
+`--summary` (slowest drone minus mean) reports as a single number. `old/cactus_lb_g5/calib.py`
+does the same comparison against the planner's own figures.
+
+## Findings for the shipped entry (g5, 7.47 s), 24 seeds
+
+- First harvest 4.44 s, second 2.99 s later. No chunk's mean is more than 0.13 s above the
+  average in either round (the two end chunks are 0.3 s below it in round A), and the latest
+  chunk changes from run to run: what is left is mostly spread, not balance.
+- The harvest still comes 0.24 s (A) and 0.30 s (B) after the average chunk is done. Chunks that
+  only wait for growth have an sd near 0; junction chunks 0.10 to 0.20 s.
+- Junction settles take 0.5 to 0.8 s per call, worst cases 1.1 s.
+- Moves take most of the drones' time: 64 drone-s in round A and 41 in B, against 24 for planting.

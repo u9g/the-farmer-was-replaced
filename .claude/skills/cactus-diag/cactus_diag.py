@@ -2,6 +2,7 @@
 
     python cactus_diag.py TRACE.tsv ENTRY.py [--drone K] [--top N]
     python cactus_diag.py --summary TRACE1.tsv TRACE2.tsv ... ENTRY.py
+    python cactus_diag.py --chunks TRACE1.tsv TRACE2.tsv ... ENTRY.py
 
 Trace lines (tab separated):
     E  t  drone  kind  x  y  dir  ticks  file:line  extra     one per side effect
@@ -12,6 +13,8 @@ the drone's cell and the neighbour before the swap, harvest -> cactus gained.
 import sys, re, collections, statistics as st
 
 ACTIONS = {"move", "swap", "plant", "till", "harvest", "use", "spawn"}
+# a drone's chunk routine: fa<N> / fb<N> (g3 entries) or w<N> (one function per drone, g5)
+ROUTINE = re.compile(r"(f[ab]|w)\d+$")
 READS = {"measure", "time", "items", "drones", "other"}
 
 
@@ -121,7 +124,7 @@ def main():
                     tb[e[2]] += gap
                 tb["fn:" + fn] += gap
                 pk = key if e[2] in READS else None
-            routine = collections.Counter(fname(fm, e[7]) for e in es if re.match(r"f[ab]\d+$", fname(fm, e[7])))
+            routine = collections.Counter(fname(fm, e[7]) for e in es if ROUTINE.match(fname(fm, e[7])))
             rname = routine.most_common(1)[0][0] if routine else "?"
             rows.append(dict(d=d, r=rname, arr=arr, tl=tl, end=work_end, n=len(plants), book=book, fbook=fbook, tb=tb,
                              swaps=sum(1 for e in es if e[2] == "swap"), moves=sum(1 for e in es if e[2] == "move")))
@@ -194,7 +197,7 @@ def summary(paths, entry):
                 acts = [e for e in es if e[2] in ACTIONS and e[2] != "harvest"]
                 if not any(e[2] == "plant" for e in es) or not acts:
                     continue
-                rt = collections.Counter(fname(fm, e[7]) for e in es if re.match(r"f[ab]\d+$", fname(fm, e[7])))
+                rt = collections.Counter(fname(fm, e[7]) for e in es if ROUTINE.match(fname(fm, e[7])))
                 rn = rt.most_common(1)[0][0] if rt else "?"
                 ends.append((acts[-1][0], rn))
                 cur, t0, n = None, 0.0, collections.Counter()
@@ -218,8 +221,70 @@ def summary(paths, entry):
         print("   %-5s call %d: mean %.3f max %.3f" % (k[0], k[2], m, mx))
 
 
+def chunks(paths, entry):
+    """over many runs: when each chunk's drone is finished in each round (fix work done and its
+    last cactus grown), mean and sd, and how often it was the last. A harvest waits for the
+    latest drone, so a chunk whose mean is above the others, or a wide sd, is time lost."""
+    fm = func_map(entry)
+    act = 200 / 6075.0
+    fin = [collections.defaultdict(list), collections.defaultdict(list)]
+    lastp = [collections.defaultdict(list), collections.defaultdict(list)]
+    last = [collections.Counter(), collections.Counter()]
+    emax = [[], []]
+    harv = [[], []]
+    for path in paths:
+        ev, grown = load(path)
+        hts = [e[0] for e in ev if e[2] == "harvest" and e[8] not in ("", "0", "0.0")]
+        if len(hts) < 2:
+            continue
+        bounds = [0.0] + hts[:2]
+        by = collections.defaultdict(list)
+        for e in ev:
+            by[e[1]].append(e)
+        for ri in range(2):
+            a, b = bounds[ri], bounds[ri + 1]
+            rows = []
+            for d, es in by.items():
+                es = [e for e in es if a <= e[0] < b and e[2] in ACTIONS and e[2] != "harvest"]
+                plants = [e for e in es if e[2] == "plant"]
+                if not plants:
+                    continue
+                rt = collections.Counter(fname(fm, e[7]) for e in es if ROUTINE.match(fname(fm, e[7])))
+                rn = rt.most_common(1)[0][0] if rt else "?"
+                lp = plants[-1][0]
+                # round A: the drone signals with a water use once it is done; its pre-travel follows
+                sig = [e[0] for e in es if e[2] == "use" and e[0] > lp + 0.5]
+                if sig:
+                    f = sig[0]
+                else:
+                    f = max(es[-1][0] + act, lp + 1.0)
+                rows.append((f - a, rn))
+                fin[ri][rn].append(f - a)
+                lastp[ri][rn].append(lp - a)
+            rows.sort()
+            last[ri][rows[-1][1]] += 1
+            emax[ri].append(rows[-1][0])
+            harv[ri].append(b - a)
+
+    def num(s):
+        m = re.search(r"\d+", s)
+        return int(m.group(0)) if m else -1
+    for ri in range(2):
+        names = sorted(fin[ri], key=lambda s: (num(s), s))
+        means = [st.mean(fin[ri][k]) for k in names]
+        print("round %s: harvest %.3f s after the round starts; latest drone done at %.3f on average; chunk means: avg %.3f, max %.3f" % (
+            "AB"[ri], st.mean(harv[ri]), st.mean(emax[ri]), st.mean(means), max(means)))
+        print("   chunk  last plant  done (mean  sd)  latest in runs")
+        for k, m in zip(names, means):
+            print("   %-6s %8.3f   %8.3f %5.3f   %3d%s" % (k, st.mean(lastp[ri][k]), m, st.pstdev(fin[ri][k]), last[ri][k],
+                                                   "   <- above the average by %.2f" % (m - st.mean(means)) if m - st.mean(means) > 0.08 else ""))
+
+
 if __name__ == "__main__":
-    if "--summary" in sys.argv:
+    if "--chunks" in sys.argv:
+        a = [x for x in sys.argv[1:] if x != "--chunks"]
+        chunks(a[:-1], a[-1])
+    elif "--summary" in sys.argv:
         a = [x for x in sys.argv[1:] if x != "--summary"]
         summary(a[:-1], a[-1])
     else:
