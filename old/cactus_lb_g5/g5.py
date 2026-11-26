@@ -164,64 +164,105 @@ def plan5(lay):
     lay.slack = [0.0 if k == 0 else max(0.0, TAh - finA[k]) * PTF for k in range(ND)]
     memoB = {}
 
-    def cB(k, p, q, d):
-        key = (k, p, q, d)
+    def travel(j, st):
+        """ticks of drone j's trip to a round-B start that its round-A slack does not cover"""
+        tr = T_ACT * tdist(lay.endA[j], st)
+        return tr if j == 0 else max(0.0, tr - lay.slack[j])
+
+    def cB(j, p, q, d):
+        key = (j, p, q, d)
         if key not in memoB:
             st = o[p] if d == 0 else o[q - 1]
             r = chunk_eval(lay, p, q, d, False, st)
-            tr = T_ACT * tdist(lay.endA[k], st)
-            eff = tr if k == 0 else max(0.0, tr - lay.slack[k])
+            eff = travel(j, st)
             memoB[key] = (r[0] + eff, r[1], r[2] + eff, r[3], r[4])
         return memoB[key]
 
     W = int(E("BWIN", "24"))
     refB = float(E("REFB", "18500"))
     cand = [[0]] + [[c for c in cuts if abs(c - ch[k][0]) <= W] for k in range(1, ND)] + [[n]]
-    f = {(0, 1): (0.0, None, 0.0, 0.0)}
-    hist = [f]
-    for k in range(ND):
-        g = {}
-        for b in cand[k + 1]:
-            for d in dirs:
-                bv = None
-                for (a, da), (v, _, pfe, ptl) in f.items():
-                    if b <= a or b - a > LMAX:
-                        continue
-                    if a > 0:
-                        if da != d and not clean[a]:
+
+    def solveB(dr):
+        """chunks for round B when chunk k goes to drone dr[k]; returns (objective, chunks)"""
+        f = {(0, 1): (0.0, None, 0.0, 0.0)}
+        hist = [f]
+        for k in range(ND):
+            g = {}
+            for b in cand[k + 1]:
+                for d in dirs:
+                    bv = None
+                    for (a, da), (v, _, pfe, ptl) in f.items():
+                        if b <= a or b - a > LMAX:
                             continue
-                        if da == 1 and d == 0:
-                            continue
-                    r = cB(k, a, b, d)
-                    fe = r[2]
-                    tl = r[0] - r[2]
-                    c = v
-                    if a > 0 and da == 0 and d == 1:
-                        if pfe <= fe:
-                            c += math.exp((fe + WAITX + ptl - refB) / TAU) - math.exp((pfe + ptl - refB) / TAU)
-                        else:
-                            fe = pfe + WAITX
-                    c += math.exp((fe + tl - refB) / TAU)
-                    if bv is None or c < bv[0]:
-                        bv = (c, (a, da), fe, tl)
-                if bv is not None:
-                    g[(b, d)] = bv
-        hist.append(g)
-        f = g
-    _, dl = min((f[(n, d)][0], d) for d in (0, 1) if (n, d) in f)
-    key = (n, dl)
-    chB = []
-    for k in range(ND, 0, -1):
-        prev = hist[k][key][1]
-        chB.append((prev[0], key[0], key[1]))
-        key = prev
-    lay.chB = chB[::-1]
-    lay.KB = [cB(k, *c)[1] for k, c in enumerate(lay.chB)]
-    lay.GB = [cB(k, *c)[4] / 6075.0 for k, c in enumerate(lay.chB)]
-    lay.TB = max(cB(k, *c)[0] for k, c in enumerate(lay.chB))
+                        if a > 0:
+                            if da != d and not clean[a]:
+                                continue
+                            if da == 1 and d == 0:
+                                continue
+                        r = cB(dr[k], a, b, d)
+                        fe = r[2]
+                        tl = r[0] - r[2]
+                        c = v
+                        if a > 0 and da == 0 and d == 1:
+                            if pfe <= fe:
+                                c += math.exp((fe + WAITX + ptl - refB) / TAU) - math.exp((pfe + ptl - refB) / TAU)
+                            else:
+                                fe = pfe + WAITX
+                        c += math.exp((fe + tl - refB) / TAU)
+                        if bv is None or c < bv[0]:
+                            bv = (c, (a, da), fe, tl)
+                    if bv is not None:
+                        g[(b, d)] = bv
+            hist.append(g)
+            f = g
+        obj, dl = min((f[(n, d)][0], d) for d in (0, 1) if (n, d) in f)
+        key = (n, dl)
+        chB = []
+        for k in range(ND, 0, -1):
+            prev = hist[k][key][1]
+            chB.append((prev[0], key[0], key[1]))
+            key = prev
+        return obj, chB[::-1]
+
+    # Which drone takes which round-B chunk: g3 gave chunk k to drone k. Here any drone may take
+    # any chunk (distances are over the torus), chosen to minimise the same objective, and the
+    # chunks are cut again for that assignment (BASSIGN=0: chunk k to drone k).
+    dr = list(range(ND))
+    obj, chB = solveB(dr)
+    best = (obj, chB, list(dr))
+    for it in range(int(E("BASSIGN", "4"))):
+        try:
+            import numpy as np
+            from scipy.optimize import linear_sum_assignment
+        except ImportError:
+            break
+        C = np.zeros((ND, ND))
+        for k, (p, q, d) in enumerate(chB):
+            st = start_of(p, q, d)
+            base = chunk_eval(lay, p, q, d, False, st)[0]
+            for j in range(ND):
+                C[j][k] = math.exp(min(40.0, (base + travel(j, st) - refB) / TAU))
+        rows, colsx = linear_sum_assignment(C)
+        nd = [0] * ND
+        for j, k in zip(rows, colsx):
+            nd[k] = int(j)
+        if nd == dr:
+            break
+        dr = nd
+        obj, chB = solveB(dr)
+        print("B assignment iter", it, "objective %.4f, drones off their own chunk %d" % (obj, sum(1 for k in range(ND) if dr[k] != k)), file=sys.stderr)
+        if obj < best[0]:
+            best = (obj, chB, list(dr))
+    obj, chB, dr = best
+    lay.chB = chB
+    lay.bdr = dr                                   # chunk -> drone
+    lay.bof = [dr.index(j) for j in range(ND)]     # drone -> chunk
+    lay.KB = [cB(dr[k], *c)[1] for k, c in enumerate(lay.chB)]
+    lay.GB = [cB(dr[k], *c)[4] / 6075.0 for k, c in enumerate(lay.chB)]
+    lay.TB = max(cB(dr[k], *c)[0] for k, c in enumerate(lay.chB))
     lay.arrB = []
     for k, (p, q, d) in enumerate(lay.chB):
-        lay.arrB.append(T_ACT * tdist(lay.endA[k], start_of(p, q, d)))
+        lay.arrB.append(T_ACT * tdist(lay.endA[dr[k]], start_of(p, q, d)))
     print("plan TA %.0f TB %.0f est total %.3fs" % (lay.TA, lay.TB, (lay.TA + lay.TB + 400) / 6075), file=sys.stderr)
 
 
@@ -264,7 +305,7 @@ def main():
         for k in range(ND):
             row = {}
             for rnd, ch, till in (("A", lay.chA, True), ("B", lay.chB, False)):
-                p, q, d = ch[k]
+                p, q, d = ch[k if till else lay.bof[k]]
                 st = o[p] if d == 0 else o[q - 1]
                 r = chunk_eval(lay, p, q, d, till, st)
                 c = corr(till, p, q)
@@ -308,14 +349,15 @@ def main():
     for k in range(ND - 1, -1, -1):
         p, q, d = lay.chA[k]
         opsA, curA = phase_ops(lay, p, q, d, True, lay.KA[k], pos_end[k], xa[k], hA[k], nA[k], wA[k])
-        p, q, d = lay.chB[k]
+        c = lay.bof[k]
+        p, q, d = lay.chB[c]
         stB = o[p] if d == 0 else o[q - 1]
         pt = [("move", int(m)) for m in path_moves(curA, stB)]
         if k == 0:
-            opsB, curB = phase_ops(lay, p, q, d, False, lay.KB[k], curA, xb[k], hB[k], nB[k], wB[k])
+            opsB, curB = phase_ops(lay, p, q, d, False, lay.KB[c], curA, xb[c], hB[c], nB[c], wB[c])
             pt = []
         else:
-            opsB, curB = phase_ops(lay, p, q, d, False, lay.KB[k], stB, xb[k], hB[k], nB[k], wB[k])
+            opsB, curB = phase_ops(lay, p, q, d, False, lay.KB[c], stB, xb[c], hB[c], nB[c], wB[c])
         L.append("def w%d():" % k)
         for st in lay.plans[k]:
             for m in st[0]:
@@ -333,7 +375,7 @@ def main():
             L.append("\twhile num_items(Items.Cactus) <= 0:")
             L.append("\t\tpass")
         L += body(opsB)
-        L.append("\twait_until(tl + %.4f)" % (lay.GB[k] - GSUB))
+        L.append("\twait_until(tl + %.4f)" % (lay.GB[c] - GSUB))
         if k == 0:
             L.append("\twhile num_drones() > 1:")
             L.append("\t\tpass")

@@ -64,12 +64,14 @@ and in a balanced plan the two end chunks stuck 0.35 s behind a neighbour's last
 `--summary` (slowest drone minus mean) reports as a single number. `old/cactus_lb_g5/calib.py`
 does the same comparison against the planner's own figures.
 
-## Findings for the shipped entry (g5, 7.47 s), 24 seeds
+## Findings for the shipped entry (g5, 7.44 s), 48 seeds
 
-- First harvest 4.44 s, second 2.99 s later. No chunk's mean is more than 0.13 s above the
-  average in either round (the two end chunks are 0.3 s below it in round A), and the latest
-  chunk changes from run to run: what is left is mostly spread, not balance.
-- The harvest still comes 0.24 s (A) and 0.30 s (B) after the average chunk is done. Chunks that
+- First harvest 4.44 s, second 2.94 s later. In round A no chunk's mean is more than 0.13 s
+  above the average (the two end chunks are 0.3 s below it); in round B the latest chunk's mean
+  is 0.22 s above. The latest chunk changes from run to run: what is left is mostly spread.
+- The harvest still comes 0.24 s (A) and 0.32 s (B) after the average chunk is done. Chunks that
   only wait for growth have an sd near 0; junction chunks 0.10 to 0.20 s.
 - Junction settles take 0.5 to 0.8 s per call, worst cases 1.1 s.
-- Moves take most of the drones' time: 64 drone-s in round A and 41 in B, against 24 for planting.
+- Moves take most of the drones' time: 64 drone-s in round A and 38 in B, against 24 for planting.
+- Round B starts 0.025 s after the harvest on average (first plant), down from 0.07 s when drone
+  k always took chunk k.

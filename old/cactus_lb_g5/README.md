@@ -1,4 +1,4 @@
-g5: generator for `cactus_lb_entry.py` (Leaderboards.Cactus). 7.473 s over a full 964-run attempt
+g5: generator for `cactus_lb_entry.py` (Leaderboards.Cactus). 7.443 s over a full 968-run attempt
 (g3's entry: 7.87 s on the same seeds). Every run meets the goal.
 
     WIDTHS=2,2,2,2,2,3,3,3,3,3,3,3,2,2,2,2,2,2,2 TAPERX=4 JMAX=5 DEPTH=8 AITER=5 DIRS=1 python g5.py ../../cactus_lb_entry.py
@@ -29,8 +29,15 @@ g3.py, lay.py, jlazy.py, spawnmm.py, build_entry.py) and changes the planner and
 - **Growth wait from the plant itself.** `tl` is read 200 ticks after the last plant took
   effect, so the wait is 0.9676 s, not 1.0001 (GSUB). 0.9672 passes, 0.96 harvests ungrown cactus.
 
+- **Any drone takes any round-B chunk.** g3 gave round-B chunk k to drone k, so a drone whose
+  round-A tail ended far from that chunk's start kept travelling after the first harvest (0.10 s
+  per drone on average, 0.68 s for the worst). Now the drones are assigned to the chunks by
+  distance over the torus (`linear_sum_assignment` on the planner's own objective) and the
+  chunks are cut again for that assignment, a few rounds (`BASSIGN=0` turns it off). About half
+  the drones change chunk; 7.473 -> 7.443 s.
+
 Measured in the simulator (mean of the run): first harvest 4.70 -> 4.44 s, second round
-3.12 -> 2.99 s.
+3.12 -> 2.94 s.
 
 ## Tools
 
@@ -68,7 +75,7 @@ At 6075 ticks/s an action is 32.9 ms. The goal is 32 x 1024^2 cactus: one sorted
   5.73 s. Deploying 32 drones adds 0.3 s at the very least (0.76 s here). That is 6.0 s with no
   sorting at all and every drone finishing at the same instant.
 - This entry: drones start planting at 0.76 s on average, plant until about 3.2 s, and the first harvest
-  comes at 4.44 s; round B plants for 1.6 s and its harvest comes 2.99 s after the first. In both
+  comes at 4.44 s; round B plants for 1.6 s and its harvest comes 2.94 s after the first. In both
   rounds the average drone is done 0.24 to 0.30 s before the harvest: the harvest waits for the
   latest of 32 drones, and tail work is random (sd 0.05 to 0.2 s per drone, junction settles most).
 - One harvest of 1024 would need 96 actions per drone and one growth wait (4.5 s), but the whole
@@ -81,6 +88,8 @@ What is left in this design: the spread between drones (0.5 s over both rounds),
 each, the widest spread of any tail item).
 
 ## Looking for 7.25 s: where the 7.47 s goes, and what did not move it
+
+(Written before the free round-B assignment, which took 0.03 s of the travel listed below.)
 
 With the entry's own shapes (4 moves per 3-wide column in round A, 2 actions per cell in round B)
 the floor is: 0.76 s average arrival + 2.39 s planting + 1 s growth for round A, 1.56 s planting +
@@ -118,3 +127,18 @@ back (420 moves per round), 30% the junction settles, the rest swaps. Measured a
   where the first tail fixes of both drones share cells. Not built.
 - The interpreter overhead of `fmc` is 23 ticks per call and of `jf` 240: nothing to unroll.
 
+## Flying across the field edges
+
+Moves wrap, sorting does not: a cactus has no neighbour across an edge, so only travel can use
+the wrap. All travel is already routed over the torus (`tdist`, `path_moves`):
+
+- deployment in round A crosses an edge 23 times per run and is 272 moves shorter for it (482
+  moves instead of 754): the origin is next to all four corners and to both ends of the long
+  middle bands;
+- the trip from a drone's round-A end to its round-B start never crosses one, with chunk k tied
+  to drone k or with the free assignment: no round-B start is nearer across an edge;
+- tail walks and junction settles stay inside a chunk, whose cells are neighbours in the field.
+
+What the wrap cannot do is shorten a planting walk: a chunk is a run of field neighbours along
+an antidiagonal band, and continuing past the edge lands on a different band that another
+drone plants.
