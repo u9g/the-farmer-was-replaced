@@ -3203,7 +3203,10 @@ struct PState {
     current_execute_exception: Option<String>,
     random_random: SysRandom,
     /// the program; None until the drone's state is set up (and while it runs)
-    program: Option<Vm>,
+    program: Option<Box<Vm>>,
+    /// skip_busy_waits' last answer for this drone: (deadline bits, clock origin, op duration,
+    /// first op count that reads the deadline)
+    wait_cache: (u64, i64, i64, f64),
     /// ProgramState's execution stack, as a count: 1 for the program, +1 per user function call
     /// still running; 0 once the program has ended
     frames: usize,
@@ -3282,6 +3285,7 @@ impl PState {
             current_execute_exception: None,
             random_random: SysRandom::new(random.next()),
             program: None,
+            wait_cache: (0, 0, 0, f64::NAN),
             frames: 1,
             module_cache: HashMap::new(),
             start_op_count: op_count,
@@ -8542,7 +8546,7 @@ impl Sim {
     fn add_program_state(&mut self, drone_id: usize, program: Vm, op_count: f64) -> StRef {
         let st = Rc::new(RefCell::new(PState::new(op_count, &mut self.random_random, drone_id as i32, self.sh.clone())));
         register_builtins(&st.borrow().module_state.global_scope.clone());
-        st.borrow_mut().program = Some(program);
+        st.borrow_mut().program = Some(Box::new(program));
         let ex = self.execution.as_mut().unwrap();
         assert!(drone_id < MAX_DRONE_SLOTS, "more than {} drones", MAX_DRONE_SLOTS);
         ex.hot[drone_id] = Hot {
@@ -8654,6 +8658,18 @@ impl Sim {
             // the first pass of this drone that reads a time at or past its deadline
             let reads = |ops: f64| dur_seconds(self.current_time + dur_mul(self.op_duration, ops - base));
             let c = b.h().op_count;
+            // The clock reads origin + op_duration * ops exactly (whole nanoseconds times whole op
+            // counts), so that first pass stays the same while the deadline, the origin and the op
+            // duration do: the passes before it at this drone's parity all read too early.
+            let origin = self.current_time - dur_mul(self.op_duration, base);
+            let key = (deadline.to_bits(), origin, self.op_duration);
+            let wc = b.wait_cache;
+            if (wc.0, wc.1, wc.2) == key && c <= wc.3 && ((wc.3 - c) * 0.5).fract() == 0.0 {
+                limit = limit.min(wc.3);
+                drop(b);
+                waiting.push((si, 2.0));
+                continue;
+            }
             let estimate = (deadline * 1e9 - self.current_time as f64) / self.op_duration as f64 + base - c;
             let mut j = (estimate / 2.0).ceil().max(0.0);
             if !j.is_finite() {
@@ -8668,6 +8684,7 @@ impl Sim {
             }
             limit = limit.min(c + 2.0 * j);
             drop(b);
+            ex.states[si].as_ref().unwrap().borrow_mut().wait_cache = (key.0, key.1, key.2, c + 2.0 * j);
             waiting.push((si, 2.0));
         }
         for (si, p) in waiting.iter() {
