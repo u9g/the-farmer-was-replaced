@@ -94,6 +94,8 @@ It follows the game's code (`BuiltinFunctions.LeaderboardRun`, `MainSim.StartLea
 - The code size limit is checked: at most 100,000 syntax nodes over the file and everything it
   imports (`error_leaderboard_code_too_large`).
 - A leaderboard run may take up to 120 s of real time, not 10.
+- Runs go to all cores and stop as soon as the finished runs cover two hours. A cactus attempt
+  of about 470 runs (15.4 s each) takes about 5 s on 16 threads, about 0.075 s of CPU per run.
 
 The report shows the first run in full, then the score, the number of runs, their spread and how
 long the script ran on after the goal was met:
