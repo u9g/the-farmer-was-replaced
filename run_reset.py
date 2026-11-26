@@ -257,11 +257,17 @@ def tend_plain(c):
 			till()
 	if plant(c):
 		PEND[item_of(c)] += yield_of(c)
-		if c == Entities.Tree and get_water() < WT_LO and num_items(Items.Water) >= 1:
+		if (c == Entities.Tree or c == Entities.Carrot) and get_water() < WT_LO and num_items(Items.Water) >= 1:
 			use_item(Items.Water)
 
 
 WT_LO = 0.12
+# polyculture farm: a crop (not a companion cell) planted on soil below WM_LO gets one water
+WM_LO = 0.12
+# companion checks per planting (a failed check rerolls the plant), fewer while drones own few columns
+RR_N = 3
+RR_FEW = 2
+RR_FEW_D = 4
 WANT = {}
 REQ = {}
 COLS = [0, 0]
@@ -294,9 +300,15 @@ def tend_mixed(cdef):
 		if not plant(c):
 			return
 		PEND[item_of(c)] += yield_of(c)
+		if pos not in WANT and get_water() < WM_LO and num_items(Items.Water) >= 1:
+			use_item(Items.Water)
 	if POLY:
 		# claim the companion's cell; if it is taken by another type, replant for a new companion
-		for _ in range(3):
+		# (with two drones a wish often falls in the other drone's columns: one reroll, then keep it)
+		k = RR_N
+		if max_drones() <= RR_FEW_D:
+			k = RR_FEW
+		for r in range(k):
 			comp = get_companion()
 			if comp == None:
 				return
@@ -316,6 +328,8 @@ def tend_mixed(cdef):
 				if WANT[cp][0] == comp[0]:
 					REQ[pos] = cp
 					return
+			if r == k - 1:
+				return
 			harvest()
 			if c != Entities.Grass or get_ground_type() == Grounds.Soil:
 				if not plant(c):
@@ -1151,7 +1165,7 @@ def step_dir(x0, y0, x1, y1):
 # Water: a cell below PK_WLO gets one water whenever there is any. Water stays in the soil (it
 # loses about 1% a second), so it is spread thin over many cells rather than poured on a few.
 
-PK_WLO = 0.25
+PK_WLO = 0.5
 PK_FA = 2
 PK_RES = 6000
 PK_ALL = True
@@ -3764,9 +3778,9 @@ PLAN = [
 	(Unlocks.Speed, 5),
 	(Unlocks.Pumpkins, 1),
 	(Unlocks.Expand, 5),
+	(Unlocks.Carrots, 4),
 	(Unlocks.Pumpkins, 2),
 	(Unlocks.Polyculture, 1),
-	(Unlocks.Carrots, 4),
 	(Unlocks.Watering, 5),
 	(Unlocks.Pumpkins, 3),
 	(Unlocks.Pumpkins, 4),
