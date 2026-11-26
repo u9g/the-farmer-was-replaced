@@ -831,6 +831,7 @@ def pk_job(i, d, a):
 						harvest()
 					if num_items(Items.Carrot) < seed:
 						return 0
+					soil()
 					plant(Entities.Pumpkin)
 					pk_wet2()
 					if not alone:
@@ -2691,16 +2692,16 @@ PLAN = [
 	(Unlocks.Expand, 2),
 	(Unlocks.Carrots, 1),
 	(Unlocks.Speed, 3),
-	(Unlocks.Watering, 1),
 	(Unlocks.Expand, 3),
 	(Unlocks.Trees, 1),
 	(Unlocks.Trees, 2),
+	(Unlocks.Carrots, 2),
 	(Unlocks.Watering, 2),
 	(Unlocks.Expand, 4),
-	(Unlocks.Carrots, 2),
 	(Unlocks.Carrots, 3),
 	(Unlocks.Grass, 2),
 	(Unlocks.Grass, 3),
+	(Unlocks.Watering, 1),
 	(Unlocks.Sunflowers, 1),
 	(Unlocks.Pumpkins, 1),
 	(Unlocks.Speed, 4),
