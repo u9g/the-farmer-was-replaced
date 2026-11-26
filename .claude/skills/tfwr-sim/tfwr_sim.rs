@@ -14163,6 +14163,8 @@ fn clock(seconds: f64) -> String {
 fn run_leaderboards(cfgs: &[Config], first_seed: i32, fixed_runs: Option<i32>, workers: usize, brief: bool) -> bool {
     let mut all_ok = true;
     let mut rows: Vec<(f64, String)> = Vec::new();
+    // each script's time by seed, for the paired comparison at the end
+    let mut by_seed: Vec<std::collections::HashMap<i32, f64>> = Vec::new();
     for (ci, cfg) in cfgs.iter().enumerate() {
         let lb = cfg.leaderboard.unwrap();
         if !brief && cfgs.len() > 1 {
@@ -14200,6 +14202,7 @@ fn run_leaderboards(cfgs: &[Config], first_seed: i32, fixed_runs: Option<i32>, w
             !(fixed_runs.is_none() && total >= LEADERBOARD_TOTAL_SECONDS)
         });
         let n = runs.iter().filter(|(_, r)| r.lb_success).count();
+        by_seed.push(runs.iter().filter(|(_, r)| r.lb_success).map(|(s, r)| (*s, r.elapsed)).collect());
         let times: Vec<f64> = runs.iter().filter(|(_, r)| r.lb_success).map(|(_, r)| r.elapsed).collect();
         let mean = if n > 0 { times.iter().sum::<f64>() / n as f64 } else { 0.0 };
         let score = (mean * 1000.0).floor() / 1000.0;
@@ -14261,6 +14264,29 @@ fn run_leaderboards(cfgs: &[Config], first_seed: i32, fixed_runs: Option<i32>, w
         rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
         for (_, line) in rows.iter() {
             println!("{}", line);
+        }
+    }
+    // Every script runs the same seeds, and runs agree exactly until a change first matters, so the
+    // per-seed difference to the first script is far less noisy than the two means.
+    if cfgs.len() > 1 {
+        println!();
+        println!("Paired by seed against {}:", cfgs[0].script.display());
+        for ci in 1..cfgs.len() {
+            let mut d: Vec<f64> = Vec::new();
+            for (seed, t0) in by_seed[0].iter() {
+                if let Some(t) = by_seed[ci].get(seed) {
+                    d.push(t - t0);
+                }
+            }
+            if d.len() < 2 {
+                println!("  {}: fewer than 2 seeds in common", cfgs[ci].script.display());
+                continue;
+            }
+            let k = d.len() as f64;
+            let mean = d.iter().sum::<f64>() / k;
+            let var = d.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / (k - 1.0);
+            let faster = d.iter().filter(|x| **x < 0.0).count();
+            println!("  {:+.1}s ± {:.1}s  (faster on {} of {} seeds)  {}", mean, (var / k).sqrt(), faster, d.len(), cfgs[ci].script.display());
         }
     }
     all_ok

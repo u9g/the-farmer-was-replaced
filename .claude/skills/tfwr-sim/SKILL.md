@@ -106,6 +106,20 @@ It follows the game's code (`BuiltinFunctions.LeaderboardRun`, `MainSim.StartLea
   each) takes about 5 s on 16 threads, about 0.075 s of CPU per run; a whole fastest-reset attempt
   (three runs of about 42 minutes) takes about half a second.
 
+Give several scripts to compare them: each runs the same seeds, and the report ends with each one's
+mean difference to the first script, paired by seed, with its standard error and how many seeds it
+won:
+
+```
+Paired by seed against old.py:
+  -10.9s ± 2.8s  (faster on 18 of 24 seeds)  new.py
+```
+
+Runs of two versions agree exactly until the change first matters, so the per-seed difference is far
+less noisy than the two means (a fastest reset's means spread ±20 s at 24 seeds; this ±3 s). A
+change that adds ticks early (a new top-level `def` or list, even unused) makes every later random
+draw diverge and loses most of that advantage: put new code where it only runs when needed.
+
 The report shows the first run in full, then the score, the number of runs, their spread and how
 long the script ran on after the goal was met:
 
