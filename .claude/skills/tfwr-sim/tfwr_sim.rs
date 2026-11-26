@@ -5578,6 +5578,22 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 return Ok(());
             }};
         }
+        // A result the next instruction, a StoreAssign, would at once pop and store: stored
+        // directly (the same steps, without the stack).
+        macro_rules! push_or_store {
+            ($v:expr) => {{
+                let v = $v;
+                if let Op::StoreAssign(an, ln) = ops[pc] {
+                    pc += 1;
+                    let exec_time = store_assign(st, an, ln, v)?;
+                    if charge(st, OPERATION_OPS * exec_time) {
+                        stop!(pc);
+                    }
+                } else {
+                    vm.stack.push(v);
+                }
+            }};
+        }
         macro_rules! eb {
             ($n:expr, $d:expr) => {{
                 if $d + depth_off > 1100 {
@@ -5704,8 +5720,8 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     }
                     // TakeRv
                     let v = std::mem::replace(&mut stm(st).module_state.return_value, V::None);
-                    vm.stack.push(v);
                     pc += 1;
+                    push_or_store!(v);
                 }
                 Op::CallA(n, argc) => {
                     let args = if argc == u32::MAX {
@@ -5759,7 +5775,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 }
                 Op::TakeRv => {
                     let v = std::mem::replace(&mut stm(st).module_state.return_value, V::None);
-                    vm.stack.push(v);
+                    push_or_store!(v);
                 }
                 Op::AndOr(_, is_and, end) => {
                     let lhs = vm.stack.last().unwrap();
@@ -6035,10 +6051,11 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     if let Val::O(v) = rhs {
                         vdrop(v);
                     }
-                    vm.stack.push(V::Bool(flag));
                     if charge(st, OPERATION_OPS * steps as f64) {
+                        vm.stack.push(V::Bool(flag));
                         stop!(pc);
                     }
+                    push_or_store!(V::Bool(flag));
                 }
                 Op::Cmp(n) => {
                     stm(st).current_executing_node = n;
