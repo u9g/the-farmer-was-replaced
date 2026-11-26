@@ -1602,8 +1602,12 @@ static UNLOCKS: &[UnlockSO] = &[
 // Scope
 // ---------------------------------------------------------------------------------------------
 /// Dictionary<string, (IPyObject val, bool isStatic)> with insertion order kept
+/// Scopes this small are searched name by name; a larger one also keeps a map.
+const SMALL_VARS: usize = 8;
+
 struct Vars {
-    /// keyed by the interned name's address (see intern)
+    /// keyed by the interned name's address (see intern); empty while there are at most
+    /// SMALL_VARS names
     map: FxMap<usize, usize>,
     /// one bit per name held (bloom_bit): a clear bit means the name is certainly not here
     bloom: u64,
@@ -1617,32 +1621,58 @@ impl Vars {
     fn len(&self) -> usize {
         self.items.len()
     }
+    /// the slot of the name with this key
     #[inline]
-    fn get(&self, name: &str) -> Option<&(Rc<str>, V, bool)> {
-        let key = name_key(name);
+    fn find(&self, key: usize) -> Option<usize> {
         if self.bloom & bloom_bit(key) == 0 {
             return None;
         }
-        self.map.get(&key).map(|i| &self.items[*i])
+        if self.items.len() <= SMALL_VARS {
+            self.items.iter().position(|e| name_key(&e.0) == key)
+        } else {
+            self.map.get(&key).copied()
+        }
+    }
+    #[inline]
+    fn get(&self, name: &str) -> Option<&(Rc<str>, V, bool)> {
+        self.find(name_key(name)).map(|i| &self.items[i])
     }
     #[inline]
     fn contains(&self, name: &str) -> bool {
-        let key = name_key(name);
-        self.bloom & bloom_bit(key) != 0 && self.map.contains_key(&key)
+        self.find(name_key(name)).is_some()
     }
     fn set(&mut self, name: &str, v: V, is_static: bool) {
-        match self.map.get(&name_key(name)) {
+        match self.find(name_key(name)) {
             Some(i) => {
-                let it = &mut self.items[*i];
+                let it = &mut self.items[i];
                 it.1 = v;
                 it.2 = is_static;
             }
-            None => {
-                let k = intern(name);
-                self.bloom |= bloom_bit(name_key(&k));
-                self.map.insert(name_key(&k), self.items.len());
-                self.items.push((k, v, is_static));
+            None => self.push(intern(name), v, is_static),
+        }
+    }
+    /// sets a name already interned (an Rc from the parser)
+    fn set_interned(&mut self, name: &Rc<str>, v: V, is_static: bool) {
+        match self.find(name_key(name)) {
+            Some(i) => {
+                let it = &mut self.items[i];
+                it.1 = v;
+                it.2 = is_static;
             }
+            None => self.push(name.clone(), v, is_static),
+        }
+    }
+    fn push(&mut self, k: Rc<str>, v: V, is_static: bool) {
+        let key = name_key(&k);
+        self.bloom |= bloom_bit(key);
+        self.items.push((k, v, is_static));
+        let n = self.items.len();
+        if n == SMALL_VARS + 1 {
+            for (i, e) in self.items.iter().enumerate() {
+                self.map.insert(name_key(&e.0), i);
+            }
+        } else if n > SMALL_VARS + 1 {
+            self.map.insert(key, n - 1);
         }
     }
     fn entries(&self) -> Vec<(Rc<str>, V, bool)> {
@@ -1660,7 +1690,7 @@ type ScopeRef = Rc<RefCell<Scope>>;
 fn new_scope(function_node: Option<Rc<Node>>, parent: Option<ScopeRef>, variable_names: &[Rc<str>]) -> ScopeRef {
     let mut vars = Vars::new();
     for n in variable_names {
-        vars.set(n, V::Unassigned, false);
+        vars.set_interned(n, V::Unassigned, false);
     }
     Rc::new(RefCell::new(Scope { function_node, parent_scope: parent, vars }))
 }
@@ -1739,7 +1769,7 @@ fn scope_lookup(scope: &ScopeRef, name: &str, cache: Option<&Cell<u64>>) -> R<(V
     let mut s: &Scope = unsafe { &*scope.as_ptr() };
     loop {
         if s.vars.bloom & bit != 0 {
-            if let Some(&i) = s.vars.map.get(&key) {
+            if let Some(i) = s.vars.find(key) {
                 if let Some(c) = cache {
                     c.set(((i as u64) << 8) | (hops + 1));
                 }
@@ -4916,10 +4946,16 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         Some(V::Func(f)) => f,
                         _ => unreachable!(),
                     };
-                    let mut parameters: Vec<V> = match &args {
-                        V::Seq(s) => s.to_vec(),
+                    // The builtin `tap` sets no result, so its call's value is the argument list
+                    // left in returnValue; every other builtin sets one (directly or when its side
+                    // effect is applied), so for them the list need not be kept.
+                    let keep_args = func.syntax_tree.is_none() && func.binding == Some("tap");
+                    let mut parameters: Vec<V> = match args {
+                        V::Seq(s) if !keep_args => Rc::try_unwrap(s).unwrap_or_else(|s| s.to_vec()),
+                        V::Seq(ref s) => s.to_vec(),
                         _ => Vec::new(),
                     };
+                    let args = if keep_args { V::Seq(Rc::new(parameters.clone())) } else { V::None };
                     if let Some(m) = &func.method_object {
                         parameters.insert(0, m.clone());
                     }
@@ -4947,11 +4983,11 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 Op::CallB => {
                     let (func, parameters) = vm.pending.take().unwrap();
                     let tree = func.syntax_tree.clone().unwrap();
-                    let vars = match &tree.kind {
-                        NK::Function { vars, .. } => vars.clone(),
-                        _ => Vec::new(),
+                    let vars: &[Rc<str>] = match &tree.kind {
+                        NK::Function { vars, .. } => vars,
+                        _ => &[],
                     };
-                    let scope = new_scope(Some(tree.clone()), func.parent_scope.clone(), &vars);
+                    let scope = new_scope(Some(tree.clone()), func.parent_scope.clone(), vars);
                     stm(st).module_state.call_stack.push(scope);
                     push_frame(st)?;
                     vm.pending = Some((func, parameters));
@@ -8545,16 +8581,28 @@ impl Sim {
 
     fn min_op_count(&self, default: f64) -> f64 {
         let ex = self.execution.as_ref().unwrap();
-        let mut min: Option<f64> = None;
-        for h in ex.hot[..ex.states.len()].iter() {
-            if h.present && h.awaited_drone_id < 0 {
-                min = Some(match min {
-                    Some(m) => m.min(h.op_count),
-                    None => h.op_count,
-                });
+        let hot = &ex.hot[..ex.states.len()];
+        let mut m = [f64::INFINITY; 4];
+        let mut any = false;
+        let mut chunks = hot.chunks_exact(4);
+        for c in &mut chunks {
+            for k in 0..4 {
+                let h = &c[k];
+                let run = h.present && h.awaited_drone_id < 0;
+                any |= run;
+                if run && h.op_count < m[k] {
+                    m[k] = h.op_count;
+                }
             }
         }
-        min.unwrap_or(default)
+        for h in chunks.remainder() {
+            let run = h.present && h.awaited_drone_id < 0;
+            any |= run;
+            if run && h.op_count < m[0] {
+                m[0] = h.op_count;
+            }
+        }
+        if any { m[0].min(m[1]).min(m[2].min(m[3])) } else { default }
     }
 
     /// Not in the game: a shortcut with the same outcome. Drones spinning in
