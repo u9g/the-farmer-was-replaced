@@ -3244,6 +3244,21 @@ fn parse_source(name: &str, code: &str) -> R<Rc<Node>> {
     Ok(t)
 }
 
+thread_local! {
+    /// parse_source for the texts read_source keeps (they live as long as the thread, so the
+    /// address names the text): no hashing of the whole text on every run
+    static PARSED_KEPT: RefCell<FxMap<usize, Vec<(String, Rc<Node>)>>> = RefCell::new(FxMap::default());
+}
+fn parse_kept_source(name: &str, code: &Rc<String>) -> R<Rc<Node>> {
+    let key = Rc::as_ptr(code) as usize;
+    if let Some(t) = PARSED_KEPT.with(|p| p.borrow().get(&key).and_then(|v| v.iter().find(|e| e.0 == name).map(|e| e.1.clone()))) {
+        return Ok(t);
+    }
+    let t = parse_source(name, code)?;
+    PARSED_KEPT.with(|p| p.borrow_mut().entry(key).or_default().push((name.to_string(), t.clone())));
+    Ok(t)
+}
+
 fn parse_source_uncached(name: &str, code: &str) -> R<Rc<Node>> {
     let text = code.replace('\u{0B}', "\n");
     let mut line_starts = vec![0usize];
@@ -3436,6 +3451,8 @@ const HOT_EMPTY: Hot = Hot { target_op_count: 0.0, awaited_drone_id: -1, resumes
 const F_PRESENT: u8 = 1;
 const F_AWAIT: u8 = 2;
 const F_SE: u8 = 0b1100;
+/// in Sim::sleepers (an item-count spinner asleep to the end of the Execute call)
+const F_SLEEP: u8 = 16;
 
 struct PState {
     /// this drone's slot in Execution::hot (which never moves while the execution lasts)
@@ -6555,7 +6572,7 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Rc<Code>, depth_of
                             Some(c) => c,
                             None => return Err(Ctrl::Err("error_module_not_found".into())),
                         };
-                        let tree = match parse_source(name, &code_text) {
+                        let tree = match parse_kept_source(name, &code_text) {
                             Ok(t) => t,
                             Err(e) => return Err(Ctrl::Err(format!("error_syntax_error_in_import: {}", e))),
                         };
@@ -7825,6 +7842,55 @@ fn not_above(ops: &[f64], x: f64) -> u64 {
     }
 }
 
+/// the least ops[i] with bit i of `mask` set, or infinity (at most 64 slots; op counts are never NaN,
+/// so the order of the minimum does not matter)
+#[inline(always)]
+fn masked_min(ops: &[f64], mask: u64) -> f64 {
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        use std::arch::x86_64::*;
+        // lane masks for two bits
+        let lanes = [
+            _mm_castsi128_pd(_mm_set_epi64x(0, 0)),
+            _mm_castsi128_pd(_mm_set_epi64x(0, -1)),
+            _mm_castsi128_pd(_mm_set_epi64x(-1, 0)),
+            _mm_castsi128_pd(_mm_set_epi64x(-1, -1)),
+        ];
+        let inf = _mm_set1_pd(f64::INFINITY);
+        let (mut m0, mut m1) = (inf, inf);
+        let n = ops.len();
+        let mut i = 0;
+        while i + 4 <= n {
+            let a = lanes[(mask >> i & 3) as usize];
+            let b = lanes[(mask >> (i + 2) & 3) as usize];
+            let va = _mm_loadu_pd(ops.as_ptr().add(i));
+            let vb = _mm_loadu_pd(ops.as_ptr().add(i + 2));
+            m0 = _mm_min_pd(m0, _mm_or_pd(_mm_and_pd(a, va), _mm_andnot_pd(a, inf)));
+            m1 = _mm_min_pd(m1, _mm_or_pd(_mm_and_pd(b, vb), _mm_andnot_pd(b, inf)));
+            i += 4;
+        }
+        let m = _mm_min_pd(m0, m1);
+        let mut out = _mm_cvtsd_f64(m).min(_mm_cvtsd_f64(_mm_unpackhi_pd(m, m)));
+        while i < n {
+            if mask >> i & 1 != 0 {
+                out = out.min(ops[i]);
+            }
+            i += 1;
+        }
+        out
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let mut out = f64::INFINITY;
+        for (i, o) in ops.iter().enumerate() {
+            if mask >> i & 1 != 0 {
+                out = out.min(*o);
+            }
+        }
+        out
+    }
+}
+
 /// slots in Execution::hot: drone ids stay below this
 const MAX_DRONE_SLOTS: usize = 1024;
 
@@ -7875,7 +7941,9 @@ struct Sim {
     waiting_scratch: Vec<(usize, f64, f64)>,
     /// drones in `while num_items(i) <op> x: pass` that skip_busy_waits sent to the end of this
     /// Execute call because the count they read has not changed: (index, item id, ops per pass).
-    /// The apply loop wakes one as soon as an applied side effect changes its item.
+    /// The apply loop wakes one as soon as an applied side effect changes its item. Each has
+    /// F_SLEEP set. Nothing else moves a sleeper (it is past every op count the call reaches), so
+    /// with up to 64 drones the list lasts the whole call and later passes pass over them.
     sleepers: Vec<(usize, usize, f64)>,
     // Simulation
     timers: PriorityQueue<Rc<Timer>>,
@@ -10015,6 +10083,10 @@ impl Sim {
     fn min_op_count(&self, default: f64) -> f64 {
         let ex = self.execution.as_ref().unwrap();
         let n = ex.states.len();
+        if n <= 64 {
+            let running = flag_mask(&ex.flags[..n], F_PRESENT | F_AWAIT, F_PRESENT);
+            return if running != 0 { masked_min(&ex.ops[..n], running) } else { default };
+        }
         let (ops, flags) = (&ex.ops[..n], &ex.flags[..n]);
         let mut m = [f64::INFINITY; 4];
         let mut any = false;
@@ -10044,10 +10116,15 @@ impl Sim {
         let mut k = 0;
         while k < self.sleepers.len() {
             let (si, id, p) = self.sleepers[k];
-            let ex = self.execution.as_ref().unwrap();
-            let st = match &ex.states[si] {
-                Some(st) if ex.flags[si] & F_PRESENT != 0 => st.clone(),
+            let ex = self.execution.as_mut().unwrap();
+            let f = ex.flags.get(si).copied().unwrap_or(0);
+            let st = match &ex.states.get(si) {
+                Some(Some(st)) if f & F_PRESENT != 0 && f & F_SLEEP != 0 && (f & F_SE) >> 2 == SE_NUM_ITEMS => st.clone(),
                 _ => {
+                    // gone, or no longer this sleeper (a new drone in its slot has no F_SLEEP)
+                    if f & F_SLEEP != 0 {
+                        ex.flags[si] &= !F_SLEEP;
+                    }
                     self.sleepers.swap_remove(k);
                     continue;
                 }
@@ -10056,6 +10133,7 @@ impl Sim {
             let (last_at, v) = match b.spin_read {
                 Some(r) => r,
                 None => {
+                    *b.flg() &= !F_SLEEP;
                     drop(b);
                     self.sleepers.swap_remove(k);
                     continue;
@@ -10079,9 +10157,22 @@ impl Sim {
                     *due |= 1u64 << si;
                 }
             }
+            *b.flg() &= !F_SLEEP;
             drop(b);
             self.sleepers.swap_remove(k);
         }
+    }
+
+    /// empties Sim::sleepers (the start of an Execute call, or more than 64 drones)
+    fn clear_sleepers(&mut self) {
+        if let Some(ex) = self.execution.as_mut() {
+            for &(si, _, _) in self.sleepers.iter() {
+                if let Some(f) = ex.flags.get_mut(si) {
+                    *f &= !F_SLEEP;
+                }
+            }
+        }
+        self.sleepers.clear();
     }
 
     /// Not in the game: a shortcut with the same outcome. Drones spinning in
@@ -10103,17 +10194,42 @@ impl Sim {
         // each skipped drone with its ops per pass
         let mut waiting = std::mem::take(&mut self.waiting_scratch);
         waiting.clear();
-        self.sleepers.clear();
+        let persist = self.execution.as_ref().unwrap().states.len() <= 64;
+        if !persist {
+            self.clear_sleepers();
+        }
         let ex = self.execution.as_ref().unwrap();
-        for si in 0..ex.states.len() {
+        let n = ex.states.len();
+        // Only a drone asking for the time or an item count can be in a skippable wait; every other
+        // running one just bounds the limit. Up to 64 drones, those are a mask and a minimum.
+        let mut special = u64::MAX;
+        if n <= 64 {
+            let flags = &ex.flags[..n];
+            let running = flag_mask(flags, F_PRESENT | F_AWAIT, F_PRESENT);
+            let waits = flag_mask(flags, F_SE, SE_GET_TIME << 2) | flag_mask(flags, F_SE, SE_NUM_ITEMS << 2);
+            special = running & waits;
+            limit = limit.min(masked_min(&ex.ops[..n], running & !waits));
+        }
+        for si in 0..n {
+            if n <= 64 {
+                if special >> si == 0 {
+                    break;
+                }
+                if special & (1u64 << si) == 0 {
+                    continue;
+                }
+            }
             let f = ex.flags[si];
             if f & (F_PRESENT | F_AWAIT) != F_PRESENT {
                 continue;
             }
-            // only a drone asking for the time or an item count can be in a skippable wait
             let k = (f & F_SE) >> 2;
             if k != SE_GET_TIME && k != SE_NUM_ITEMS {
                 limit = limit.min(ex.ops[si]);
+                continue;
+            }
+            if f & F_SLEEP != 0 && k == SE_NUM_ITEMS {
+                // asleep since an earlier pass of this call, and still past its every op count
                 continue;
             }
             let b = ex.states[si].as_ref().unwrap().borrow();
@@ -10132,7 +10248,10 @@ impl Sim {
                     // call ends. A count does not depend on the clock, and a timer that changes it
                     // between calls comes before that pass.
                     waiting.push((si, p, num + 1.0));
-                    self.sleepers.push((si, id, p));
+                    if f & F_SLEEP == 0 {
+                        self.sleepers.push((si, id, p));
+                        *ex.states[si].as_ref().unwrap().borrow().flg() |= F_SLEEP;
+                    }
                     continue;
                 }
             }
@@ -10195,6 +10314,7 @@ impl Sim {
         let num = (self.execution.as_ref().unwrap().global_op_count
             + f64::min(199.0, target_run_time as f64 / self.op_duration as f64))
         .floor();
+        self.clear_sleepers();
         loop {
             let global_op_count = match &self.execution {
                 Some(ex) => ex.global_op_count,
@@ -11085,8 +11205,14 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     // dropped last, once everything else of the run is gone
     let _sweep = ScopeSweep;
     let name = cfg.script.file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string();
-    let code = std::fs::read_to_string(&cfg.script).map_err(|e| format!("cannot read {}: {}", cfg.script.display(), e))?;
-    let tree = parse_source(&name, &code)?;
+    let code = match read_source(&cfg.script) {
+        Some(c) => c,
+        None => {
+            let e = std::fs::read_to_string(&cfg.script).err().map(|e| e.to_string()).unwrap_or_default();
+            return Err(format!("cannot read {}: {}", cfg.script.display(), e));
+        }
+    };
+    let tree = parse_kept_source(&name, &code)?;
     let sh = Rc::new(Shared {
         op_duration_ns: Cell::new(2500000),
         current_time: Cell::new(0),
