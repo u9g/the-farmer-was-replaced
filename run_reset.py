@@ -1717,7 +1717,7 @@ def mz_serve(goal, per, cost, g0, park):
 	paths = MZ_PATH
 	home = MZ_PARK
 	race = MZ_RACE
-	rep = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed)) + 0.001
+	rep = 0
 	lim = g0 + 300 * per
 	cur = MZ_CUR
 	if park:
@@ -3329,7 +3329,12 @@ def run_plan(plan):
 				mixed_round(set_need(plan, i))
 			elif item == Items.Weird_Substance and num_unlocked(Unlocks.Cactus) == 0:
 				power_check()
-				weird_round(get_cost(u)[item])
+				g = get_cost(u)[item]
+				if u == Unlocks.Mazes and num_unlocked(u) == 0 and i + 1 < len(plan) and plan[i + 1][0] == Unlocks.Megafarm:
+					# the first maze's own weird substance (one maze cost per treasure) in the same round
+					n = get_world_size()
+					g += ((get_cost(Unlocks.Megafarm)[Items.Gold] - num_items(Items.Gold)) // (n * n) + 2) * n
+				weird_round(g)
 			else:
 				farm(item, get_cost(u)[item])
 
