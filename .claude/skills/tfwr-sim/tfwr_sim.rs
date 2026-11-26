@@ -1724,15 +1724,24 @@ impl Drop for ScopeSweep {
 
 /// Scope.SetVar
 fn scope_set_var(scope: &ScopeRef, name: &str, value: V, is_static: bool) {
-    let parent = {
-        let mut s = scope.borrow_mut();
-        if s.vars.contains(name) || s.parent_scope.is_none() {
-            s.vars.set(name, value, is_static);
+    let key = name_key(name);
+    // Nothing else holds a scope while a variable is set.
+    let mut s: &mut Scope = unsafe { &mut *scope.as_ptr() };
+    loop {
+        if let Some(i) = s.vars.find(key) {
+            let it = &mut s.vars.items[i];
+            it.1 = value;
+            it.2 = is_static;
             return;
         }
-        s.parent_scope.clone().unwrap()
-    };
-    scope_set_var(&parent, name, value, is_static);
+        match &s.parent_scope {
+            Some(p) => s = unsafe { &mut *p.as_ptr() },
+            None => {
+                s.vars.set(name, value, is_static);
+                return;
+            }
+        }
+    }
 }
 
 /// Scope.ImportVar
@@ -4375,6 +4384,10 @@ enum Op {
     /// StoreName for an assignment straight to a name: sets the assignment node first (the
     /// SetNode it replaces); the operator comes from the assignment node
     StoreAssign(*const Node, *const Node),
+    /// Bin / Cmp of two operands taken from code.fused[k]: each a name or a literal (evaluated
+    /// here, Eb and all, as their own instructions would) or the value on the stack
+    BinF(*const Node, u32),
+    CmpF(*const Node, u32),
     /// pops the arguments (this many, or one argument list for u32::MAX), the static flag and the
     /// function; a builtin is called here (then TakeRv, 3 on), a user function charges its op and
     /// goes on to CallB
@@ -4443,8 +4456,19 @@ enum Op {
     ModuleEnd,
 }
 
+/// an operand of a fused instruction
+#[derive(Clone, Copy)]
+enum Opnd {
+    Stack,
+    /// a Value node and its depth
+    Load(*const Node, u32),
+    /// a Literal node, its depth, its constant
+    Lit(*const Node, u32, u32),
+}
+
 struct Code {
     ops: Vec<Op>,
+    fused: Vec<(Opnd, Opnd)>,
     consts: Vec<V>,
     strs: Vec<Rc<str>>,
     /// the tree this was compiled from (kept alive: instructions point into it)
@@ -4462,6 +4486,7 @@ const FAIL_MSGS: &[&str] = &[
 
 struct Compiler {
     ops: Vec<Op>,
+    fused: Vec<(Opnd, Opnd)>,
     consts: Vec<V>,
     strs: Vec<Rc<str>>,
     /// innermost loop last: (break target fixups, continue target fixups)
@@ -4494,6 +4519,9 @@ impl Compiler {
     fn emit(&mut self, op: Op) -> usize {
         if let Some((n, d)) = self.pending_eb.take() {
             let starts_with_eb = matches!(op, Op::Load(..) | Op::Lit(..) | Op::Eb(..) | Op::Def(..) | Op::Pass(..) | Op::BrkCont(..) | Op::ImportStart(..) | Op::LoadCallee(..));
+            // (BinF / CmpF with a name or literal on the left are pushed through emit too)
+            let starts_with_eb = starts_with_eb
+                || matches!(op, Op::BinF(_, k) | Op::CmpF(_, k) if !matches!(self.fused[k as usize].0, Opnd::Stack));
             if !(starts_with_eb && d < 1000) {
                 self.ops.push(Op::Eb(n, d));
             }
@@ -4506,6 +4534,45 @@ impl Compiler {
             Op::Jump(t) | Op::JumpIfFalse(t) | Op::ForNext(t) | Op::AndOr(_, _, t) | Op::DotMod(_, t) | Op::BrkCont(_, _, t) | Op::CondJumpF(_, t) => *t = target,
             Op::LoopCond(_, t, _) => *t = target,
             _ => panic!("patch of a non-jump"),
+        }
+    }
+    /// a name or a literal operand, compiled into the fused instruction instead of its own
+    fn operand(&mut self, node: &Rc<Node>, depth: u32) -> Opnd {
+        match &node.kind {
+            NK::Value(_) => Opnd::Load(Rc::as_ptr(node), depth),
+            NK::Literal(v) => {
+                self.consts.push(v.clone());
+                Opnd::Lit(Rc::as_ptr(node), depth, (self.consts.len() - 1) as u32)
+            }
+            _ => unreachable!(),
+        }
+    }
+    /// Bin / Cmp of slots a and b: fused when b is a name or literal
+    fn binop(&mut self, np: *const Node, a: &Rc<Node>, b: &Rc<Node>, depth: u32, cmp: bool) {
+        let simple = |n: &Rc<Node>| matches!(&n.kind, NK::Value(_) | NK::Literal(_));
+        if !simple(b) {
+            self.expr(a, depth + 1);
+            self.expr(b, depth + 1);
+            self.emit(if cmp { Op::Cmp(np) } else { Op::Bin(np) });
+            return;
+        }
+        let left = if simple(a) {
+            self.operand(a, depth + 1)
+        } else {
+            self.expr(a, depth + 1);
+            Opnd::Stack
+        };
+        let right = self.operand(b, depth + 1);
+        self.fused.push((left, right));
+        let k = (self.fused.len() - 1) as u32;
+        let op = if cmp { Op::CmpF(np, k) } else { Op::BinF(np, k) };
+        if matches!(left, Opnd::Stack) {
+            // after the left operand's code: no Eb of the parent can be pending here
+            self.flush_eb();
+            self.ops.push(op);
+        } else {
+            // starts with the left operand's Eb, so a pending parent Eb is dropped
+            self.emit(op);
         }
     }
     fn s(&mut self, v: &Rc<str>) -> u32 {
@@ -4785,6 +4852,10 @@ impl Compiler {
             }
             NK::Binary(_, _, bop) => {
                 self.eb(np, depth);
+                if !matches!(bop, BOp::And | BOp::Or | BOp::Dot) {
+                    self.binop(np, &node.slots[0], &node.slots[1], depth, false);
+                    return;
+                }
                 self.expr(&node.slots[0], depth + 1);
                 match bop {
                     BOp::And | BOp::Or => {
@@ -4814,6 +4885,10 @@ impl Compiler {
             }
             NK::Comparison(..) => {
                 self.eb(np, depth);
+                if node.slots.len() == 2 {
+                    self.binop(np, &node.slots[0], &node.slots[1], depth, true);
+                    return;
+                }
                 for slot in node.slots.iter() {
                     self.expr(slot, depth + 1);
                 }
@@ -4854,7 +4929,7 @@ fn code_of(node: &Rc<Node>) -> Rc<Code> {
     if let Some(c) = CODES.with(|c| c.borrow().get(&key).cloned()) {
         return c;
     }
-    let mut c = Compiler { ops: Vec::new(), consts: Vec::new(), strs: Vec::new(), loops: Vec::new(), pending_eb: None };
+    let mut c = Compiler { ops: Vec::new(), fused: Vec::new(), consts: Vec::new(), strs: Vec::new(), loops: Vec::new(), pending_eb: None };
     match &node.kind {
         NK::Function { .. } => {
             let np = Rc::as_ptr(node);
@@ -4879,7 +4954,7 @@ fn code_of(node: &Rc<Node>) -> Rc<Code> {
         }
     }
     c.flush_eb();
-    let code = Rc::new(Code { ops: c.ops, consts: c.consts, strs: c.strs, root: node.clone() });
+    let code = Rc::new(Code { ops: c.ops, fused: c.fused, consts: c.consts, strs: c.strs, root: node.clone() });
     CODES.with(|cs| cs.borrow_mut().insert(key, code.clone()));
     code
 }
@@ -5235,6 +5310,42 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     };
                     let (result, steps) = binary_value(op, bop, lhs, rhs)?;
                     vm.stack.push(result);
+                    if charge(st, OPERATION_OPS * steps as f64) {
+                        stop!(pc);
+                    }
+                }
+                Op::BinF(n, k) => {
+                    let (a, b) = code.fused[k as usize];
+                    let lhs = match a {
+                        Opnd::Stack => vm.stack.pop().unwrap(),
+                        _ => fused_operand(st, &code, a, depth_off)?,
+                    };
+                    let rhs = fused_operand(st, &code, b, depth_off)?;
+                    stm(st).current_executing_node = n;
+                    let (op, bop) = match &node_ref(n).kind {
+                        NK::Binary(op, _, bop) => (op.as_ref(), *bop),
+                        _ => unreachable!(),
+                    };
+                    let (result, steps) = binary_value(op, bop, lhs, rhs)?;
+                    vm.stack.push(result);
+                    if charge(st, OPERATION_OPS * steps as f64) {
+                        stop!(pc);
+                    }
+                }
+                Op::CmpF(n, k) => {
+                    let (a, b) = code.fused[k as usize];
+                    let lhs = match a {
+                        Opnd::Stack => vm.stack.pop().unwrap(),
+                        _ => fused_operand(st, &code, a, depth_off)?,
+                    };
+                    let rhs = fused_operand(st, &code, b, depth_off)?;
+                    stm(st).current_executing_node = n;
+                    let (ops_t, cops) = match &node_ref(n).kind {
+                        NK::Comparison(o, c) => (o, c),
+                        _ => unreachable!(),
+                    };
+                    let (flag, steps) = compare_two(ops_t, cops, lhs, rhs)?;
+                    vm.stack.push(V::Bool(flag));
                     if charge(st, OPERATION_OPS * steps as f64) {
                         stop!(pc);
                     }
@@ -5763,6 +5874,61 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
             }
         }
     }
+}
+
+/// A fused instruction's name or literal operand, evaluated as Load / Lit would.
+#[inline(always)]
+fn fused_operand(st: &StRef, code: &Code, o: Opnd, depth_off: u32) -> R<V> {
+    match o {
+        Opnd::Load(n, d) => {
+            if d + depth_off > 1100 {
+                return Err("error_max_stack_size_reached".into());
+            }
+            let s = stm(st);
+            s.current_executing_node = n;
+            let node = node_ref(n);
+            let name = match &node.kind {
+                NK::Value(name) => name,
+                _ => unreachable!(),
+            };
+            let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+            let (v, is_static) = scope_lookup(scope, name, Some(&node.lookup))?;
+            s.module_state.is_expression_static = is_static;
+            Ok(v)
+        }
+        Opnd::Lit(n, d, k) => {
+            if d + depth_off > 1100 {
+                return Err("error_max_stack_size_reached".into());
+            }
+            let s = stm(st);
+            s.current_executing_node = n;
+            s.module_state.is_expression_static = false;
+            Ok(code.consts[k as usize].clone())
+        }
+        Opnd::Stack => unreachable!(),
+    }
+}
+
+/// a two-operand comparison: the fast path for two numbers, else compare_values
+#[inline(always)]
+fn compare_two(ops_t: &[Rc<str>], cops: &[COp], a: V, b: V) -> R<(bool, i32)> {
+    if let (V::Num(x), V::Num(y)) = (&a, &b) {
+        let (x, y) = (*x, *y);
+        let c = if x > y { 1 } else if x < y { -1 } else { 0 };
+        let f = match cops[0] {
+            COp::Eq => Some(x == y),
+            COp::Ne => Some(x != y),
+            COp::Ge => Some(c >= 0),
+            COp::Le => Some(c <= 0),
+            COp::Gt => Some(c > 0),
+            COp::Lt => Some(c < 0),
+            _ => None,
+        };
+        if let Some(f) = f {
+            return Ok((f, 1));
+        }
+    }
+    compare_values(ops_t, cops, &[a, b])
 }
 
 /// CondTest's work: clear the busy-wait markers, then the condition's truth.
