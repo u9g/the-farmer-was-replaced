@@ -428,6 +428,25 @@ impl SysRandom {
     fn sample(&mut self) -> f64 {
         self.internal_sample() as f64 * (1.0 / i32::MAX as f64)
     }
+    /// n draws whose values nobody looks at (the same as n internal_sample calls)
+    fn advance(&mut self, n: usize) {
+        let (mut a, mut b) = (self.inext, self.inextp);
+        let sa = &mut self.seed_array;
+        for _ in 0..n {
+            a = if a + 1 >= 56 { 1 } else { a + 1 };
+            b = if b + 1 >= 56 { 1 } else { b + 1 };
+            let mut r = sa[a].wrapping_sub(sa[b]);
+            if r == i32::MAX {
+                r -= 1;
+            }
+            if r < 0 {
+                r = r.wrapping_add(i32::MAX);
+            }
+            sa[a] = r;
+        }
+        self.inext = a;
+        self.inextp = b;
+    }
     fn next(&mut self) -> i32 {
         self.internal_sample()
     }
@@ -8611,6 +8630,12 @@ impl Sim {
     }
 
     fn water_decay(&mut self) {
+        // A dry cell stays dry (0 * 0.99 is 0): with no water anywhere only the draws matter.
+        if self.cells.iter().all(|c| c.water_volume == 0.0) {
+            self.random_various.advance((self.wx * self.wy) as usize);
+            self.start_timer(TimerFn::WaterDecay, dur_from_seconds(0.1));
+            return;
+        }
         for j in 0..self.wy {
             for k in 0..self.wx {
                 if self.random_various.next_double() < 0.1 {
