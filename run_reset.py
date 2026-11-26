@@ -944,7 +944,7 @@ def dino_round():
 def carrots_for(n):
 	# make sure n carrots are on hand (seeds for pumpkins / sunflowers)
 	while num_items(Items.Carrot) < n:
-		c = {Items.Carrot: n * 2, Items.Wood: n * 2, Items.Hay: n * 2}
+		c = with_seeds({Items.Carrot: n * 2})
 		mixed_round((c, c))
 
 
@@ -1007,13 +1007,16 @@ def set_need(plan, i):
 
 
 def with_seeds(need):
-	# carrots are planted with wood and hay
+	# carrots are planted with wood and hay: one of each per carrot, divided by the companion bonus
 	if Items.Carrot in need:
+		seeds = need[Items.Carrot]
+		if num_unlocked(Unlocks.Polyculture) > 0:
+			seeds = seeds // 6
 		for it in [Items.Wood, Items.Hay]:
 			if it in need:
-				need[it] += need[Items.Carrot]
+				need[it] += seeds
 			else:
-				need[it] = need[Items.Carrot]
+				need[it] = seeds
 	return need
 
 
@@ -1052,17 +1055,17 @@ PLAN = [
 	(Unlocks.Sunflowers, 1),
 	(Unlocks.Pumpkins, 1),
 	(Unlocks.Polyculture, 1),
+	(Unlocks.Trees, 2),
 	(Unlocks.Speed, 4),
+	(Unlocks.Expand, 5),
+	(Unlocks.Trees, 3),
 	(Unlocks.Speed, 5),
 	(Unlocks.Grass, 4),
-	(Unlocks.Trees, 2),
-	(Unlocks.Trees, 3),
 	(Unlocks.Carrots, 4),
 	(Unlocks.Pumpkins, 2),
 	(Unlocks.Pumpkins, 3),
-	(Unlocks.Fertilizer, 1),
-	(Unlocks.Expand, 5),
 	(Unlocks.Pumpkins, 4),
+	(Unlocks.Fertilizer, 1),
 	(Unlocks.Cactus, 1),
 	(Unlocks.Mazes, 1),
 	(Unlocks.Megafarm, 1),
