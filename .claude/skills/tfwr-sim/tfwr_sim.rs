@@ -2160,20 +2160,31 @@ fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
+/// The tokens of a text, read front to back: one list per text for the whole process (see
+/// shared_tokens), each parse with its own position in it.
 struct TokenStream {
-    tokens: VecDeque<Token>,
+    toks: &'static [Token],
+    pos: usize,
     last_string_index: usize,
 }
 
 impl TokenStream {
+    #[inline]
     fn current(&self) -> Option<&Token> {
-        self.tokens.front()
+        self.toks.get(self.pos)
     }
+    #[inline]
     fn cur_ty(&self) -> TT {
-        self.tokens.front().map(|t| t.ty).unwrap_or(TT::NoToken)
+        self.toks.get(self.pos).map(|t| t.ty).unwrap_or(TT::NoToken)
     }
+    #[inline]
     fn look_ahead_ty(&self) -> TT {
-        self.tokens.get(1).map(|t| t.ty).unwrap_or(TT::NoToken)
+        self.toks.get(self.pos + 1).map(|t| t.ty).unwrap_or(TT::NoToken)
+    }
+    fn pop_front(&mut self) -> Option<Token> {
+        let t = self.toks.get(self.pos)?.clone();
+        self.pos += 1;
+        Some(t)
     }
     fn current_string_end_index(&self) -> usize {
         match self.current() {
@@ -2187,17 +2198,54 @@ impl TokenStream {
             Some(t) => t.start,
         }
     }
+}
+
+/// tokenize's output as it is built
+struct TokenList {
+    tokens: Vec<Token>,
+    last_string_index: usize,
+}
+impl TokenList {
     fn add(&mut self, t: Token) {
         self.last_string_index = t.start + t.value.chars().count();
-        self.tokens.push_back(t);
+        self.tokens.push(t);
     }
 }
 
+/// Every text's tokens, made once per process: the worker threads all parse the same script, and
+/// tokenizing it on each of them at once costs several times what it costs alone. (The text and
+/// its tokens are kept for good; token values are slices of the text.)
+static TOKEN_CACHE: std::sync::Mutex<Vec<(&'static str, Result<(&'static [Token], usize), String>)>> = std::sync::Mutex::new(Vec::new());
+fn shared_tokens(code: &str) -> R<TokenStream> {
+    let mut cache = TOKEN_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let found = cache.iter().find(|e| e.0 == code).map(|e| e.1.clone());
+    let r = match found {
+        Some(r) => r,
+        None => {
+            let original: &'static str = Box::leak(code.to_string().into_boxed_str());
+            let r = tokenize(original).map(|l| (&*Box::leak(l.tokens.into_boxed_slice()), l.last_string_index));
+            cache.push((original, r.clone()));
+            r
+        }
+    };
+    let (toks, last_string_index) = r?;
+    Ok(TokenStream { toks, pos: 0, last_string_index })
+}
+
 /// Tokenizer.Tokenize; the regex alternatives are matched by hand in the same order.
-fn tokenize(code: &str) -> R<TokenStream> {
+fn tokenize(code: &'static str) -> R<TokenList> {
     let mut text: Vec<char> = Vec::with_capacity(code.len());
     text.extend(code.chars().map(|c| if c == '\u{0B}' { '\n' } else { c }));
-    let mut stream = TokenStream { tokens: VecDeque::with_capacity(code.len() / 3 + 16), last_string_index: 0 };
+    let mut stream = TokenList { tokens: Vec::with_capacity(code.len() / 3 + 16), last_string_index: 0 };
+    // A token's value: its text as a slice of the code (the text with \u{0B} read as \n: the same
+    // bytes, but for that one, so such a token gets its own copy).
+    let ascii = code.is_ascii();
+    let byte_at: Vec<usize> = if ascii { Vec::new() } else { code.char_indices().map(|(b, _)| b).chain(std::iter::once(code.len())).collect() };
+    let slice = |from: usize, to: usize| -> std::borrow::Cow<'static, str> {
+        let (b0, b1) = if ascii { (from, to) } else { (byte_at[from], byte_at[to]) };
+        let v = &code[b0..b1];
+        if v.contains('\u{0B}') { std::borrow::Cow::Owned(v.replace('\u{0B}', "\n")) } else { std::borrow::Cow::Borrowed(v) }
+    };
     stream.add(Token { ty: TT::NewLine, value: "\n".into(), start: 0 });
     let n = text.len();
     let mut num = 0usize;
@@ -2338,16 +2386,16 @@ fn tokenize(code: &str) -> R<TokenStream> {
             return Err(format!("line {}: error_unknown_token `{}`", line, text[num..num + len].iter().collect::<String>()));
         }
         if ty != TT::Ignore {
-            stream.add(Token { ty, value: std::borrow::Cow::Owned(text[num..num + len].iter().collect()), start: num });
+            stream.add(Token { ty, value: slice(num, num + len), start: num });
         }
         num += len;
     }
-    while let Some(last) = stream.tokens.back() {
+    while let Some(last) = stream.tokens.last() {
         if last.ty != TT::NewLine {
             break;
         }
-        stream.tokens.pop_back();
-        stream.last_string_index = match stream.tokens.back() {
+        stream.tokens.pop();
+        stream.last_string_index = match stream.tokens.last() {
             Some(l) => l.start + l.value.chars().count(),
             None => 0,
         };
@@ -2517,7 +2565,7 @@ impl Parser {
         self.stream.cur_ty()
     }
     fn consume_any(&mut self) -> R<Token> {
-        match self.stream.tokens.pop_front() {
+        match self.stream.pop_front() {
             Some(t) => Ok(t),
             None => self.perr("error_unexpected_token", self.stream.last_string_index),
         }
@@ -2536,7 +2584,7 @@ impl Parser {
         if ty != TT::NoToken && cur_ty != ty {
             return self.perr(error.unwrap_or(&format!("error_unexpected_token (expected {:?})", ty)), start);
         }
-        Ok(self.stream.tokens.pop_front().unwrap())
+        Ok(self.stream.pop_front().unwrap())
     }
 
     /// Parser.Parse
@@ -2978,7 +3026,7 @@ impl Parser {
 
     fn line_breaks(&mut self) {
         while self.cur() == TT::NewLine {
-            self.stream.tokens.pop_front();
+            self.stream.pop_front();
         }
     }
 
@@ -3264,7 +3312,7 @@ impl Parser {
             return self.perr("error_new_line_expected", self.stream.current_string_start_index());
         }
         while self.stream.look_ahead_ty() == TT::NewLine {
-            self.stream.tokens.pop_front();
+            self.stream.pop_front();
         }
         let value = &self.stream.current().unwrap().value;
         let spaces = value.bytes().filter(|b| *b == b' ').count();
@@ -3323,7 +3371,7 @@ fn parse_source_uncached(name: &str, code: &str) -> R<Rc<Node>> {
         }
     }
     let file = Rc::new(FileInfo { name: name.to_string(), line_starts });
-    let stream = tokenize(code).map_err(|e| format!("{}.py {}", name, e))?;
+    let stream = shared_tokens(code).map_err(|e| format!("{}.py {}", name, e))?;
     Parser { stream, file }.parse()
 }
 
@@ -8202,6 +8250,91 @@ struct Drone {
 #[inline(always)]
 fn not_above(ops: &[f64], x: f64) -> u64 {
     #[cfg(target_arch = "x86_64")]
+    {
+        if std::arch::is_x86_feature_detected!("avx2") {
+            return unsafe { not_above_avx2(ops, x) };
+        }
+    }
+    not_above_sse2(ops, x)
+}
+
+/// the sum of ops[i] - lasts[i], setting lasts to ops (PState::consume_ops for every drone; op
+/// counts are whole numbers, so the sum is exact in any order)
+#[inline(always)]
+fn consume_all(ops: &[f64], lasts: &mut [f64]) -> f64 {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::arch::is_x86_feature_detected!("avx2") {
+            return unsafe { consume_all_avx2(ops, lasts) };
+        }
+    }
+    let n = ops.len();
+    let mut acc = [0.0f64; 4];
+    let mut i = 0;
+    while i + 4 <= n {
+        for k in 0..4 {
+            acc[k] += ops[i + k] - lasts[i + k];
+            lasts[i + k] = ops[i + k];
+        }
+        i += 4;
+    }
+    while i < n {
+        acc[0] += ops[i] - lasts[i];
+        lasts[i] = ops[i];
+        i += 1;
+    }
+    (acc[0] + acc[1]) + (acc[2] + acc[3])
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn consume_all_avx2(ops: &[f64], lasts: &mut [f64]) -> f64 {
+    use std::arch::x86_64::*;
+    let n = ops.len();
+    let mut acc = _mm256_setzero_pd();
+    let mut i = 0;
+    while i + 4 <= n {
+        let o = _mm256_loadu_pd(ops.as_ptr().add(i));
+        let l = _mm256_loadu_pd(lasts.as_ptr().add(i));
+        acc = _mm256_add_pd(acc, _mm256_sub_pd(o, l));
+        _mm256_storeu_pd(lasts.as_mut_ptr().add(i), o);
+        i += 4;
+    }
+    let mut a = [0.0f64; 4];
+    _mm256_storeu_pd(a.as_mut_ptr(), acc);
+    let mut tail = 0.0;
+    while i < n {
+        tail += ops[i] - lasts[i];
+        lasts[i] = ops[i];
+        i += 1;
+    }
+    (a[0] + a[1]) + (a[2] + a[3]) + tail
+}
+
+/// not_above, four lanes at a time
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn not_above_avx2(ops: &[f64], x: f64) -> u64 {
+    use std::arch::x86_64::*;
+    let vx = _mm256_set1_pd(x);
+    let mut out = 0u64;
+    let mut i = 0;
+    while i + 4 <= ops.len() {
+        // !(a > x): not-greater-than, unordered true (as for NaN)
+        let c = _mm256_cmp_pd::<_CMP_NGT_UQ>(_mm256_loadu_pd(ops.as_ptr().add(i)), vx);
+        out |= (_mm256_movemask_pd(c) as u64) << i;
+        i += 4;
+    }
+    while i < ops.len() {
+        out |= (!(ops[i] > x) as u64) << i;
+        i += 1;
+    }
+    out
+}
+
+#[inline(always)]
+fn not_above_sse2(ops: &[f64], x: f64) -> u64 {
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         use std::arch::x86_64::*;
         let vx = _mm_set1_pd(x);
@@ -10820,22 +10953,7 @@ impl Sim {
                     let n = ex.states.len();
                     // PState::consume_ops for every drone (an empty slot keeps op == last, so adds 0).
                     // Op counts are whole numbers, so the sum is exact in any order: four lanes.
-                    let (ops, lasts) = (&ex.ops[..n], &mut ex.lasts[..n]);
-                    let mut acc = [0.0f64; 4];
-                    let mut i = 0;
-                    while i + 4 <= n {
-                        for k in 0..4 {
-                            acc[k] += ops[i + k] - lasts[i + k];
-                            lasts[i + k] = ops[i + k];
-                        }
-                        i += 4;
-                    }
-                    while i < n {
-                        acc[0] += ops[i] - lasts[i];
-                        lasts[i] = ops[i];
-                        i += 1;
-                    }
-                    num2 += (acc[0] + acc[1]) + (acc[2] + acc[3]);
+                    num2 += consume_all(&ex.ops[..n], &mut ex.lasts[..n]);
                 }
                 let mut due_mask = 0u64;
                 let masked = {
