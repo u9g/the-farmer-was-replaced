@@ -2,10 +2,12 @@
 # Run with run_reset_lb.py (leaderboard_run(Leaderboards.Fastest_Reset, "run_reset", 256)).
 #
 # Early game: one drone on a mixed farm. Every cell grows whatever the next few unlocks are
-# shortest of (hay, wood, carrots), and two columns grow sunflowers for power once the farm is 6x6.
+# shortest of (hay, wood, carrots). Once polyculture is bought, crops grow on one checkerboard
+# colour and the other colour holds the companion each crop asks for.
 # After that the script works through PLAN: for each unlock it cannot afford yet it runs a round
-# for the first item it lacks, using every drone (pumpkin field, sorted cactus field, one maze per
-# drone, the dinosaur snake), with a sunflower round whenever power runs low.
+# for the first item it lacks, using every drone (pumpkin field watered for faster growth, sorted
+# cactus field, one maze shared by all drones, the dinosaur snake), with a sunflower round
+# whenever power runs low.
 
 T0 = get_time()
 
@@ -59,6 +61,16 @@ def go(tx, ty):
 	else:
 		for _ in range(n - dy):
 			move(South)
+
+
+WET_LO = 0.5
+WET_N = 3
+
+
+def wet():
+	# top the cell up with water when it has run low and water is in stock
+	if get_water() < WET_LO and num_items(Items.Water) >= WET_N:
+		use_item(Items.Water, WET_N)
 
 
 def soil():
@@ -189,11 +201,14 @@ def sun_cell():
 		SUN.pop(pos)
 
 
-def mixed_cell(strip, weird):
+def mixed_cell(strip, weird, c):
 	if strip and get_pos_x() < 2:
 		sun_cell()
 		return
-	tend_mixed()
+	if POLY:
+		tend_mixed(c)
+	else:
+		tend_plain(c)
 	# plus shapes centred where (x + 2y) % 5 == 0 tile the field: the west and south arms were
 	# just replanted, the north and east arms are cut later in this same pass
 	if weird and (get_pos_x() + 2 * get_pos_y()) % 5 == 0:
@@ -203,12 +218,36 @@ def mixed_cell(strip, weird):
 			use_item(Items.Fertilizer)
 
 
+def tend_plain(c):
+	# no companions yet: cut what is ripe and plant this cell's crop
+	e = get_entity_type()
+	if e == Entities.Grass:
+		if c == Entities.Grass:
+			if can_harvest():
+				harvest()
+			return
+		harvest()
+	elif e != None:
+		if not can_harvest():
+			return
+		harvest()
+	if c == Entities.Grass:
+		if get_ground_type() == Grounds.Soil:
+			plant(Entities.Grass)
+		return
+	if c == Entities.Carrot:
+		if get_ground_type() != Grounds.Soil:
+			till()
+	if plant(c):
+		PEND[item_of(c)] += yield_of(c)
+
+
 WANT = {}
 REQ = {}
 COLS = [0, 0]
 
 
-def tend_mixed():
+def tend_mixed(cdef):
 	e = get_entity_type()
 	pos = (get_pos_x(), get_pos_y())
 	if e != None and e != Entities.Grass and not can_harvest():
@@ -225,7 +264,7 @@ def tend_mixed():
 	if pos in WANT:
 		c = WANT[pos][0]
 	else:
-		c = choose((pos[0] + pos[1]) % 2 == 0)
+		c = cdef
 	if c == Entities.Grass:
 		if get_ground_type() == Grounds.Soil:
 			plant(Entities.Grass)
@@ -277,16 +316,204 @@ def mixed_job(i, d, need, flags):
 		return 0
 	for x in my_cols(i, d):
 		go(x, 0)
+		ce = choose(True)
+		co = choose(False)
+		if x % 2 == 0:
+			cs = [ce, co]
+		else:
+			cs = [co, ce]
 		for y in range(n):
-			mixed_cell(strip, weird)
+			mixed_cell(strip, weird, cs[y % 2])
 			move(North)
 	return 0
 
 
 def mixed_round(need):
-	strip = drones() == 1 and num_unlocked(Unlocks.Sunflowers) > 0 and get_world_size() >= 6
+	strip = False
 	weird = Items.Weird_Substance in need[0] and num_unlocked(Unlocks.Fertilizer) > 0
 	all_drones(mixed_job, need, (strip, weird))
+
+
+# ---- polyculture farm ----------------------------------------------------------------------------
+# Crops grow on the cells where (x + y) is even, servants on the odd cells. A crop's companion
+# wish is claimed when it is planted: an odd cell in the drone's own columns that nobody else has
+# claimed for another type. A wish that cannot be claimed is rerolled (cut and replant). Servant
+# cells are made into the wished type when the drone passes them, which is always before the crop
+# is cut again. Free servant cells stay grass and give hay.
+
+PW_T = []
+PW_BY = []
+PW_C0 = [0]
+PW_C1 = [0]
+
+
+def pw_item(e):
+	if e == Entities.Carrot:
+		return Items.Carrot
+	if e == Entities.Grass:
+		return Items.Hay
+	return Items.Wood
+
+
+def pw_crop(need, have, col):
+	# the crop most short of its goal (relative); carrots only while their seeds last a column
+	best = Entities.Carrot
+	bs = -1
+	for e in [Entities.Carrot, Entities.Tree, Entities.Grass]:
+		it = pw_item(e)
+		if it in need:
+			s = (need[it] - have[it]) / need[it]
+			if s > bs:
+				bs = s
+				best = e
+	if best == Entities.Carrot:
+		seed = get_cost(Entities.Carrot)[Items.Wood] * col
+		if have[Items.Wood] < seed:
+			return Entities.Tree
+		if have[Items.Hay] < seed:
+			return Entities.Grass
+	return best
+
+
+def pw_make(e, t):
+	# make the entity here type t (t is never None)
+	if e == t:
+		return
+	if t == Entities.Grass:
+		if e != None:
+			harvest()
+		if get_ground_type() == Grounds.Soil:
+			plant(Entities.Grass)
+		return
+	if e != None and e != Entities.Grass:
+		harvest()
+	if t == Entities.Carrot and get_ground_type() != Grounds.Soil:
+		till()
+	plant(t)
+
+
+def pw_cell_crop(c, n, t, rerolls):
+	e = get_entity_type()
+	if e != None and e != Entities.Grass:
+		if not can_harvest():
+			return
+	if e != None:
+		harvest()
+	q = PW_BY[c]
+	if q >= 0:
+		if PW_BY[q] == c:
+			PW_T[q] = None
+			PW_BY[q] = -1
+		PW_BY[c] = -1
+	if t == Entities.Carrot and get_ground_type() != Grounds.Soil:
+		till()
+	if WET_POLY:
+		wet()
+	if not plant(t):
+		return
+	for r in range(rerolls + 1):
+		comp = get_companion()
+		if comp == None:
+			return
+		px = comp[1][0]
+		if px >= PW_C0[0] and px < PW_C1[0]:
+			q = px * n + comp[1][1]
+			ct = comp[0]
+			if (px + comp[1][1]) % 2 == 1:
+				w = PW_T[q]
+				if w == None or w == ct:
+					PW_T[q] = ct
+					PW_BY[q] = c
+					PW_BY[c] = q
+					return
+		if r < rerolls:
+			harvest()
+			if not plant(t):
+				return
+
+
+def pw_cell_servant(c, hay):
+	t = PW_T[c]
+	e = get_entity_type()
+	if t == None:
+		if e == Entities.Grass:
+			if hay and can_harvest():
+				harvest()
+		elif e != None:
+			if can_harvest():
+				harvest()
+				if get_ground_type() == Grounds.Soil:
+					plant(Entities.Grass)
+		elif get_ground_type() == Grounds.Soil:
+			plant(Entities.Grass)
+		return
+	pw_make(e, t)
+
+
+def poly_job(i, d, need, flags):
+	passes = 2
+	strip = flags[0]
+	global PW_T
+	global PW_BY
+	n = get_world_size()
+	c0 = i * n // d
+	c1 = (i + 1) * n // d
+	if strip:
+		c0 = 2
+	PW_C0[0] = c0
+	PW_C1[0] = c1
+	if len(PW_T) != n * n:
+		PW_T = []
+		PW_BY = []
+		for c in range(n * n):
+			PW_T.append(None)
+			PW_BY.append(-1)
+	if strip:
+		go(0, 0)
+		for x in range(2):
+			for y in range(n):
+				sun_cell()
+				move(North)
+			move(East)
+	go(c0, 0)
+	for p in range(passes):
+		have = {Items.Carrot: num_items(Items.Carrot), Items.Wood: num_items(Items.Wood), Items.Hay: num_items(Items.Hay)}
+		done = True
+		for it in need:
+			if have[it] < need[it]:
+				done = False
+		if done:
+			return 0
+		hay = Items.Hay in need and have[Items.Hay] < need[Items.Hay]
+		if p % 2 == 0:
+			xs = range(c0, c1)
+		else:
+			xs = range(c1 - 1, c0 - 1, -1)
+		for x in xs:
+			have = {Items.Carrot: num_items(Items.Carrot), Items.Wood: num_items(Items.Wood), Items.Hay: num_items(Items.Hay)}
+			t = pw_crop(need, have, n)
+			if get_pos_y() == 0:
+				ys = range(n)
+				dy = North
+			else:
+				ys = range(n - 1, -1, -1)
+				dy = South
+			k = 0
+			for y in ys:
+				c = x * n + y
+				if (x + y) % 2 == 0:
+					pw_cell_crop(c, n, t, 2)
+				else:
+					pw_cell_servant(c, hay)
+				k += 1
+				if k < n:
+					move(dy)
+			if p % 2 == 0:
+				if x < c1 - 1:
+					move(East)
+			elif x > c0:
+				move(West)
+	return 0
 
 
 # ---- power -------------------------------------------------------------------------------------
@@ -328,8 +555,6 @@ def power_round():
 def power_check():
 	if num_unlocked(Unlocks.Sunflowers) == 0 or width() < 6:
 		return
-	if drones() == 1 and get_world_size() < 8:
-		return
 	if num_items(Items.Power) < 60 * drones():
 		power_round()
 
@@ -346,6 +571,8 @@ def pumpkin_job(i, d, a, b):
 			if e != Entities.Pumpkin:
 				clear_cell()
 				soil()
+				if WET_PK:
+					wet()
 				plant(Entities.Pumpkin)
 				todo.append((x, y))
 			elif not can_harvest():
@@ -460,154 +687,225 @@ def cactus_round(weird):
 DIRS = [North, East, South, West]
 DX = [0, 1, 0, -1]
 DY = [1, 0, -1, 0]
+BACK = [2, 3, 0, 1]
+MAZE_SECS = 90
+POLY_FARM = True
+WET_PK = True
+WET_POLY = True
+
+# ---- shared mazes --------------------------------------------------------------------------
+# The field is cut into q x q mazes of size s. A leader drone per maze makes the maze, maps it
+# with one depth-first walk, splits it into territories around h home cells, and spawns the
+# other h - 1 workers, which inherit the map. Every worker polls where the treasure is and goes
+# for it only when it lies in its own territory, then walks back home.
+
+MZ_S = 0
+MZ_RX = 0
+MZ_RY = 0
+OPENS = []
+OWNER = []
+PDIR = []
+HOMES = []
+CPATH = []
 
 
-def maze_map(rx, ry, s):
-	# depth-first walk over the whole maze; returns open[x][y] = list of direction indexes
+def mz_map():
+	# depth-first walk from the drone's cell; OPENS[c] = open directions of local cell c
+	global OPENS
+	s = MZ_S
 	opens = []
-	seen = []
-	for x in range(s):
-		opens.append([])
-		seen.append([])
-		for y in range(s):
-			opens[x].append([])
-			seen[x].append(False)
-	x = get_pos_x() - rx
-	y = get_pos_y() - ry
-	stack = []
-	seen[x][y] = True
+	for c in range(s * s):
+		opens.append(None)
+	x = get_pos_x() - MZ_RX
+	y = get_pos_y() - MZ_RY
+	c = x + y * s
+	o = []
 	for k in range(4):
 		if can_move(DIRS[k]):
-			opens[x][y].append(k)
+			o.append(k)
+	opens[c] = o
+	stack = []
 	nxt = [0]
 	while True:
+		o = opens[c]
+		i = nxt[-1]
 		moved = False
-		while nxt[-1] < len(opens[x][y]):
-			k = opens[x][y][nxt[-1]]
-			nxt[-1] += 1
-			nx = x + DX[k]
-			ny = y + DY[k]
-			if not seen[nx][ny]:
+		while i < len(o):
+			k = o[i]
+			i += 1
+			nc = c + DX[k] + DY[k] * s
+			if opens[nc] == None:
+				nxt[-1] = i
 				move(DIRS[k])
 				stack.append(k)
-				x = nx
-				y = ny
-				seen[x][y] = True
+				c = nc
+				o2 = []
 				for k2 in range(4):
 					if can_move(DIRS[k2]):
-						opens[x][y].append(k2)
+						o2.append(k2)
+				opens[c] = o2
 				nxt.append(0)
 				moved = True
 				break
 		if moved:
 			continue
 		if len(stack) == 0:
-			return opens
+			OPENS = opens
+			return
 		k = stack.pop()
 		nxt.pop()
-		move(DIRS[(k + 2) % 4])
-		x = x - DX[k]
-		y = y - DY[k]
+		move(DIRS[BACK[k]])
+		c = c - DX[k] - DY[k] * s
 
 
-def maze_path(opens, s, sx, sy, tx, ty):
-	# breadth-first search from target back to start; returns the moves from start
-	came = []
-	for x in range(s):
-		came.append([])
-		for y in range(s):
-			came[x].append(-1)
-	came[tx][ty] = 4
-	front = [(tx, ty)]
-	while len(front) > 0 and came[sx][sy] == -1:
+def mz_split(h, start):
+	# h homes spread over the maze; every cell goes to the home nearest along the maze
+	global OWNER
+	global PDIR
+	global HOMES
+	global CPATH
+	s = MZ_S
+	g = 1
+	while g * g < h:
+		g += 1
+	homes = []
+	for j in range(g):
+		for i in range(g):
+			if len(homes) < h:
+				hx = (2 * i + 1) * s // (2 * g)
+				hy = (2 * j + 1) * s // (2 * g)
+				homes.append(hx + hy * s)
+	owner = []
+	pdir = []
+	for c in range(s * s):
+		owner.append(-1)
+		pdir.append(-1)
+	front = []
+	for i in range(len(homes)):
+		owner[homes[i]] = i
+		front.append(homes[i])
+	while len(front) > 0:
 		nf = []
 		for c in front:
-			for k in opens[c[0]][c[1]]:
-				nx = c[0] + DX[k]
-				ny = c[1] + DY[k]
-				if came[nx][ny] == -1:
-					came[nx][ny] = (k + 2) % 4
-					nf.append((nx, ny))
+			oc = owner[c]
+			for k in OPENS[c]:
+				nc = c + DX[k] + DY[k] * s
+				if owner[nc] == -1:
+					owner[nc] = oc
+					pdir[nc] = k
+					nf.append(nc)
 		front = nf
-	path = []
-	x = sx
-	y = sy
-	while came[x][y] != 4:
-		k = came[x][y]
-		path.append(k)
-		x += DX[k]
-		y += DY[k]
-	return path
+	# path from the start cell to every home
+	seen = []
+	for c in range(s * s):
+		seen.append(-1)
+	seen[start] = 4
+	front = [start]
+	while len(front) > 0:
+		nf = []
+		for c in front:
+			for k in OPENS[c]:
+				nc = c + DX[k] + DY[k] * s
+				if seen[nc] == -1:
+					seen[nc] = k
+					nf.append(nc)
+		front = nf
+	cpath = []
+	for hc in homes:
+		p = []
+		c = hc
+		while c != start:
+			k = seen[c]
+			p.append(k)
+			c = c - DX[k] - DY[k] * s
+		q = []
+		for i in range(len(p) - 1, -1, -1):
+			q.append(p[i])
+		cpath.append(q)
+	OWNER = owner
+	PDIR = pdir
+	HOMES = homes
+	CPATH = cpath
 
 
-def maze_job(i, d, s, goal, start, stop):
-	k = get_world_size() // s
-	rx = (i % k) * s
-	ry = (i // k) * s
-	mult = lvl_mult(Unlocks.Mazes)
-	cost = s * mult
+def mz_work(me, goal, cost, stop):
+	s = MZ_S
+	for k in CPATH[me]:
+		move(DIRS[k])
+	# the treasure moves one action after a use; no other use can bring it back sooner
+	rep = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed)) + 0.001
+	home = HOMES[me]
+	while True:
+		t = measure()
+		if t == None:
+			return 0
+		c = (t[0] - MZ_RX) + (t[1] - MZ_RY) * s
+		if OWNER[c] == me:
+			p = []
+			while c != home:
+				k = PDIR[c]
+				p.append(k)
+				c = c - DX[k] - DY[k] * s
+			for i in range(len(p) - 1, -1, -1):
+				move(DIRS[p[i]])
+			if num_items(Items.Gold) >= goal or get_time() > stop or not use_item(Items.Weird_Substance, cost):
+				harvest()
+				return 0
+			until = get_time() + rep
+			for k in p:
+				move(DIRS[BACK[k]])
+			while get_time() < until:
+				pass
+
+
+def mz_lead(rx, ry, s, h, goal, start, stop):
+	global MZ_S
+	global MZ_RX
+	global MZ_RY
+	MZ_S = s
+	MZ_RX = rx
+	MZ_RY = ry
+	cost = s * lvl_mult(Unlocks.Mazes)
 	go(rx + s // 2, ry + s // 2)
-	clear_cell()
+	harvest()
 	plant(Entities.Bush)
-	# no maze may exist while other drones still walk to their regions
+	# no maze may exist while other leaders still walk to their mazes
 	while get_time() < start:
 		pass
-	while num_items(Items.Gold) < goal and num_items(Items.Weird_Substance) >= cost and get_time() < stop:
-		if get_entity_type() != Entities.Bush:
-			clear_cell()
-			plant(Entities.Bush)
-		use_item(Items.Weird_Substance, cost)
-		opens = maze_map(rx, ry, s)
-		while True:
-			t = measure()
-			path = maze_path(opens, s, get_pos_x() - rx, get_pos_y() - ry, t[0] - rx, t[1] - ry)
-			for kk in path:
-				move(DIRS[kk])
-			if num_items(Items.Gold) >= goal or num_items(Items.Weird_Substance) < cost or get_time() > stop:
-				harvest()
-				break
-			if not use_item(Items.Weird_Substance, cost):
-				harvest()
-				break
-			while get_entity_type() == Entities.Treasure:
-				pass
-		go(rx + s // 2, ry + s // 2)
+	use_item(Items.Weird_Substance, cost)
+	mz_map()
+	start = (get_pos_x() - rx) + (get_pos_y() - ry) * s
+	mz_split(h, start)
+	hs = []
+	for i in range(1, h):
+		d = spawn_drone(mz_work, i, goal, cost, stop)
+		if d != None:
+			hs.append(d)
+	mz_work(0, goal, cost, stop)
+	for d in hs:
+		wait_for(d)
 	return 0
 
 
-def maze_layout():
-	# k x k regions of size s, one drone each
+def maze_round(s, goal):
+	stop = get_time() + MAZE_SECS
 	n = get_world_size()
-	d = drones()
-	k = 1
-	while k * k < d or n % k != 0:
-		k += 1
-	while n // k < 3:
-		k -= 1
-		while n % k != 0:
-			k -= 1
-	return (k, n // k, min(d, k * k))
-
-
-def maze_round(goal):
-	n = get_world_size()
-	lay = maze_layout()
-	k = lay[0]
-	s = lay[1]
-	d = lay[2]
+	q = n // s
+	d = max_drones()
+	nm = q * q
+	h = d // nm
 	clear()
 	act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
-	start = get_time() + act * (d + n + 8)
-	stop = start + 40
+	start = get_time() + act * (nm + n + 4)
 	hs = []
-	for i in range(1, d):
-		h = spawn_drone(maze_job, i, d, s, goal, start, stop)
-		if h != None:
-			hs.append(h)
-	maze_job(0, d, s, goal, start, stop)
-	for h in hs:
-		wait_for(h)
-	clear()
+	for i in range(1, nm):
+		dd = spawn_drone(mz_lead, (i % q) * s, (i // q) * s, s, h, goal, start, stop)
+		if dd != None:
+			hs.append(dd)
+	mz_lead(0, 0, s, h, goal, start, stop)
+	for dd in hs:
+		wait_for(dd)
+
 
 
 # ---- dinosaur snake (dinosaurs.py, whole field) ------------------------------------------------
@@ -966,17 +1264,15 @@ def farm(item, amount):
 			farm(Items.Pumpkin, cells * pc)
 		cactus_round(item == Items.Weird_Substance)
 	elif item == Items.Gold:
-		lay = maze_layout()
-		s = lay[1]
-		cost = s * lvl_mult(Unlocks.Mazes)
-		finds = (amount - num_items(Items.Gold)) // (s * s * lvl_mult(Unlocks.Mazes)) + 1 + lay[2]
-		s_need = finds * cost
-		if num_unlocked(Unlocks.Cactus) > 0:
-			s_need = min(s_need, cost * 4 * lay[2] * 30)
+		n = get_world_size()
+		m = lvl_mult(Unlocks.Mazes)
+		cost = n * m
+		finds = (amount - num_items(Items.Gold)) // (n * n * m) + 2
+		s_need = min(finds, 300) * cost
 		if num_items(Items.Weird_Substance) < s_need:
 			farm(Items.Weird_Substance, s_need)
 		else:
-			maze_round(amount)
+			maze_round(n, amount)
 	elif item == Items.Bone:
 		ac = 2 * lvl_mult(Unlocks.Dinosaurs) * get_world_size() * get_world_size()
 		if num_items(Items.Cactus) < ac:
@@ -1045,8 +1341,10 @@ PLAN = [
 	(Unlocks.Speed, 2),
 	(Unlocks.Carrots, 1),
 	(Unlocks.Speed, 3),
+	(Unlocks.Watering, 1),
 	(Unlocks.Expand, 3),
 	(Unlocks.Trees, 1),
+	(Unlocks.Watering, 2),
 	(Unlocks.Expand, 4),
 	(Unlocks.Carrots, 2),
 	(Unlocks.Carrots, 3),
@@ -1054,14 +1352,17 @@ PLAN = [
 	(Unlocks.Grass, 3),
 	(Unlocks.Sunflowers, 1),
 	(Unlocks.Pumpkins, 1),
-	(Unlocks.Polyculture, 1),
 	(Unlocks.Trees, 2),
+	(Unlocks.Polyculture, 1),
+	(Unlocks.Watering, 3),
+	(Unlocks.Watering, 4),
 	(Unlocks.Speed, 4),
 	(Unlocks.Expand, 5),
-	(Unlocks.Trees, 3),
 	(Unlocks.Speed, 5),
+	(Unlocks.Trees, 3),
 	(Unlocks.Grass, 4),
 	(Unlocks.Carrots, 4),
+	(Unlocks.Watering, 5),
 	(Unlocks.Pumpkins, 2),
 	(Unlocks.Pumpkins, 3),
 	(Unlocks.Pumpkins, 4),
