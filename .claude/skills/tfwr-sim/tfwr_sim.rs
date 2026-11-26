@@ -4653,6 +4653,8 @@ enum Op {
     /// IndexF, then the StoreAssign that follows it (kept as the fallback, where a stopped drone
     /// resumes and where jumps land)
     IndexStoreF(*const Node, u32),
+    /// x[e] with one computed index: x and then e on the stack (no index list)
+    IndexSS(*const Node),
     /// CmpF, then the CondJumpF (+ JumpIfFalse) / LoopCond that follows it, likewise
     CmpJF(*const Node, u32),
     /// pops the arguments (this many, or one argument list for u32::MAX), the static flag and the
@@ -5135,6 +5137,13 @@ impl Compiler {
             NK::Binary(_, _, bop) => {
                 self.eb(np, depth);
                 let simple = |n: &Rc<Node>| matches!(&n.kind, NK::Value(_) | NK::Literal(_));
+                if *bop == BOp::Index && matches!(&node.slots[1].kind, NK::Seq) && node.slots[1].slots.len() == 1 && !simple(&node.slots[1].slots[0]) {
+                    // the index list's one element is computed: lhs, then that element, on the stack
+                    self.expr(&node.slots[0], depth + 1);
+                    self.expr(&node.slots[1].slots[0], depth + 2);
+                    self.emit(Op::IndexSS(np));
+                    return;
+                }
                 if *bop == BOp::Index && matches!(&node.slots[1].kind, NK::Seq) && node.slots[1].slots.len() == 1 && simple(&node.slots[1].slots[0]) {
                     let a = &node.slots[0];
                     let left = if simple(a) {
@@ -5472,10 +5481,34 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         }
                         0.0
                     } else {
-                        let before = scope_evaluate(scope, value)?.0;
-                        let (v, exec_time) = get_value_to_assign(Some(&before), &rhs, op)?;
-                        scope_set_var(scope, value, v, false);
-                        exec_time
+                        // `x += n` / `x -= n` on numbers: get_value_to_assign's arithmetic (one op),
+                        // on the slot that scope_evaluate and scope_set_var would both use
+                        let lnode = node_ref(ln);
+                        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
+                        let fast = if slot.is_null() {
+                            None
+                        } else {
+                            match (op.as_ref(), unsafe { &(*slot).1 }, &rhs) {
+                                ("+=", V::Num(a), V::Num(b)) => Some(a + b),
+                                ("-=", V::Num(a), V::Num(b)) => Some(a - b),
+                                _ => None,
+                            }
+                        };
+                        match fast {
+                            Some(x) => {
+                                let e = unsafe { &mut *slot };
+                                e.1 = V::Num(x);
+                                e.2 = false;
+                                1.0
+                            }
+                            None => {
+                                let before = scope_evaluate(scope, value)?.0;
+                                let (v, exec_time) = get_value_to_assign(Some(&before), &rhs, op)?;
+                                scope_set_var(scope, value, v, false);
+                                remember_slot(scope, value, &lnode.lookup);
+                                exec_time
+                            }
+                        }
                     };
                     if charge(st, OPERATION_OPS * exec_time) {
                         stop!(pc);
@@ -5630,6 +5663,47 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         stop!(pc);
                     }
                 }
+                Op::IndexSS(n) => {
+                    let idx = vm.stack.pop().unwrap();
+                    let lhs = vm.stack.pop().unwrap();
+                    stm(st).current_executing_node = n;
+                    // binary_value's checks for "[]" (the index list itself is never a function)
+                    if let V::Func(f) = &lhs {
+                        return Err(Ctrl::Err(err("error_function_in_operator", &[f.name.to_string(), "[]".to_string()])));
+                    }
+                    if !(lhs.is_seq() || matches!(lhs, V::Dict(_))) {
+                        return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(&lhs)])));
+                    }
+                    let mut steps: i32 = 0;
+                    let fast = match (&lhs, &idx) {
+                        (V::List(_) | V::Tuple(_), V::Num(x)) => {
+                            let count = seq_len(&lhs) as f64;
+                            let mut num = *x;
+                            if num < 0.0 {
+                                num += count;
+                            }
+                            if num < 0.0 || num >= count || num.is_nan() {
+                                None
+                            } else {
+                                Some(seq_get(&lhs, num as i32 as usize))
+                            }
+                        }
+                        _ => None,
+                    };
+                    let result = match fast {
+                        Some(v) => {
+                            steps = 1;
+                            v
+                        }
+                        None => index_at(&lhs, std::slice::from_ref(&idx), &mut steps, None)?,
+                    };
+                    vdrop(idx);
+                    drop(lhs);
+                    vm.stack.push(result);
+                    if charge(st, OPERATION_OPS * steps as f64) {
+                        stop!(pc);
+                    }
+                }
                 Op::IndexStoreF(n, k) => {
                     let (a, b) = code.fused[k as usize];
                     let lhs = match a {
@@ -5710,10 +5784,34 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         }
                         0.0
                     } else {
-                        let before = scope_evaluate(scope, value)?.0;
-                        let (v, exec_time) = get_value_to_assign(Some(&before), &rhs, op)?;
-                        scope_set_var(scope, value, v, false);
-                        exec_time
+                        // `x += n` / `x -= n` on numbers: get_value_to_assign's arithmetic (one op),
+                        // on the slot that scope_evaluate and scope_set_var would both use
+                        let lnode = node_ref(ln);
+                        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
+                        let fast = if slot.is_null() {
+                            None
+                        } else {
+                            match (op.as_ref(), unsafe { &(*slot).1 }, &rhs) {
+                                ("+=", V::Num(a), V::Num(b)) => Some(a + b),
+                                ("-=", V::Num(a), V::Num(b)) => Some(a - b),
+                                _ => None,
+                            }
+                        };
+                        match fast {
+                            Some(x) => {
+                                let e = unsafe { &mut *slot };
+                                e.1 = V::Num(x);
+                                e.2 = false;
+                                1.0
+                            }
+                            None => {
+                                let before = scope_evaluate(scope, value)?.0;
+                                let (v, exec_time) = get_value_to_assign(Some(&before), &rhs, op)?;
+                                scope_set_var(scope, value, v, false);
+                                remember_slot(scope, value, &lnode.lookup);
+                                exec_time
+                            }
+                        }
                     };
                     if charge(st, OPERATION_OPS * exec_time) {
                         stop!(pc);
