@@ -1481,6 +1481,10 @@ fn deep_copy(v: &V, copies: &mut Copies) -> V {
             res
         }
         V::Func(f) => {
+            // a builtin (no scope, tree or bound object) is shared, not copied (see BUILTINS)
+            if f.syntax_tree.is_none() && f.parent_scope.is_none() && f.method_object.is_none() {
+                return V::Func(f.clone());
+            }
             if let Some(c) = copies.values.get(&p) {
                 return c.clone();
             }
@@ -2218,6 +2222,8 @@ struct Node {
     /// for a Value node: where its name was found last time, as (slot index << 8) | (scopes up + 1),
     /// 0 for not yet; see scope_lookup
     lookup: Cell<u64>,
+    /// for a module's root or a FunctionNode: its compiled code (code_of)
+    code: std::cell::OnceCell<Rc<Code>>,
 }
 
 struct FileInfo {
@@ -2257,6 +2263,7 @@ impl PN {
             word_end: self.end,
             file: file.clone(),
             lookup: Cell::new(0),
+            code: std::cell::OnceCell::new(),
         })
     }
 }
@@ -3360,19 +3367,35 @@ fn is_builtin_name(name: &str) -> bool {
 }
 
 /// The global scope every ProgramState and module starts with: __name__ plus all builtins as statics.
+thread_local! {
+    /// the builtin function objects, made once per thread and shared by every scope: they never
+    /// change, and a copy of one would be indistinguishable from it
+    static BUILTINS: Vec<(Rc<str>, Rc<PyFunc>)> = FUNCTION_LIST
+        .iter()
+        .enumerate()
+        .map(|(i, (name, is_free))| {
+            (
+                intern(name),
+                Rc::new(PyFunc {
+                    bidx: i as u8,
+                    name: Rc::from(*name),
+                    syntax_tree: None,
+                    parent_scope: None,
+                    binding: Some(name),
+                    method_object: None,
+                    is_free: *is_free,
+                }),
+            )
+        })
+        .collect();
+}
+
 fn register_builtins(scope: &ScopeRef) {
-    for (i, (name, is_free)) in FUNCTION_LIST.iter().enumerate() {
-        let f = Rc::new(PyFunc {
-            bidx: i as u8,
-            name: Rc::from(*name),
-            syntax_tree: None,
-            parent_scope: None,
-            binding: Some(name),
-            method_object: None,
-            is_free: *is_free,
-        });
-        scope_set_var(scope, &intern(name), V::Func(f), true);
-    }
+    BUILTINS.with(|b| {
+        for (name, f) in b.iter() {
+            scope_set_var(scope, name, V::Func(f.clone()), true);
+        }
+    });
 }
 
 impl PState {
@@ -4461,6 +4484,9 @@ enum Op {
     /// here, Eb and all, as their own instructions would) or the value on the stack
     BinF(*const Node, u32),
     CmpF(*const Node, u32),
+    /// x[i] with one index: x (a name, literal or the stack) and i (a name or literal) from
+    /// code.fused[k], without building the index list
+    IndexF(*const Node, u32),
     /// pops the arguments (this many, or one argument list for u32::MAX), the static flag and the
     /// function; a builtin is called here (then TakeRv, 3 on), a user function charges its op and
     /// goes on to CallB
@@ -4544,8 +4570,8 @@ struct Code {
     fused: Vec<(Opnd, Opnd)>,
     consts: Vec<V>,
     strs: Vec<Rc<str>>,
-    /// the tree this was compiled from (kept alive: instructions point into it)
-    root: Rc<Node>,
+    /// the tree this was compiled from (which owns this code and outlives it)
+    root: std::rc::Weak<Node>,
 }
 
 /// error message ids used by Fail / FailAt
@@ -4594,7 +4620,7 @@ impl Compiler {
             let starts_with_eb = matches!(op, Op::Load(..) | Op::Lit(..) | Op::Eb(..) | Op::Def(..) | Op::Pass(..) | Op::BrkCont(..) | Op::ImportStart(..) | Op::LoadCallee(..));
             // (BinF / CmpF with a name or literal on the left are pushed through emit too)
             let starts_with_eb = starts_with_eb
-                || matches!(op, Op::BinF(_, k) | Op::CmpF(_, k) if !matches!(self.fused[k as usize].0, Opnd::Stack));
+                || matches!(op, Op::BinF(_, k) | Op::CmpF(_, k) | Op::IndexF(_, k) if !matches!(self.fused[k as usize].0, Opnd::Stack));
             if !(starts_with_eb && d < 1000) {
                 self.ops.push(Op::Eb(n, d));
             }
@@ -4925,6 +4951,27 @@ impl Compiler {
             }
             NK::Binary(_, _, bop) => {
                 self.eb(np, depth);
+                let simple = |n: &Rc<Node>| matches!(&n.kind, NK::Value(_) | NK::Literal(_));
+                if *bop == BOp::Index && matches!(&node.slots[1].kind, NK::Seq) && node.slots[1].slots.len() == 1 && simple(&node.slots[1].slots[0]) {
+                    let a = &node.slots[0];
+                    let left = if simple(a) {
+                        self.operand(a, depth + 1)
+                    } else {
+                        self.expr(a, depth + 1);
+                        Opnd::Stack
+                    };
+                    // the index list is node.slots[1] (depth + 1), its one element one deeper
+                    let right = self.operand(&node.slots[1].slots[0], depth + 2);
+                    self.fused.push((left, right));
+                    let k = (self.fused.len() - 1) as u32;
+                    if matches!(left, Opnd::Stack) {
+                        self.flush_eb();
+                        self.ops.push(Op::IndexF(np, k));
+                    } else {
+                        self.emit(Op::IndexF(np, k));
+                    }
+                    return;
+                }
                 if !matches!(bop, BOp::And | BOp::Or | BOp::Dot) {
                     self.binop(np, &node.slots[0], &node.slots[1], depth, false);
                     return;
@@ -4998,10 +5045,10 @@ thread_local! {
 /// per thread. Trees live for the whole thread (parse_source keeps them), so a node's address names
 /// it for good.
 fn code_of(node: &Rc<Node>) -> Rc<Code> {
-    let key = Rc::as_ptr(node) as usize;
-    if let Some(c) = CODES.with(|c| c.borrow().get(&key).cloned()) {
-        return c;
-    }
+    node.code.get_or_init(|| compile(node)).clone()
+}
+
+fn compile(node: &Rc<Node>) -> Rc<Code> {
     let mut c = Compiler { ops: Vec::new(), fused: Vec::new(), consts: Vec::new(), strs: Vec::new(), loops: Vec::new(), pending_eb: None };
     match &node.kind {
         NK::Function { .. } => {
@@ -5027,9 +5074,8 @@ fn code_of(node: &Rc<Node>) -> Rc<Code> {
         }
     }
     c.flush_eb();
-    let code = Rc::new(Code { ops: c.ops, fused: c.fused, consts: c.consts, strs: c.strs, root: node.clone() });
-    CODES.with(|cs| cs.borrow_mut().insert(key, code.clone()));
-    code
+    // (the code holds the tree only weakly: the tree holds the code)
+    Rc::new(Code { ops: c.ops, fused: c.fused, consts: c.consts, strs: c.strs, root: Rc::downgrade(node) })
 }
 
 enum FrameKind {
@@ -5436,6 +5482,28 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         _ => unreachable!(),
                     };
                     let (result, steps) = binary_value(op, bop, lhs, rhs)?;
+                    vm.stack.push(result);
+                    if charge(st, OPERATION_OPS * steps as f64) {
+                        stop!(pc);
+                    }
+                }
+                Op::IndexF(n, k) => {
+                    let (a, b) = code.fused[k as usize];
+                    let lhs = match a {
+                        Opnd::Stack => vm.stack.pop().unwrap(),
+                        _ => fused_operand(st, &code, a, depth_off)?,
+                    };
+                    let idx = fused_operand(st, &code, b, depth_off)?;
+                    stm(st).current_executing_node = n;
+                    // binary_value's checks for "[]" (the index list itself is never a function)
+                    if let V::Func(f) = &lhs {
+                        return Err(Ctrl::Err(err("error_function_in_operator", &[f.name.to_string(), "[]".to_string()])));
+                    }
+                    if !(lhs.is_seq() || matches!(lhs, V::Dict(_))) {
+                        return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(&lhs)])));
+                    }
+                    let mut steps: i32 = 0;
+                    let result = index_at(&lhs, std::slice::from_ref(&idx), &mut steps, None)?;
                     vm.stack.push(result);
                     if charge(st, OPERATION_OPS * steps as f64) {
                         stop!(pc);
