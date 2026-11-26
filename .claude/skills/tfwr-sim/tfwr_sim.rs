@@ -3495,6 +3495,29 @@ const F_SE: u8 = 0b1100;
 /// in Sim::sleepers (an item-count spinner asleep to the end of the Execute call)
 const F_SLEEP: u8 = 16;
 
+/// Execution::fbits: flag bits 0-3 (present, await, the side effect kind's two bits) of drones
+/// 0..64 as one bit per drone, kept with every write of those bits, so the scheduler's masks are a
+/// few logic operations
+type FBits = [u64; 4];
+/// writes flags byte `f` of drone `i` and, below 64, its bits
+#[inline(always)]
+fn write_flags(fp: *mut u8, bits: *mut FBits, i: usize, f: u8) {
+    unsafe {
+        *fp = f;
+        if i < 64 && !bits.is_null() {
+            let m = 1u64 << i;
+            let b = &mut *bits;
+            for k in 0..4 {
+                if f >> k & 1 != 0 {
+                    b[k] |= m;
+                } else {
+                    b[k] &= !m;
+                }
+            }
+        }
+    }
+}
+
 struct PState {
     /// this drone's slot in Execution::hot (which never moves while the execution lasts)
     hot: *mut Hot,
@@ -3502,6 +3525,7 @@ struct PState {
     opp: *mut f64,
     lastp: *mut f64,
     flagp: *mut u8,
+    fbitp: *mut FBits,
     current_side_effect: SE,
     sh: Rc<Shared>,
     module_state: ModuleState,
@@ -3701,6 +3725,7 @@ impl PState {
             opp: std::ptr::null_mut(),
             lastp: std::ptr::null_mut(),
             flagp: std::ptr::null_mut(),
+            fbitp: std::ptr::null_mut(),
             current_side_effect: SE::None,
             current_execute_exception: None,
             random_random: SysRandom::new(random.next()),
@@ -3752,15 +3777,16 @@ impl PState {
             SE::NumItems(_) => SE_NUM_ITEMS,
             _ => SE_OTHER,
         };
-        let f = self.flg();
-        *f = (*f & !F_SE) | (k << 2);
+        let f = (*self.flg() & !F_SE) | (k << 2);
+        write_flags(self.flagp, self.fbitp, self.drone_id as usize, f);
         self.current_side_effect = se;
     }
     /// sets awaited_drone_id, keeping the flag
     fn set_awaited(&mut self, id: i32) {
         self.h().awaited_drone_id = id;
-        let f = self.flg();
-        *f = if id >= 0 { *f | F_AWAIT } else { *f & !F_AWAIT };
+        let f = *self.flg();
+        let f = if id >= 0 { f | F_AWAIT } else { f & !F_AWAIT };
+        write_flags(self.flagp, self.fbitp, self.drone_id as usize, f);
     }
     fn add_and_consume_ops(&mut self, ops: f64) {
         (*self.op()) += ops;
@@ -4796,6 +4822,10 @@ enum Op {
     CallFunc(*const Node),
     /// Load of a plain name as the callee (Value node, depth) + CallFunc(call node)
     LoadCallee(*const Node, *const Node, u32),
+    /// LoadCallee of a call whose arguments are all names or literals (Code::calls): a builtin
+    /// that CallA would call in place is called right here, and the run goes on after the TakeRv;
+    /// anything else does just what LoadCallee does
+    CallF(u32),
     /// StoreName for an assignment straight to a name: sets the assignment node first (the
     /// SetNode it replaces); the operator comes from the assignment node
     StoreAssign(*const Node, *const Node),
@@ -4901,6 +4931,7 @@ struct Code {
     fused: Vec<(Opnd, Opnd)>,
     consts: Vec<V>,
     strs: Vec<Rc<str>>,
+    calls: Vec<CallSite>,
     /// the tree this was compiled from (which owns this code and outlives it)
     root: std::rc::Weak<Node>,
 }
@@ -4914,9 +4945,24 @@ const FAIL_MSGS: &[&str] = &[
     "a function body cannot be executed without a call",
 ];
 
+/// see Op::CallF
+#[derive(Clone, Copy)]
+struct CallSite {
+    /// LoadCallee's operands
+    vn: *const Node,
+    cn: *const Node,
+    d: u32,
+    /// the arguments, as their Load / Lit would evaluate them
+    args: [Opnd; 2],
+    argc: u32,
+    /// where the call's TakeRv is
+    take_rv: u32,
+}
+
 struct Compiler {
     ops: Vec<Op>,
     fused: Vec<(Opnd, Opnd)>,
+    calls: Vec<CallSite>,
     consts: Vec<V>,
     strs: Vec<Rc<str>>,
     /// innermost loop last: (break target fixups, continue target fixups)
@@ -5285,8 +5331,9 @@ impl Compiler {
             NK::Bracket => self.expr(&node.slots[0], depth + 1),
             NK::Call => {
                 self.eb(np, depth);
+                let mut load_callee = None;
                 if let NK::Value(_) = &node.slots[0].kind {
-                    self.emit(Op::LoadCallee(Rc::as_ptr(&node.slots[0]), np, depth + 1));
+                    load_callee = Some(self.emit(Op::LoadCallee(Rc::as_ptr(&node.slots[0]), np, depth + 1)));
                 } else {
                     self.expr(&node.slots[0], depth + 1);
                     self.emit(Op::CallFunc(np));
@@ -5303,7 +5350,31 @@ impl Compiler {
                 }
                 self.emit(Op::CallB);
                 self.emit(Op::CallC);
-                self.emit(Op::TakeRv);
+                let take_rv = self.emit(Op::TakeRv);
+                // LoadCallee, then up to two Load / Lit, then CallA: a CallF site
+                if let (Some(at), NK::Seq) = (load_callee, &args.kind) {
+                    let argc = args.slots.len();
+                    if argc <= 2 && take_rv == at + argc + 4 {
+                        let mut a = [Opnd::Stack; 2];
+                        let mut ok = true;
+                        for i in 0..argc {
+                            a[i] = match self.ops[at + 1 + i] {
+                                Op::Load(n, d) => Opnd::Load(n, d),
+                                Op::Lit(n, d, k) => Opnd::Lit(n, d, k),
+                                _ => {
+                                    ok = false;
+                                    Opnd::Stack
+                                }
+                            };
+                        }
+                        if ok && matches!(self.ops[at + 1 + argc], Op::CallA(..)) {
+                            if let Op::LoadCallee(vn, cn, d) = self.ops[at] {
+                                self.calls.push(CallSite { vn, cn, d, args: a, argc: argc as u32, take_rv: take_rv as u32 });
+                                self.ops[at] = Op::CallF((self.calls.len() - 1) as u32);
+                            }
+                        }
+                    }
+                }
             }
             NK::Unary(_) => {
                 self.eb(np, depth);
@@ -5419,7 +5490,7 @@ fn code_of(node: &Rc<Node>) -> Rc<Code> {
 /// (kept out of line: the interpreter loop stays small)
 #[inline(never)]
 fn compile(node: &Rc<Node>) -> Rc<Code> {
-    let mut c = Compiler { ops: Vec::new(), fused: Vec::new(), consts: Vec::new(), strs: Vec::new(), loops: Vec::new(), pending_eb: None };
+    let mut c = Compiler { ops: Vec::new(), fused: Vec::new(), calls: Vec::new(), consts: Vec::new(), strs: Vec::new(), loops: Vec::new(), pending_eb: None };
     match &node.kind {
         NK::Function { .. } => {
             let np = Rc::as_ptr(node);
@@ -5445,7 +5516,7 @@ fn compile(node: &Rc<Node>) -> Rc<Code> {
     }
     c.flush_eb();
     // (the code holds the tree only weakly: the tree holds the code)
-    Rc::new(Code { ops: c.ops, fused: c.fused, consts: c.consts, strs: c.strs, root: Rc::downgrade(node) })
+    Rc::new(Code { ops: c.ops, fused: c.fused, consts: c.consts, strs: c.strs, calls: c.calls, root: Rc::downgrade(node) })
 }
 
 enum FrameKind {
@@ -5634,6 +5705,44 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 stm(st).current_executing_node = $n;
             }};
         }
+        // LoadCallee: pushes the function and whether it is static
+        macro_rules! load_callee {
+            ($vn:expr, $cn:expr, $d:expr) => {{
+                let (vn, cn, d) = ($vn, $cn, $d);
+                    eb!(vn, d);
+                    let node = node_ref(vn);
+                    let name = match &node.kind {
+                        NK::Value(name) => name,
+                        _ => unreachable!(),
+                    };
+                    let s = stm(st);
+                    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+                    let e = scope_slot_cached(scope, name_key(name), node.lookup.get());
+                    let is_static = if !e.is_null() {
+                        let e = unsafe { &*e };
+                        match &e.1 {
+                            V::Func(f) => vm.stack.push(V::Func(f.clone())),
+                            _ => {
+                                s.module_state.is_expression_static = e.2;
+                                s.current_executing_node = cn;
+                                return Err(Ctrl::Err("error_not_a_function".into()));
+                            }
+                        }
+                        e.2
+                    } else {
+                        let (v, is_static) = scope_lookup_search(scope, name, Some(&node.lookup))?;
+                        if !matches!(v, V::Func(_)) {
+                            s.module_state.is_expression_static = is_static;
+                            s.current_executing_node = cn;
+                            return Err(Ctrl::Err("error_not_a_function".into()));
+                        }
+                        vm.stack.push(v);
+                        is_static
+                    };
+                    s.module_state.is_expression_static = is_static;
+                    vm.stack.push(V::Bool(is_static));
+            }};
+        }
         loop {
             let op = ops[pc];
             pc += 1;
@@ -5674,39 +5783,63 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vdrop(vm.stack.pop().unwrap());
                 }
                 Op::PushNone => vm.stack.push(V::None),
-                Op::LoadCallee(vn, cn, d) => {
-                    eb!(vn, d);
-                    let node = node_ref(vn);
-                    let name = match &node.kind {
-                        NK::Value(name) => name,
-                        _ => unreachable!(),
-                    };
-                    let s = stm(st);
-                    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
-                    let e = scope_slot_cached(scope, name_key(name), node.lookup.get());
-                    let is_static = if !e.is_null() {
-                        let e = unsafe { &*e };
-                        match &e.1 {
-                            V::Func(f) => vm.stack.push(V::Func(f.clone())),
-                            _ => {
-                                s.module_state.is_expression_static = e.2;
-                                s.current_executing_node = cn;
-                                return Err(Ctrl::Err("error_not_a_function".into()));
+                Op::LoadCallee(vn, cn, d) => load_callee!(vn, cn, d),
+                Op::CallF(k) => {
+                    let cs = &code.calls[k as usize];
+                    let (vn, cn, d) = (cs.vn, cs.cn, cs.d);
+                    // a builtin that CallA calls in place, found where LoadCallee would find it
+                    let fast = if d + depth_off > 1100 {
+                        None
+                    } else {
+                        let node = node_ref(vn);
+                        let name = match &node.kind {
+                            NK::Value(name) => name,
+                            _ => unreachable!(),
+                        };
+                        let s = stm(st);
+                        let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+                        let e = scope_slot_cached(scope, name_key(name), node.lookup.get());
+                        if e.is_null() {
+                            None
+                        } else {
+                            match unsafe { &*e } {
+                                (_, V::Func(f), is_static) if f.syntax_tree.is_none() && f.method_object.is_none() && f.bidx != B_TAP => Some((f.bidx, f.is_free, *is_static)),
+                                _ => None,
                             }
                         }
-                        e.2
-                    } else {
-                        let (v, is_static) = scope_lookup_search(scope, name, Some(&node.lookup))?;
-                        if !matches!(v, V::Func(_)) {
-                            s.module_state.is_expression_static = is_static;
-                            s.current_executing_node = cn;
-                            return Err(Ctrl::Err("error_not_a_function".into()));
-                        }
-                        vm.stack.push(v);
-                        is_static
                     };
-                    s.module_state.is_expression_static = is_static;
-                    vm.stack.push(V::Bool(is_static));
+                    match fast {
+                        None => load_callee!(vn, cn, d),
+                        Some((bidx, is_free, is_static)) => {
+                            let s = stm(st);
+                            s.current_executing_node = vn;
+                            s.module_state.is_expression_static = is_static;
+                            let argc = cs.argc as usize;
+                            let mut args = [V::None, V::None];
+                            for i in 0..argc {
+                                args[i] = operand(st, &code, cs.args[i], depth_off)?.into_v();
+                            }
+                            let s = stm(st);
+                            s.current_executing_node = cn;
+                            s.module_state.return_value = V::None;
+                            let r = call_builtin(bidx, &args[..argc], st);
+                            let [a0, a1] = args;
+                            vdrop(a0);
+                            vdrop(a1);
+                            let mut num = r?;
+                            if is_free && !is_static {
+                                num = num.max(OPERATION_OPS);
+                            }
+                            pc = cs.take_rv as usize;
+                            if charge(st, num) {
+                                stop!(pc);
+                            }
+                            // TakeRv
+                            let v = std::mem::replace(&mut stm(st).module_state.return_value, V::None);
+                            pc += 1;
+                            push_or_store!(v);
+                        }
+                    }
                 }
                 Op::StoreF(k) => {
                     let v = operand(st, &code, code.fused[k as usize].0, depth_off)?.into_v();
@@ -7003,6 +7136,11 @@ fn compare_two(ops_t: &[Rc<str>], cops: &[COp], a: &V, b: &V) -> R<(bool, i32)> 
             return Ok((f, 1));
         }
     }
+    if cops.len() == 1 {
+        let mut steps = 0;
+        let f = compare_one(ops_t[0].as_ref(), cops[0], a, b, &mut steps)?;
+        return Ok((f, steps));
+    }
     compare_values(ops_t, cops, &[a.clone(), b.clone()])
 }
 
@@ -7166,10 +7304,19 @@ fn compare_values(ops: &[Rc<str>], cops: &[COp], operands: &[V]) -> R<(bool, i32
     let mut steps: i32 = 0;
     let mut flag = true;
     for i in 0..ops.len() {
-        let text: &str = ops[i].as_ref();
-        let cop = cops[i];
-        let a = &operands[i];
-        let b = &operands[i + 1];
+        let flag2 = compare_one(ops[i].as_ref(), cops[i], &operands[i], &operands[i + 1], &mut steps)?;
+        flag = flag && flag2;
+        if !flag {
+            break;
+        }
+    }
+    Ok((flag, steps))
+}
+
+/// one link of compare_values: `a text b`
+#[inline(never)]
+fn compare_one(text: &str, cop: COp, a: &V, b: &V, steps: &mut i32) -> R<bool> {
+    {
         let f = match (a, b) {
             (V::Func(f), _) => Some(f.clone()),
             (_, V::Func(f)) => Some(f.clone()),
@@ -7183,32 +7330,28 @@ fn compare_values(ops: &[Rc<str>], cops: &[COp], operands: &[V]) -> R<(bool, i32
             return Err(err("error_bad_unary_operator", &[text.to_string(), nice_el(b)]));
         }
         let flag2 = match cop {
-            COp::Eq => py_equals(a, b, &mut steps)?,
-            COp::Ne => !py_equals(a, b, &mut steps)?,
-            COp::Ge => deep_compare(a, b, text, &mut steps)? >= 0,
-            COp::Le => deep_compare(a, b, text, &mut steps)? <= 0,
-            COp::Gt => deep_compare(a, b, text, &mut steps)? > 0,
-            COp::Lt => deep_compare(a, b, text, &mut steps)? < 0,
+            COp::Eq => py_equals(a, b, steps)?,
+            COp::Ne => !py_equals(a, b, steps)?,
+            COp::Ge => deep_compare(a, b, text, steps)? >= 0,
+            COp::Le => deep_compare(a, b, text, steps)? <= 0,
+            COp::Gt => deep_compare(a, b, text, steps)? > 0,
+            COp::Lt => deep_compare(a, b, text, steps)? < 0,
             COp::In | COp::NotIn => {
                 let found = match b {
                     V::Dict(d) | V::Set(d) => {
                         let key = to_key(a)?;
                         let r = d.borrow().contains(&key);
-                        steps += py_size(a);
+                        *steps += py_size(a);
                         r
                     }
-                    _ => seq_contains(b, a, &mut steps)?,
+                    _ => seq_contains(b, a, steps)?,
                 };
                 if cop == COp::In { found } else { !found }
             }
             _ => true,
         };
-        flag = flag && flag2;
-        if !flag {
-            break;
-        }
+        Ok(flag2)
     }
-    Ok((flag, steps))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -7894,37 +8037,6 @@ struct Drone {
     hat: Hat,
 }
 
-/// bit i set where flags[i] & mask == want (at most 64 slots)
-#[inline(always)]
-fn flag_mask(flags: &[u8], mask: u8, want: u8) -> u64 {
-    #[cfg(target_arch = "x86_64")]
-    unsafe {
-        use std::arch::x86_64::*;
-        let (vm, vw) = (_mm_set1_epi8(mask as i8), _mm_set1_epi8(want as i8));
-        let mut out = 0u64;
-        let mut i = 0;
-        while i + 16 <= flags.len() {
-            let v = _mm_loadu_si128(flags.as_ptr().add(i) as *const __m128i);
-            let eq = _mm_cmpeq_epi8(_mm_and_si128(v, vm), vw);
-            out |= (_mm_movemask_epi8(eq) as u16 as u64) << i;
-            i += 16;
-        }
-        while i < flags.len() {
-            out |= ((flags[i] & mask == want) as u64) << i;
-            i += 1;
-        }
-        out
-    }
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        let mut out = 0u64;
-        for (i, f) in flags.iter().enumerate() {
-            out |= ((f & mask == want) as u64) << i;
-        }
-        out
-    }
-}
-
 /// bit i set where !(ops[i] > x) (at most 64 slots)
 #[inline(always)]
 fn not_above(ops: &[f64], x: f64) -> u64 {
@@ -8059,6 +8171,7 @@ struct Execution {
     ops: Vec<f64>,
     lasts: Vec<f64>,
     flags: Vec<u8>,
+    fbits: Box<FBits>,
     main_state: Option<StRef>,
     global_op_count: f64,
     next_execution_time: i64,
@@ -10219,13 +10332,15 @@ impl Sim {
         ex.hot[drone_id] = Hot { target_op_count: 0.0, awaited_drone_id: -1, resumes: 0 };
         ex.ops[drone_id] = op_count;
         ex.lasts[drone_id] = op_count;
-        ex.flags[drone_id] = F_PRESENT;
+        let fbitp: *mut FBits = &mut *ex.fbits;
+        write_flags(&mut ex.flags[drone_id], fbitp, drone_id, F_PRESENT);
         {
             let mut b = st.borrow_mut();
             b.hot = &mut ex.hot[drone_id] as *mut Hot;
             b.opp = &mut ex.ops[drone_id] as *mut f64;
             b.lastp = &mut ex.lasts[drone_id] as *mut f64;
             b.flagp = &mut ex.flags[drone_id] as *mut u8;
+            b.fbitp = fbitp;
         }
         if drone_id >= ex.states.len() {
             ex.states.push(Some(st.clone()));
@@ -10243,6 +10358,7 @@ impl Sim {
             ops: vec![0.0; MAX_DRONE_SLOTS],
             lasts: vec![0.0; MAX_DRONE_SLOTS],
             flags: vec![0; MAX_DRONE_SLOTS],
+            fbits: Box::new([0; 4]),
             main_state: None,
             global_op_count: 0.0,
             next_execution_time: self.current_time,
@@ -10258,7 +10374,8 @@ impl Sim {
         let ex = self.execution.as_ref().unwrap();
         let n = ex.states.len();
         if n <= 64 {
-            let running = flag_mask(&ex.flags[..n], F_PRESENT | F_AWAIT, F_PRESENT);
+            let b = &*ex.fbits;
+            let running = b[0] & !b[1];
             return if running != 0 { masked_min(&ex.ops[..n], running) } else { default };
         }
         let (ops, flags) = (&ex.ops[..n], &ex.flags[..n]);
@@ -10378,9 +10495,10 @@ impl Sim {
         // running one just bounds the limit. Up to 64 drones, those are a mask and a minimum.
         let mut special = u64::MAX;
         if n <= 64 {
-            let flags = &ex.flags[..n];
-            let running = flag_mask(flags, F_PRESENT | F_AWAIT, F_PRESENT);
-            let waits = flag_mask(flags, F_SE, SE_GET_TIME << 2) | flag_mask(flags, F_SE, SE_NUM_ITEMS << 2);
+            // (kinds 1 and 2: exactly one of the two bits)
+            let b = &*ex.fbits;
+            let running = b[0] & !b[1];
+            let waits = b[2] ^ b[3];
             special = running & waits;
             limit = limit.min(masked_min(&ex.ops[..n], running & !waits));
         }
@@ -10500,7 +10618,8 @@ impl Sim {
                 let n = ex.states.len();
                 if n <= 64 {
                     // present, not waiting for a drone, no side effect pending, op count <= num
-                    let mut mask = flag_mask(&ex.flags[..n], F_PRESENT | F_AWAIT | F_SE, F_PRESENT) & not_above(&ex.ops[..n], num);
+                    let b = &*ex.fbits;
+                    let mut mask = (b[0] & !b[1] & !(b[2] | b[3])) & not_above(&ex.ops[..n], num);
                     while mask != 0 {
                         let i = mask.trailing_zeros() as usize;
                         mask &= mask - 1;
@@ -10553,8 +10672,8 @@ impl Sim {
                     if n <= 64 {
                         let g = ex.global_op_count;
                         // present, not waiting for a drone, a side effect pending, op count <= g
-                        let flags = &ex.flags[..n];
-                        let ready = flag_mask(flags, F_PRESENT | F_AWAIT, F_PRESENT) & !flag_mask(flags, F_SE, 0);
+                        let b = &*ex.fbits;
+                        let ready = b[0] & !b[1] & (b[2] | b[3]);
                         due_mask = ready & not_above(&ex.ops[..n], g);
                         true
                     } else {
@@ -11013,7 +11132,8 @@ impl Sim {
                         ex.main_state = None;
                     }
                     ex.states[drone_id] = None;
-                    ex.flags[drone_id] = 0;
+                    let fbitp: *mut FBits = &mut *ex.fbits;
+                    write_flags(&mut ex.flags[drone_id], fbitp, drone_id, 0);
                     ex.lasts[drone_id] = ex.ops[drone_id];
                     ex.states.iter().all(|s| s.is_none())
                 };
