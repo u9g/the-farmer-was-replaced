@@ -116,6 +116,10 @@ fn intern(s: &str) -> Rc<str> {
 fn name_key(name: &str) -> usize {
     name.as_ptr() as usize
 }
+#[inline]
+fn bloom_bit(key: usize) -> u64 {
+    1u64 << (((key >> 4) ^ (key >> 10)) & 63)
+}
 
 /// Every drone's program runs on a stack of its own, so the interpreter can be plain recursion
 /// that steps out to the scheduler wherever the game's iterators would yield, without a heap
@@ -1601,23 +1605,30 @@ static UNLOCKS: &[UnlockSO] = &[
 struct Vars {
     /// keyed by the interned name's address (see intern)
     map: FxMap<usize, usize>,
+    /// one bit per name held (bloom_bit): a clear bit means the name is certainly not here
+    bloom: u64,
     items: Vec<(Rc<str>, V, bool)>,
 }
 
 impl Vars {
     fn new() -> Vars {
-        Vars { map: FxMap::default(), items: Vec::new() }
+        Vars { map: FxMap::default(), bloom: 0, items: Vec::new() }
     }
     fn len(&self) -> usize {
         self.items.len()
     }
     #[inline]
     fn get(&self, name: &str) -> Option<&(Rc<str>, V, bool)> {
-        self.map.get(&name_key(name)).map(|i| &self.items[*i])
+        let key = name_key(name);
+        if self.bloom & bloom_bit(key) == 0 {
+            return None;
+        }
+        self.map.get(&key).map(|i| &self.items[*i])
     }
     #[inline]
     fn contains(&self, name: &str) -> bool {
-        self.map.contains_key(&name_key(name))
+        let key = name_key(name);
+        self.bloom & bloom_bit(key) != 0 && self.map.contains_key(&key)
     }
     fn set(&mut self, name: &str, v: V, is_static: bool) {
         match self.map.get(&name_key(name)) {
@@ -1628,6 +1639,7 @@ impl Vars {
             }
             None => {
                 let k = intern(name);
+                self.bloom |= bloom_bit(name_key(&k));
                 self.map.insert(name_key(&k), self.items.len());
                 self.items.push((k, v, is_static));
             }
@@ -1679,6 +1691,75 @@ fn scope_import_var(scope: &ScopeRef, name: &str, value: V, mut is_static: bool)
 
 /// Scope.Evaluate
 fn scope_evaluate(scope: &ScopeRef, name: &str) -> R<(V, bool)> {
+    scope_lookup(scope, name, None)
+}
+
+/// Scope.Evaluate, remembering in `cache` which scope up the chain held the name and at which
+/// slot. Drones running the same function have scopes with the same names in the same order, so
+/// the next lookup usually goes straight there: the scopes it passes must not hold the name (their
+/// filter bit is clear) and the slot must hold this very name, or it falls back to the full search.
+/// Either way the answer is the first scope up the chain that holds the name.
+#[inline]
+fn scope_lookup(scope: &ScopeRef, name: &str, cache: Option<&Cell<u64>>) -> R<(V, bool)> {
+    let key = name_key(name);
+    let bit = bloom_bit(key);
+    if let Some(c) = cache {
+        let c = c.get();
+        if c != 0 {
+            let hops = (c & 0xff) - 1;
+            let idx = (c >> 8) as usize;
+            let mut s: &Scope = unsafe { &*scope.as_ptr() };
+            let mut ok = true;
+            for _ in 0..hops {
+                if s.vars.bloom & bit != 0 {
+                    ok = false;
+                    break;
+                }
+                match &s.parent_scope {
+                    Some(p) => s = unsafe { &*p.as_ptr() },
+                    None => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if ok {
+                if let Some(e) = s.vars.items.get(idx) {
+                    if name_key(&e.0) == key {
+                        if matches!(e.1, V::Unassigned) {
+                            return Err(err("error_use_before_assign", &[name.to_string()]));
+                        }
+                        return Ok((e.1.clone(), e.2));
+                    }
+                }
+            }
+        }
+    }
+    let mut hops = 0u64;
+    let mut s: &Scope = unsafe { &*scope.as_ptr() };
+    loop {
+        if s.vars.bloom & bit != 0 {
+            if let Some(&i) = s.vars.map.get(&key) {
+                if let Some(c) = cache {
+                    c.set(((i as u64) << 8) | (hops + 1));
+                }
+                let e = &s.vars.items[i];
+                if matches!(e.1, V::Unassigned) {
+                    return Err(err("error_use_before_assign", &[name.to_string()]));
+                }
+                return Ok((e.1.clone(), e.2));
+            }
+        }
+        match &s.parent_scope {
+            Some(p) => s = unsafe { &*p.as_ptr() },
+            None => return Err(err("error_name_not_defined", &[name.to_string()])),
+        }
+        hops += 1;
+    }
+}
+
+#[allow(dead_code)]
+fn scope_evaluate_uncached(scope: &ScopeRef, name: &str) -> R<(V, bool)> {
     // Nothing else holds a scope mutably while a name is looked up.
     let mut s: &Scope = unsafe { &*scope.as_ptr() };
     loop {
@@ -2065,6 +2146,9 @@ struct Node {
     word_start: usize,
     word_end: usize,
     file: Rc<FileInfo>,
+    /// for a Value node: where its name was found last time, as (slot index << 8) | (scopes up + 1),
+    /// 0 for not yet; see scope_lookup
+    lookup: Cell<u64>,
 }
 
 struct FileInfo {
@@ -2103,6 +2187,7 @@ impl PN {
             word_start: self.start,
             word_end: self.end,
             file: file.clone(),
+            lookup: Cell::new(0),
         })
     }
 }
@@ -2895,7 +2980,22 @@ impl Parser {
 }
 
 /// CodeWindow.Parse
+thread_local! {
+    static PARSED: RefCell<HashMap<(String, String), Rc<Node>>> = RefCell::new(HashMap::new());
+}
+/// parse_source, once per (module name, source text) on each thread: runs never change a tree
+/// (only the lookup caches in it, which hold for any run).
 fn parse_source(name: &str, code: &str) -> R<Rc<Node>> {
+    let k = (name.to_string(), code.to_string());
+    if let Some(t) = PARSED.with(|p| p.borrow().get(&k).cloned()) {
+        return Ok(t);
+    }
+    let t = parse_source_uncached(name, code)?;
+    PARSED.with(|p| p.borrow_mut().insert(k, t.clone()));
+    Ok(t)
+}
+
+fn parse_source_uncached(name: &str, code: &str) -> R<Rc<Node>> {
     let text = code.replace('\u{0B}', "\n");
     let mut line_starts = vec![0usize];
     for (i, c) in text.chars().enumerate() {
@@ -3389,7 +3489,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Ev {
                     eb(&st, &node, depth)?;
                     let s = stm(st);
                     let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
-                    let (v, is_static) = scope_evaluate(scope, name)?;
+                    let (v, is_static) = scope_lookup(scope, name, Some(&node.lookup))?;
                     s.module_state.is_expression_static = is_static;
                     Ok(v)
                 }
