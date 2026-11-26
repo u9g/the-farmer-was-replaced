@@ -99,18 +99,22 @@ def my_cols(i, d):
 
 # ---- mixed farm (hay, wood, carrots) -----------------------------------------------------------
 
-NEED = {}
-PEND = {Items.Hay: 0, Items.Wood: 0, Items.Carrot: 0}
+NEED = ({}, {})
+POLY = False
+PEND = {Items.Hay: 0, Items.Wood: 0, Items.Carrot: 0, Items.Weird_Substance: 0}
 SUN = {}
 
 
 def yield_of(e):
+	f = 1
+	if POLY:
+		f = 5 * 2 ** num_unlocked(Unlocks.Polyculture) * 0.6
 	if e == Entities.Tree:
-		return 5 * lvl_mult(Unlocks.Trees)
+		return 5 * lvl_mult(Unlocks.Trees) * f
 	if e == Entities.Bush:
-		return lvl_mult(Unlocks.Trees)
+		return lvl_mult(Unlocks.Trees) * f
 	if e == Entities.Carrot:
-		return lvl_mult(Unlocks.Carrots)
+		return lvl_mult(Unlocks.Carrots) * f
 	return 0
 
 
@@ -123,16 +127,23 @@ def item_of(e):
 
 
 def short(item):
-	if item not in NEED:
-		return 0
-	return (NEED[item] - num_items(item) - PEND[item]) / NEED[item]
+	# NEED = (current unlock's cost, the next few unlocks' cost); the current one comes first
+	r = 0
+	have = num_items(item) + PEND[item]
+	cur = NEED[0]
+	if item in cur and cur[item] > have:
+		r = 10 + (cur[item] - have) / cur[item]
+	look = NEED[1]
+	if item in look and look[item] > have:
+		r += (look[item] - have) / look[item]
+	return r
 
 
 def choose(even):
 	best = Entities.Grass
 	bs = short(Items.Hay)
 	if num_unlocked(Unlocks.Plant) > 0:
-		s = short(Items.Wood)
+		s = max(short(Items.Wood), short(Items.Weird_Substance))
 		if s > bs:
 			if num_unlocked(Unlocks.Trees) == 0:
 				bs = s
@@ -178,29 +189,85 @@ def sun_cell():
 		SUN.pop(pos)
 
 
-def mixed_cell(strip):
+def mixed_cell(strip, weird):
 	if strip and get_pos_x() < 2:
 		sun_cell()
 		return
+	tend_mixed()
+	# plus shapes centred where (x + 2y) % 5 == 0 tile the field: the west and south arms were
+	# just replanted, the north and east arms are cut later in this same pass
+	if weird and (get_pos_x() + 2 * get_pos_y()) % 5 == 0:
+		if num_items(Items.Weird_Substance) >= 1:
+			use_item(Items.Weird_Substance)
+		elif num_items(Items.Fertilizer) >= 1:
+			use_item(Items.Fertilizer)
+
+
+WANT = {}
+REQ = {}
+COLS = [0, 0]
+
+
+def tend_mixed():
 	e = get_entity_type()
+	pos = (get_pos_x(), get_pos_y())
 	if e != None and e != Entities.Grass and not can_harvest():
-		return
+		# a growing plant stays, unless a neighbour needs another type here as its companion
+		if pos not in WANT or WANT[pos][0] == e:
+			return
 	if e != None:
 		harvest()
-	c = choose((get_pos_x() + get_pos_y()) % 2 == 0)
+	if pos in REQ:
+		# this plant's companion claim ends with its harvest
+		c = REQ.pop(pos)
+		if c in WANT and WANT[c][1] == pos:
+			WANT.pop(c)
+	if pos in WANT:
+		c = WANT[pos][0]
+	else:
+		c = choose((pos[0] + pos[1]) % 2 == 0)
 	if c == Entities.Grass:
 		if get_ground_type() == Grounds.Soil:
 			plant(Entities.Grass)
-		return
-	if c == Entities.Carrot:
-		soil()
-	if plant(c):
+	else:
+		if c == Entities.Carrot:
+			soil()
+		if not plant(c):
+			return
 		PEND[item_of(c)] += yield_of(c)
+	if POLY:
+		# claim the companion's cell; if it is taken by another type, replant for a new companion
+		for _ in range(3):
+			comp = get_companion()
+			if comp == None:
+				return
+			cp = comp[1]
+			if cp[0] >= COLS[0] and cp[0] < COLS[1] and cp != pos:
+				if cp not in WANT:
+					WANT[cp] = (comp[0], pos)
+					REQ[pos] = cp
+					return
+				if WANT[cp][0] == comp[0]:
+					REQ[pos] = cp
+					return
+			harvest()
+			if c != Entities.Grass or get_ground_type() == Grounds.Soil:
+				if not plant(c):
+					return
 
 
-def mixed_job(i, d, need, strip):
+def mixed_job(i, d, need, flags):
 	global NEED
+	global POLY
 	NEED = need
+	POLY = num_unlocked(Unlocks.Polyculture) > 0
+	cols = my_cols(i, d)
+	COLS[0] = cols[0]
+	COLS[1] = cols[0] + len(cols)
+	if flags[0]:
+		COLS[0] = 2
+	strip = flags[0]
+	weird = flags[1]
 	for k in PEND:
 		PEND[k] = 0
 	n = get_world_size()
@@ -211,14 +278,15 @@ def mixed_job(i, d, need, strip):
 	for x in my_cols(i, d):
 		go(x, 0)
 		for y in range(n):
-			mixed_cell(strip)
+			mixed_cell(strip, weird)
 			move(North)
 	return 0
 
 
 def mixed_round(need):
 	strip = drones() == 1 and num_unlocked(Unlocks.Sunflowers) > 0 and get_world_size() >= 6
-	all_drones(mixed_job, need, strip)
+	weird = Items.Weird_Substance in need[0] and num_unlocked(Unlocks.Fertilizer) > 0
+	all_drones(mixed_job, need, (strip, weird))
 
 
 # ---- power -------------------------------------------------------------------------------------
@@ -270,25 +338,34 @@ def power_check():
 
 def pumpkin_job(i, d, a, b):
 	n = get_world_size()
-	while True:
-		ok = True
-		for x in my_cols(i, d):
-			go(x, 0)
-			for y in range(n):
-				e = get_entity_type()
-				if e == Entities.Pumpkin:
-					if not can_harvest():
-						ok = False
-				else:
-					clear_cell()
-					soil()
-					plant(Entities.Pumpkin)
-					ok = False
-				move(North)
-		if ok:
-			return 0
-		if num_items(Items.Carrot) < 4:
-			return 0
+	todo = []
+	for x in my_cols(i, d):
+		go(x, 0)
+		for y in range(n):
+			e = get_entity_type()
+			if e != Entities.Pumpkin:
+				clear_cell()
+				soil()
+				plant(Entities.Pumpkin)
+				todo.append((x, y))
+			elif not can_harvest():
+				todo.append((x, y))
+			move(North)
+	# revisit only the cells not yet grown; a pumpkin that died is replanted and revisited
+	while len(todo) > 0:
+		nt = []
+		for c in todo:
+			go(c[0], c[1])
+			while get_entity_type() == Entities.Pumpkin and not can_harvest():
+				pass
+			if get_entity_type() != Entities.Pumpkin:
+				if num_items(Items.Carrot) < 1:
+					return 0
+				clear_cell()
+				plant(Entities.Pumpkin)
+				nt.append(c)
+		todo = nt
+	return 0
 
 
 def pumpkin_round():
@@ -463,7 +540,7 @@ def maze_path(opens, s, sx, sy, tx, ty):
 	return path
 
 
-def maze_job(i, d, s, goal, start):
+def maze_job(i, d, s, goal, start, stop):
 	k = get_world_size() // s
 	rx = (i % k) * s
 	ry = (i // k) * s
@@ -475,7 +552,7 @@ def maze_job(i, d, s, goal, start):
 	# no maze may exist while other drones still walk to their regions
 	while get_time() < start:
 		pass
-	while num_items(Items.Gold) < goal and num_items(Items.Weird_Substance) >= cost:
+	while num_items(Items.Gold) < goal and num_items(Items.Weird_Substance) >= cost and get_time() < stop:
 		if get_entity_type() != Entities.Bush:
 			clear_cell()
 			plant(Entities.Bush)
@@ -486,7 +563,7 @@ def maze_job(i, d, s, goal, start):
 			path = maze_path(opens, s, get_pos_x() - rx, get_pos_y() - ry, t[0] - rx, t[1] - ry)
 			for kk in path:
 				move(DIRS[kk])
-			if num_items(Items.Gold) >= goal or num_items(Items.Weird_Substance) < cost:
+			if num_items(Items.Gold) >= goal or num_items(Items.Weird_Substance) < cost or get_time() > stop:
 				harvest()
 				break
 			if not use_item(Items.Weird_Substance, cost):
@@ -498,23 +575,36 @@ def maze_job(i, d, s, goal, start):
 	return 0
 
 
-def maze_round(goal):
+def maze_layout():
+	# k x k regions of size s, one drone each
 	n = get_world_size()
 	d = drones()
 	k = 1
-	while k * k < d or n % k != 0 or (n // k) % 2 != 0:
+	while k * k < d or n % k != 0:
 		k += 1
-	s = n // k
-	d = min(d, k * k)
+	while n // k < 3:
+		k -= 1
+		while n % k != 0:
+			k -= 1
+	return (k, n // k, min(d, k * k))
+
+
+def maze_round(goal):
+	n = get_world_size()
+	lay = maze_layout()
+	k = lay[0]
+	s = lay[1]
+	d = lay[2]
 	clear()
 	act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
 	start = get_time() + act * (d + n + 8)
+	stop = start + 40
 	hs = []
 	for i in range(1, d):
-		h = spawn_drone(maze_job, i, d, s, goal, start)
+		h = spawn_drone(maze_job, i, d, s, goal, start, stop)
 		if h != None:
 			hs.append(h)
-	maze_job(0, d, s, goal, start)
+	maze_job(0, d, s, goal, start, stop)
 	for h in hs:
 		wait_for(h)
 	clear()
@@ -854,24 +944,35 @@ def dino_round():
 def carrots_for(n):
 	# make sure n carrots are on hand (seeds for pumpkins / sunflowers)
 	while num_items(Items.Carrot) < n:
-		mixed_round({Items.Carrot: n * 2, Items.Wood: n * 2, Items.Hay: n * 2})
+		c = {Items.Carrot: n * 2, Items.Wood: n * 2, Items.Hay: n * 2}
+		mixed_round((c, c))
 
 
 def farm(item, amount):
 	power_check()
 	cells = width() * get_world_size()
 	if item == Items.Hay or item == Items.Wood or item == Items.Carrot:
-		mixed_round(with_seeds({item: amount}))
+		n = with_seeds({item: amount})
+		mixed_round((n, n))
 	elif item == Items.Pumpkin:
 		carrots_for(cells * 2 * lvl_mult(Unlocks.Pumpkins))
 		pumpkin_round()
+	elif item == Items.Weird_Substance and num_unlocked(Unlocks.Cactus) == 0:
+		n = with_seeds({Items.Weird_Substance: amount, Items.Wood: amount, Items.Hay: amount})
+		mixed_round((n, n))
 	elif item == Items.Cactus or item == Items.Weird_Substance:
 		pc = 2 * lvl_mult(Unlocks.Cactus)
 		while num_items(Items.Pumpkin) < cells * pc:
 			farm(Items.Pumpkin, cells * pc)
 		cactus_round(item == Items.Weird_Substance)
 	elif item == Items.Gold:
-		s_need = get_world_size() * lvl_mult(Unlocks.Mazes) * 40
+		lay = maze_layout()
+		s = lay[1]
+		cost = s * lvl_mult(Unlocks.Mazes)
+		finds = (amount - num_items(Items.Gold)) // (s * s * lvl_mult(Unlocks.Mazes)) + 1 + lay[2]
+		s_need = finds * cost
+		if num_unlocked(Unlocks.Cactus) > 0:
+			s_need = min(s_need, cost * 4 * lay[2] * 30)
 		if num_items(Items.Weird_Substance) < s_need:
 			farm(Items.Weird_Substance, s_need)
 		else:
@@ -884,19 +985,25 @@ def farm(item, amount):
 			dino_round()
 	else:
 		log("no farm for " + str(item))
-		mixed_round({Items.Hay: 100})
+		mixed_round(({Items.Hay: 100}, {}))
+
+
+def add_cost(need, u):
+	cost = get_cost(u)
+	for it in cost:
+		if it in need:
+			need[it] += cost[it]
+		else:
+			need[it] = cost[it]
 
 
 def set_need(plan, i):
-	need = {}
+	cur = {}
+	add_cost(cur, plan[i][0])
+	look = {}
 	for j in range(i, min(i + 3, len(plan))):
-		cost = get_cost(plan[j][0])
-		for it in cost:
-			if it in need:
-				need[it] += cost[it]
-			else:
-				need[it] = cost[it]
-	return with_seeds(need)
+		add_cost(look, plan[j][0])
+	return (with_seeds(cur), with_seeds(look))
 
 
 def with_seeds(need):
@@ -920,6 +1027,9 @@ def run_plan(plan):
 			if item == Items.Hay or item == Items.Wood or item == Items.Carrot:
 				power_check()
 				mixed_round(set_need(plan, i))
+			elif item == Items.Weird_Substance and num_unlocked(Unlocks.Cactus) == 0:
+				power_check()
+				mixed_round(set_need(plan, i))
 			else:
 				farm(item, get_cost(u)[item])
 
@@ -931,42 +1041,44 @@ PLAN = [
 	(Unlocks.Expand, 2),
 	(Unlocks.Speed, 2),
 	(Unlocks.Carrots, 1),
+	(Unlocks.Speed, 3),
 	(Unlocks.Expand, 3),
 	(Unlocks.Trees, 1),
-	(Unlocks.Grass, 2),
-	(Unlocks.Trees, 2),
-	(Unlocks.Grass, 3),
-	(Unlocks.Speed, 3),
 	(Unlocks.Expand, 4),
 	(Unlocks.Carrots, 2),
-	(Unlocks.Grass, 4),
-	(Unlocks.Trees, 3),
 	(Unlocks.Carrots, 3),
+	(Unlocks.Grass, 2),
+	(Unlocks.Grass, 3),
 	(Unlocks.Sunflowers, 1),
+	(Unlocks.Pumpkins, 1),
+	(Unlocks.Polyculture, 1),
 	(Unlocks.Speed, 4),
 	(Unlocks.Speed, 5),
-	(Unlocks.Pumpkins, 1),
+	(Unlocks.Grass, 4),
+	(Unlocks.Trees, 2),
+	(Unlocks.Trees, 3),
+	(Unlocks.Carrots, 4),
+	(Unlocks.Pumpkins, 2),
+	(Unlocks.Pumpkins, 3),
 	(Unlocks.Fertilizer, 1),
 	(Unlocks.Expand, 5),
-	(Unlocks.Pumpkins, 2),
+	(Unlocks.Pumpkins, 4),
 	(Unlocks.Cactus, 1),
 	(Unlocks.Mazes, 1),
 	(Unlocks.Megafarm, 1),
+	(Unlocks.Mazes, 2),
 	(Unlocks.Megafarm, 2),
 	(Unlocks.Expand, 6),
-	(Unlocks.Carrots, 4),
-	(Unlocks.Pumpkins, 3),
+	(Unlocks.Mazes, 3),
 	(Unlocks.Megafarm, 3),
 	(Unlocks.Cactus, 2),
 	(Unlocks.Expand, 7),
-	(Unlocks.Mazes, 2),
 	(Unlocks.Megafarm, 4),
 	(Unlocks.Dinosaurs, 1),
-	(Unlocks.Mazes, 3),
-	(Unlocks.Cactus, 3),
 	(Unlocks.Dinosaurs, 2),
 	(Unlocks.Dinosaurs, 3),
 	(Unlocks.Dinosaurs, 4),
+	(Unlocks.Mazes, 4),
 	(Unlocks.Leaderboard, 1),
 ]
 
