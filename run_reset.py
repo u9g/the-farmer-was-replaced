@@ -1,14 +1,15 @@
 # Fastest reset: from a 1x1 farm to unlocking the leaderboard again (1M gold, 2M bone).
 # Run with run_reset_lb.py (leaderboard_run(Leaderboards.Fastest_Reset, "run_reset", 256)).
 #
+# Opening: tight loops for the first unlocks (grass on 1x1, a 1x3 strip, then bushes for wood).
 # Early game: one drone on a mixed farm. Every cell grows whatever the next few unlocks are
 # shortest of (hay, wood, carrots). Megafarm 1 comes before polyculture: weird substance from a
 # checkerboard of weird trees, then gold from one maze. Once polyculture is bought, crops grow on
 # one checkerboard colour and the other colour holds the companion each crop asks for.
 # After that the script works through PLAN: for each unlock it cannot afford yet it runs a round
 # for the first item it lacks, using every drone (pumpkin field watered for faster growth, sorted
-# cactus field, one maze shared by all drones, the dinosaur snake), with a sunflower round
-# whenever power runs low.
+# cactus field, one maze shared by all drones and mapped by drones splitting at its forks, the
+# dinosaur snake), with a sunflower round whenever power runs low.
 
 T0 = get_time()
 
@@ -652,6 +653,8 @@ def pumpkin_job(i, d, a, b):
 					return 0
 				clear_cell()
 				plant(Entities.Pumpkin)
+				if num_items(Items.Fertilizer) >= 1:
+					use_item(Items.Fertilizer)
 				nt.append(c)
 		todo = nt
 	return 0
@@ -771,6 +774,7 @@ HOMES = []
 CPATH = []
 DEPTH = []
 MZ_STAY = True
+MZ_PAR = True
 
 
 def mz_map():
@@ -820,6 +824,90 @@ def mz_map():
 		nxt.pop()
 		move(DIRS[BACK[k]])
 		c = c - DX[k] - DY[k] * s
+
+
+def mz_branch(k0):
+	# walk into direction k0 from here, map that whole branch of the maze tree depth first and
+	# come back; at a fork, a free drone takes one of the branches. Returns [cell, opens] pairs.
+	s = MZ_S
+	out = []
+	hs = []
+	move(DIRS[k0])
+	stack = [k0]
+	c = (get_pos_x() - MZ_RX) + (get_pos_y() - MZ_RY) * s
+	o = []
+	for k in range(4):
+		if can_move(DIRS[k]):
+			o.append(k)
+	out.append([c, o])
+	kids = [[]]
+	for k in o:
+		if k != BACK[k0]:
+			kids[0].append(k)
+	while True:
+		ks = kids[-1]
+		if len(ks) > 0:
+			k = ks.pop()
+			if len(ks) > 0 and num_drones() < max_drones():
+				h = spawn_drone(mz_branch, k)
+				if h != None:
+					hs.append(h)
+					continue
+			move(DIRS[k])
+			stack.append(k)
+			c = c + DX[k] + DY[k] * s
+			o = []
+			for k2 in range(4):
+				if can_move(DIRS[k2]):
+					o.append(k2)
+			out.append([c, o])
+			nk = []
+			for k2 in o:
+				if k2 != BACK[k]:
+					nk.append(k2)
+			kids.append(nk)
+		else:
+			kids.pop()
+			k = stack.pop()
+			move(DIRS[BACK[k]])
+			c = c - DX[k] - DY[k] * s
+			if len(stack) == 0:
+				break
+	for h in hs:
+		for e in wait_for(h):
+			out.append(e)
+	return out
+
+
+def mz_map_par():
+	global OPENS
+	s = MZ_S
+	opens = []
+	for c in range(s * s):
+		opens.append(None)
+	c = (get_pos_x() - MZ_RX) + (get_pos_y() - MZ_RY) * s
+	o = []
+	for k in range(4):
+		if can_move(DIRS[k]):
+			o.append(k)
+	opens[c] = o
+	hs = []
+	mine = []
+	for i in range(len(o)):
+		if i < len(o) - 1 and num_drones() < max_drones():
+			h = spawn_drone(mz_branch, o[i])
+			if h != None:
+				hs.append(h)
+				continue
+		mine.append(o[i])
+	for k in mine:
+		for e in mz_branch(k):
+			opens[e[0]] = e[1]
+	for h in hs:
+		for e in wait_for(h):
+			opens[e[0]] = e[1]
+	OPENS = opens
+
 
 
 def mz_split(h, start):
@@ -976,7 +1064,10 @@ def mz_lead(rx, ry, s, h, goal, start, stop):
 	while get_time() < start:
 		pass
 	use_item(Items.Weird_Substance, cost)
-	mz_map()
+	if MZ_PAR:
+		mz_map_par()
+	else:
+		mz_map()
 	start = (get_pos_x() - rx) + (get_pos_y() - ry) * s
 	mz_split(h, start)
 	hs = []
@@ -1418,6 +1509,48 @@ def with_seeds(need):
 	return need
 
 
+def opening():
+	# the first unlocks with tight loops: grass on 1x1, then a 1x3 strip, then bushes for wood
+	while not (num_unlocked(Unlocks.Speed) >= 1 and num_unlocked(Unlocks.Expand) >= 1):
+		if can_harvest():
+			harvest()
+		if num_unlocked(Unlocks.Speed) == 0:
+			buy(Unlocks.Speed)
+		elif num_unlocked(Unlocks.Expand) == 0:
+			buy(Unlocks.Expand)
+	while num_unlocked(Unlocks.Plant) == 0:
+		if can_harvest():
+			harvest()
+		move(North)
+		buy(Unlocks.Plant)
+	for u in OPENING_WOOD:
+		while num_unlocked(u[0]) < u[1]:
+			n = get_world_size()
+			w = width()
+			for x in range(w):
+				for y in range(n):
+					e = get_entity_type()
+					if e == Entities.Bush:
+						if can_harvest():
+							harvest()
+							plant(Entities.Bush)
+					else:
+						if e != None:
+							harvest()
+						plant(Entities.Bush)
+					if y < n - 1:
+						move(North)
+				move(North)
+				if w > 1:
+					move(East)
+				if buy(u[0]):
+					break
+
+
+OPENING_WOOD = [(Unlocks.Expand, 2), (Unlocks.Speed, 2), (Unlocks.Carrots, 1)]
+
+
+
 def run_plan(plan):
 	for i in range(len(plan)):
 		u = plan[i][0]
@@ -1437,10 +1570,10 @@ def run_plan(plan):
 
 PLAN = [
 	(Unlocks.Speed, 1),
-	(Unlocks.Expand, 1),
 	(Unlocks.Plant, 1),
-	(Unlocks.Expand, 2),
+	(Unlocks.Expand, 1),
 	(Unlocks.Speed, 2),
+	(Unlocks.Expand, 2),
 	(Unlocks.Carrots, 1),
 	(Unlocks.Speed, 3),
 	(Unlocks.Watering, 1),
@@ -1459,26 +1592,26 @@ PLAN = [
 	(Unlocks.Fertilizer, 1),
 	(Unlocks.Mazes, 1),
 	(Unlocks.Megafarm, 1),
-	(Unlocks.Polyculture, 1),
 	(Unlocks.Watering, 3),
-	(Unlocks.Speed, 5),
-	(Unlocks.Watering, 4),
+	(Unlocks.Polyculture, 1),
 	(Unlocks.Trees, 3),
-	(Unlocks.Expand, 5),
 	(Unlocks.Grass, 4),
+	(Unlocks.Speed, 5),
+	(Unlocks.Expand, 5),
+	(Unlocks.Watering, 4),
 	(Unlocks.Carrots, 4),
 	(Unlocks.Pumpkins, 2),
-	(Unlocks.Pumpkins, 3),
 	(Unlocks.Watering, 5),
+	(Unlocks.Pumpkins, 3),
 	(Unlocks.Pumpkins, 4),
-	(Unlocks.Cactus, 1),
-	(Unlocks.Mazes, 2),
 	(Unlocks.Megafarm, 2),
-	(Unlocks.Expand, 6),
-	(Unlocks.Megafarm, 3),
-	(Unlocks.Mazes, 3),
-	(Unlocks.Megafarm, 4),
+	(Unlocks.Cactus, 1),
 	(Unlocks.Cactus, 2),
+	(Unlocks.Expand, 6),
+	(Unlocks.Mazes, 2),
+	(Unlocks.Mazes, 3),
+	(Unlocks.Megafarm, 3),
+	(Unlocks.Megafarm, 4),
 	(Unlocks.Expand, 7),
 	(Unlocks.Dinosaurs, 1),
 	(Unlocks.Dinosaurs, 2),
@@ -1488,5 +1621,6 @@ PLAN = [
 	(Unlocks.Leaderboard, 1),
 ]
 
+opening()
 run_plan(PLAN)
 log("done")
