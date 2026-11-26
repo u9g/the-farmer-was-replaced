@@ -67,6 +67,7 @@ The first run after the file changes takes about 25 s to build (one fully optimi
 | `--whatif` | leaderboard runs: what a 20% improvement in each of ticks, compute, growth and each item would save |
 | `--whatif-step F` | the improvement `--whatif` tries (default 0.2) |
 | `--tweak name=factor` | change a game rule for a what-if: `speed`, `compute`, `grow`, `cost.<item>`, `yield.<item>` |
+| `--until unlock[=level]` | leaderboard runs: end each run the moment that unlock reaches that level (default 1) and score it by that time, e.g. `--until megafarm` |
 
 World size and drone limit come from the save's `expand` and `megafarm` levels unless overridden.
 
@@ -219,6 +220,13 @@ worth, counting only what goes into unlocks (not cactus spent on bones, say). A 
 also mean the cut is smaller than one round (1.6M bones still takes four 520k snakes). Runs are
 chaotic, since a small change moves every random draw after it, so use 8 or more seeds and read
 anything inside about two standard errors as noise.
+
+To work on one part of a long run, cut the runs off where that part ends: `--until megafarm` scores
+a fastest reset by the time Megafarm 1 is bought (`--until expand=4` by Expand 4, and so on). An
+early-game change then reads without the noise of the half hour after it: a fastest reset spreads
+about ±60 s per run, the same runs cut at Megafarm 1 about ±18 s. It works with `--profile` and
+`--whatif` too. Check a winner on whole runs before keeping it, since a faster early game can
+leave less in stock for later.
 
 `--tweak` applies one such change to any run, to try a what-if by hand: `speed=1.2` (every tick),
 `compute=0.8` (everything but actions; actions keep their time), `grow=0.8` (growth times),

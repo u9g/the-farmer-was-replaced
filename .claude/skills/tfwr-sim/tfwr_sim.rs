@@ -9244,6 +9244,8 @@ struct Sim {
     stat_best: Items,
     /// --tweak: not in the game, what-if changes to its rules (identity unless asked for)
     tweak: Tweak,
+    /// --until: the time the --until unlock was bought
+    until_at: Option<i64>,
     /// --profile: where each drone's time goes (see Prof)
     prof: Option<Box<Prof>>,
 }
@@ -9315,6 +9317,7 @@ impl Sim {
             stat_sum: empty_items(),
             stat_best: empty_items(),
             tweak: Tweak::none(),
+            until_at: None,
             prof: None,
         };
         // GridManager constructor
@@ -9584,6 +9587,11 @@ impl Sim {
         let level = self.num_unlocked(so.name) + 1;
         self.unlock(so.name, level);
         self.unlock_all_in(so);
+        if let Some((n, l)) = self.tweak.until {
+            if self.until_at.is_none() && n == so.name && level >= l {
+                self.until_at = Some(self.current_time);
+            }
+        }
         true
     }
 
@@ -12566,10 +12574,12 @@ struct Tweak {
     costs: bool,
     /// every unlock's cost in each item multiplied by this (rounded up), by item id
     cost_mul: Vec<f64>,
+    /// --until: a leaderboard run ends (and counts as met) when this unlock reaches this level
+    until: Option<(&'static str, i32)>,
 }
 impl Tweak {
     fn none() -> Tweak {
-        Tweak { speed: 1.0, compute: 1.0, ascale: 1.0, grow: 1.0, power: 1.0, yields: false, yield_mul: vec![1.0; ITEM_NAMES.len()], yield_carry: vec![0.0; ITEM_NAMES.len()], costs: false, cost_mul: vec![1.0; ITEM_NAMES.len()] }
+        Tweak { speed: 1.0, compute: 1.0, ascale: 1.0, grow: 1.0, power: 1.0, yields: false, yield_mul: vec![1.0; ITEM_NAMES.len()], yield_carry: vec![0.0; ITEM_NAMES.len()], costs: false, cost_mul: vec![1.0; ITEM_NAMES.len()], until: None }
     }
     #[inline]
     fn action_scale(&self) -> f64 {
@@ -13722,7 +13732,7 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
         None => (0, 0),
     };
     let mut sim = Sim::new(sh.clone(), &cfg.unlocks, cfg.items.clone(), seed, override_size, cfg.max_drones);
-    if cfg.tweak.speed != 1.0 || cfg.tweak.compute != 1.0 || cfg.tweak.grow != 1.0 || cfg.tweak.power != 1.0 || cfg.tweak.yields || cfg.tweak.costs {
+    if cfg.tweak.speed != 1.0 || cfg.tweak.compute != 1.0 || cfg.tweak.grow != 1.0 || cfg.tweak.power != 1.0 || cfg.tweak.yields || cfg.tweak.costs || cfg.tweak.until.is_some() {
         sim.tweak = cfg.tweak.clone();
         let sf = sim.speed_factor;
         sim.change_execution_speed(sf);
@@ -13778,9 +13788,15 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
             }
             let goal_time = (sim.current_time + frame).min(limit);
             while !sim.run_next_step(goal_time) {
-                if sim.error.is_some() || sim.finished {
+                if sim.error.is_some() || sim.finished || sim.until_at.is_some() {
                     break;
                 }
+            }
+            if let Some(t) = sim.until_at {
+                // --until: the run ends the moment that unlock is bought
+                sim.stop_program_execution();
+                sim.set_time(t);
+                break;
             }
             if let Some(lb) = lb {
                 if goal_at.is_none() && leaderboard_success(&sim, lb) {
@@ -13811,7 +13827,7 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     warnings.sort();
     let output = std::mem::take(&mut *sh.output.borrow_mut());
     let lb_success = match lb {
-        Some(lb) => sim.finished && sim.error.is_none() && leaderboard_success(&sim, lb),
+        Some(lb) => sim.finished && sim.error.is_none() && (sim.until_at.is_some() || leaderboard_success(&sim, lb)),
         None => false,
     };
     Ok(RunResult {
@@ -14424,7 +14440,7 @@ fn raise_priority() {
 const USAGE: &str = "usage: tfwr_sim <script.py>... [--seed N] [--seeds N] [--jobs N] [--item NAME]
                 [--save save.json] [--size N] [--drones N] [--set unlock=level] [--give item=n]
                 [--fps N] [--quiet] [--brief] [--leaderboard NAME]
-                [--profile] [--whatif] [--whatif-step F] [--tweak name=factor,...]
+                [--profile] [--whatif] [--whatif-step F] [--tweak name=factor,...] [--until unlock[=level]]
 
 Runs each script on a fresh farm with the unlocks and items from save.json and reports what it
 produced. Every run simulates one game minute, or longer (up to ten) if the script needs it to
@@ -14447,7 +14463,11 @@ thing made --whatif-step (default 0.2) better each time (ticks, interpreter work
 item's yield) and reports what each would save. --tweak applies such a change to any run:
 speed=1.2 (every tick), compute=0.8 (everything but actions), grow=0.8 (growth times),
 cost.gold=0.8 (every unlock's cost in that item), yield.hay=1.5 (every harvest of that item; a
-script that infers state from exact counts, such as gold per treasure, can stall).";
+script that infers state from exact counts, such as gold per treasure, can stall).
+
+--until megafarm (or --until expand=4) ends a leaderboard run the moment that unlock reaches that
+level and scores the run by that time, to compare changes to one part of a long run (a fastest
+reset's early game) without the noise of everything after it.";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -14520,6 +14540,19 @@ fn main() {
                 let v = val();
                 if let Err(e) = tweak.parse(&v) {
                     fail(&e);
+                }
+            }
+            "--until" => {
+                let v = val();
+                let (n, l) = match v.split_once('=') {
+                    Some((n, l)) => (n.to_string(), l.parse::<i32>().unwrap_or_else(|_| fail("--until needs unlock or unlock=level"))),
+                    None => (v.clone(), 1),
+                };
+                let n = n.trim().to_lowercase();
+                let n = n.strip_prefix("unlocks.").unwrap_or(&n).to_string();
+                match unlock_so(&n) {
+                    Some(so) => tweak.until = Some((so.name, l)),
+                    None => fail(&format!("--until: no unlock named {}", n)),
                 }
             }
             "--profile" => profile = true,
