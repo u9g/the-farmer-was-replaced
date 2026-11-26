@@ -86,19 +86,22 @@ With the entry's own shapes (4 moves per 3-wide column in round A, 2 actions per
 the floor is: 0.76 s average arrival + 2.39 s planting + 1 s growth for round A, 1.56 s planting +
 1 s growth for round B, 0.03 s for the last harvest: 6.74 s. The entry is 0.73 s above that:
 
-- round A, 0.29 s: 0.05 s of inline swaps, about 0.10 s of tail work that does not fit the
-  growth wait, and 0.14 s because the harvest waits for the latest of 32 drones;
-- round B, 0.43 s: 0.05 s of inline swaps, 0.07 s of travel left over from the pre-travel, 0.12 s
-  of tail work over the wait, and 0.19 s for the latest drone.
+- round A, 0.29 s: 0.05 s of inline swaps; the latest chunk's mean finish is 0.13 s past the
+  rest of the floor (tail work that does not fit the growth wait, planting that ends unevenly);
+  the harvest comes 0.11 s after that mean, since it waits for the latest of 32 drones;
+- round B, 0.43 s: 0.05 s of inline swaps, 0.07 s of travel left over from the pre-travel, 0.14 s
+  for the latest chunk's mean, 0.17 s from that mean to the harvest.
+  (The 0.05 s and the two 0.13/0.14 s figures are my split of a measured total.)
 
-Tail work is about 31.5 drone-seconds per round against 32 drone-seconds of growth wait, so the
-wait is full: fix work moved into the forward pass costs time there, and fix work left in the
-tail runs past the wait. A third of the tail work is walking back (420 moves per round), a third
-is the junction settles, the rest swaps. Measured against that:
+Tail work is about 31 drone-seconds per round (my estimate from the action counts) against 32
+drone-seconds of growth wait, so the wait is full: fix work moved into the forward pass costs
+time there, and fix work left in the tail runs past the wait. Over 40% of the tail work is walking
+back (420 moves per round), 30% the junction settles, the rest swaps. Measured against that:
 
-- **Junction settle** (`junction_sim.py`): the shipped work list does 5.9 swaps where the fewest
-  possible is 5.5 (7.1 against 6.5 with nothing settled around it), so only its 7 moves can
-  shrink. Every visiting order is within 0.3 action of the shipped one; nearest-cell-first with a
+- **Junction settle** (`junction_sim.py`): the shipped work list does 4.7 swaps where the fewest
+  possible is 4.4 when the cells around the junction are already settled, and 7.1 against 6.5
+  when nothing is, so only its 7 moves can shrink. In the planner's model the best of all 24
+  visiting orders is 0.6 action (of 16) better than the shipped one; nearest-cell-first with a
   free exit saves up to 2 of 13; settling while planting costs more (14.8). Not built: about
   0.03 s.
 - **Layouts with fewer mixed cells**: 129 to 131 isolated middles instead of 144 (a 3-wide band in
