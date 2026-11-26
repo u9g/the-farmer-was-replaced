@@ -972,6 +972,8 @@ fn nice(obj: &V) -> String {
     to_nice_string(obj, 0, &mut Vec::new(), false)
 }
 /// what LocalizeAndFormat puts into error messages
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn nice_el(obj: &V) -> String {
     to_nice_string(obj, 0, &mut Vec::new(), true)
 }
@@ -1001,6 +1003,8 @@ fn to_string(obj: &V) -> String {
     }
 }
 
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn err(key: &str, args: &[String]) -> String {
     if args.is_empty() {
         key.to_string()
@@ -1304,6 +1308,8 @@ fn py_modulo(lhs: f64, rhs: f64) -> f64 {
 }
 
 /// IPyIndexable.At for sequences and PyDict.At
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn index_at(target: &V, indices: &[V], steps: &mut i32, value_to_set: Option<V>) -> R<V> {
     if let V::Dict(d) = target {
         if indices.len() != 1 {
@@ -1438,6 +1444,8 @@ impl Copies {
     }
 }
 
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn deep_copy(v: &V, copies: &mut Copies) -> V {
     let p = v.ptr();
     match v {
@@ -1694,6 +1702,8 @@ struct Scope {
 }
 type ScopeRef = Rc<RefCell<Scope>>;
 
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn new_scope(function_node: Option<Rc<Node>>, parent: Option<ScopeRef>, variable_names: &[Rc<str>]) -> ScopeRef {
     let mut vars = Vars::new();
     for n in variable_names {
@@ -1752,6 +1762,8 @@ fn scope_set_var(scope: &ScopeRef, name: &str, value: V, is_static: bool) {
 }
 
 /// Scope.ImportVar
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn scope_import_var(scope: &ScopeRef, name: &str, value: V, mut is_static: bool) {
     let mut s = scope.borrow_mut();
     if let Some(e) = s.vars.get(name) {
@@ -1763,6 +1775,8 @@ fn scope_import_var(scope: &ScopeRef, name: &str, value: V, mut is_static: bool)
 }
 
 /// Scope.Evaluate
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn scope_evaluate(scope: &ScopeRef, name: &str) -> R<(V, bool)> {
     scope_lookup(scope, name, None)
 }
@@ -1772,8 +1786,43 @@ fn scope_evaluate(scope: &ScopeRef, name: &str) -> R<(V, bool)> {
 /// the next lookup usually goes straight there: the scopes it passes must not hold the name (their
 /// filter bit is clear) and the slot must hold this very name, or it falls back to the full search.
 /// Either way the answer is the first scope up the chain that holds the name.
-#[inline]
+#[inline(always)]
 fn scope_lookup(scope: &ScopeRef, name: &str, cache: Option<&Cell<u64>>) -> R<(V, bool)> {
+    if let Some(c) = cache {
+        if let Some(r) = scope_lookup_cached(scope, name_key(name), c.get()) {
+            return Ok(r);
+        }
+    }
+    scope_lookup_search(scope, name, cache)
+}
+
+/// The cached path of scope_lookup: the value if the cache still holds (and is assigned).
+#[inline(always)]
+fn scope_lookup_cached(scope: &ScopeRef, key: usize, c: u64) -> Option<(V, bool)> {
+    if c == 0 {
+        return None;
+    }
+    let bit = bloom_bit(key);
+    let hops = (c & 0xff) - 1;
+    let idx = (c >> 8) as usize;
+    let mut s: &Scope = unsafe { &*scope.as_ptr() };
+    for _ in 0..hops {
+        if s.vars.bloom & bit != 0 {
+            return None;
+        }
+        match &s.parent_scope {
+            Some(p) => s = unsafe { &*p.as_ptr() },
+            None => return None,
+        }
+    }
+    match s.vars.items.get(idx) {
+        Some(e) if name_key(&e.0) == key && !matches!(e.1, V::Unassigned) => Some((e.1.clone(), e.2)),
+        _ => None,
+    }
+}
+
+#[inline(never)]
+fn scope_lookup_search(scope: &ScopeRef, name: &str, cache: Option<&Cell<u64>>) -> R<(V, bool)> {
     let key = name_key(name);
     let bit = bloom_bit(key);
     if let Some(c) = cache {
@@ -1908,6 +1957,8 @@ fn evaluate_constant(s: &str) -> Option<V> {
 }
 
 /// PyConstBag.Evaluate
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn bag_evaluate(ns: u8, value: &str) -> R<V> {
     let lower = value.to_lowercase();
     match ns_members(ns).into_iter().find(|n| *n == lower) {
@@ -3500,6 +3551,8 @@ fn eb(st: &StRef, node: &Rc<Node>, depth: i32) -> R<()> {
 }
 
 /// ProgramState.PushOntoExecutionStack, for a user function call
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn push_frame(st: &StRef) -> R<()> {
     let mut s = st.borrow_mut();
     if s.frames >= 1101 {
@@ -3525,6 +3578,8 @@ fn yp(st: &StRef) {
 }
 
 /// How a drone's program ends: ProgramState.PerformExecutionStep's handling of the last iterator.
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn program_finished(st: &StRef, r: Res) {
     let mut s = st.borrow_mut();
     s.frames = 0;
@@ -4265,6 +4320,8 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Ev {
 }
 
 /// PyModule.Export
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn module_export(m: &Rc<PyModule>, value: &str) -> R<(V, bool)> {
     match m.scope.borrow().vars.get(value) {
         Some(e) => Ok((e.1.clone(), e.2)),
@@ -4320,6 +4377,8 @@ fn exec_function(node: &Rc<Node>, st: &StRef, mut arguments: Vec<V>, depth: i32)
 }
 
 /// AssignmentNode.GetValueToAssign; returns (value, execTime)
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn get_value_to_assign(before: Option<&V>, rhs: &V, op: &str) -> R<(V, f64)> {
     if op == "=" {
         return Ok((rhs.clone(), 0.0));
@@ -5048,6 +5107,8 @@ fn code_of(node: &Rc<Node>) -> Rc<Code> {
     node.code.get_or_init(|| compile(node)).clone()
 }
 
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn compile(node: &Rc<Node>) -> Rc<Code> {
     let mut c = Compiler { ops: Vec::new(), fused: Vec::new(), consts: Vec::new(), strs: Vec::new(), loops: Vec::new(), pending_eb: None };
     match &node.kind {
@@ -5262,14 +5323,6 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         stop!(pc);
                     }
                 }
-                Op::CallFunc(n) => {
-                    if !matches!(vm.stack.last(), Some(V::Func(_))) {
-                        stm(st).current_executing_node = n;
-                        return Err(Ctrl::Err("error_not_a_function".into()));
-                    }
-                    let is_static = stm(st).module_state.is_expression_static;
-                    vm.stack.push(V::Bool(is_static));
-                }
                 Op::CallA(n, argc) if argc != u32::MAX && {
                     let base = vm.stack.len() - argc as usize;
                     matches!(&vm.stack[base - 2], V::Func(f) if f.syntax_tree.is_none() && f.method_object.is_none() && f.bidx != B_TAP)
@@ -5348,67 +5401,9 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         pc += 1;
                     }
                 }
-                Op::CallB => {
-                    let (func, parameters) = vm.pending.take().unwrap();
-                    let tree = func.syntax_tree.clone().unwrap();
-                    let vars: &[Rc<str>] = match &tree.kind {
-                        NK::Function { vars, .. } => vars,
-                        _ => &[],
-                    };
-                    let scope = new_scope(Some(tree.clone()), func.parent_scope.clone(), vars);
-                    stm(st).module_state.call_stack.push(scope);
-                    push_frame(st)?;
-                    vm.pending = Some((func, parameters));
-                    if yield_stops(st) {
-                        stop!(pc);
-                    }
-                }
-                Op::CallC => {
-                    let (func, parameters) = vm.pending.take().unwrap();
-                    let tree = func.syntax_tree.clone().unwrap();
-                    vm.frames[fi].pc = pc + 1; // after TakeRv
-                    let fcode = code_of(&tree);
-                    vm.frames.push(Frame {
-                        code: fcode,
-                        pc: 0,
-                        stack_base: vm.stack.len(),
-                        iter_base: vm.iters.len(),
-                        depth_off: 0,
-                        kind: FrameKind::Function,
-                        args: parameters,
-                    });
-                    continue 'frames;
-                }
                 Op::TakeRv => {
                     let v = std::mem::replace(&mut stm(st).module_state.return_value, V::None);
                     vm.stack.push(v);
-                }
-                Op::Unary(n) => {
-                    stm(st).current_executing_node = n;
-                    let value = vm.stack.pop().unwrap();
-                    let op = match &node_ref(n).kind {
-                        NK::Unary(op) => op,
-                        _ => unreachable!(),
-                    };
-                    if let V::Func(f) = &value {
-                        if op.as_ref() != "not" {
-                            return Err(Ctrl::Err(err("error_function_in_operator", &[f.name.to_string(), op.to_string()])));
-                        }
-                    }
-                    let r = match op.as_ref() {
-                        "+" => {
-                            if value.num().is_none() {
-                                return Err(Ctrl::Err(err("error_bad_unary_operator", &[op.to_string(), nice_el(&value)])));
-                            }
-                            value
-                        }
-                        "-" => match value.num() {
-                            Some(x) => V::Num(0.0 - x),
-                            None => return Err(Ctrl::Err(err("error_bad_unary_operator", &[op.to_string(), nice_el(&value)]))),
-                        },
-                        _ => V::Bool(!is_true_value(&value)?),
-                    };
-                    vm.stack.push(r);
                 }
                 Op::AndOr(_, is_and, end) => {
                     let lhs = vm.stack.last().unwrap();
@@ -5426,34 +5421,6 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     if charge(st, OPERATION_OPS) {
                         stop!(pc);
                     }
-                }
-                Op::DotMod(n, fin) => {
-                    if matches!(vm.stack.last(), Some(V::Module(_) | V::Bag(_))) {
-                        let node = node_ref(n);
-                        if !matches!(&node.slots[1].kind, NK::Value(_)) {
-                            return Err(Ctrl::Err("error_invalid_const2".into()));
-                        }
-                        let is_static = stm(st).module_state.is_expression_static;
-                        pc = fin as usize;
-                        if charge(st, if is_static { 0.0 } else { OPERATION_OPS }) {
-                            stop!(pc);
-                        }
-                    }
-                }
-                Op::DotModFinish(n) => {
-                    let lhs = vm.stack.pop().unwrap();
-                    let node = node_ref(n);
-                    let member = match &node.slots[1].kind {
-                        NK::Value(v) => v,
-                        _ => unreachable!(),
-                    };
-                    let (v, flag) = match &lhs {
-                        V::Module(m) => module_export(m, member)?,
-                        V::Bag(ns) => (bag_evaluate(*ns, member)?, true),
-                        _ => unreachable!(),
-                    };
-                    stm(st).module_state.is_expression_static &= flag;
-                    vm.stack.push(v);
                 }
                 Op::Bin(n) => {
                     stm(st).current_executing_node = n;
@@ -5562,6 +5529,199 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         stop!(pc);
                     }
                 }
+                Op::Jump(t) => pc = t as usize,
+                Op::JumpIfFalse(t) => {
+                    if matches!(vm.stack.pop(), Some(V::Bool(false))) {
+                        pc = t as usize;
+                    }
+                }
+                Op::CondJumpF(items_spin, t) => {
+                    let cv = vm.stack.pop().unwrap();
+                    let condition = cond_truth(st, &cv, items_spin)?;
+                    // ChargeFirst; if it stops, the JumpIfFalse after this decides on resume
+                    if charge(st, OPERATION_OPS) {
+                        vm.stack.push(V::Bool(condition));
+                        stop!(pc);
+                    }
+                    pc = if condition { pc + 1 } else { t as usize };
+                }
+                Op::LoopCond(items_spin, e, b) => {
+                    let cv = vm.stack.pop().unwrap();
+                    let condition = cond_truth(st, &cv, items_spin)?;
+                    pc = if condition { b as usize } else { e as usize };
+                }
+                Op::Yp => {
+                    if yield_stops(st) {
+                        stop!(pc);
+                    }
+                }
+                Op::ForNext(end) => match vm.iters.last_mut().unwrap().next()? {
+                    Some(c) => vm.stack.push(c),
+                    None => {
+                        vm.iters.pop();
+                        pc = end as usize;
+                    }
+                },
+                Op::StoreName(n, k) => {
+                    let rhs = vm.stack.pop().unwrap();
+                    let value = match &node_ref(n).kind {
+                        NK::Value(v) => v,
+                        _ => unreachable!(),
+                    };
+                    let op = &code.strs[k as usize];
+                    let scope = cur_scope!(st);
+                    let before = if op.as_ref() == "=" { None } else { Some(scope_evaluate(&scope, value)?.0) };
+                    let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
+                    scope_set_var(&scope, value, v, false);
+                    if charge(st, OPERATION_OPS * exec_time) {
+                        stop!(pc);
+                    }
+                }
+                op => {
+                    let (flow, next) = vm_cold(op, st, vm, fi, &code, depth_off, pc)?;
+                    pc = next;
+                    match flow {
+                        Flow::Next => {}
+                        Flow::Stop => {
+                            vm.frames[fi].pc = pc;
+                            return Ok(());
+                        }
+                        Flow::Frames => continue 'frames,
+                        Flow::Done => return Ok(()),
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// What vm_cold tells the interpreter loop to do next.
+enum Flow {
+    Next,
+    /// stop the drone here (pc already set)
+    Stop,
+    /// the frame changed: pick up the top frame
+    Frames,
+    /// the program is over
+    Done,
+}
+
+/// The instructions run rarely, kept out of vm_loop so that its hot path stays small.
+#[inline(never)]
+fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Rc<Code>, depth_off: u32, pc: usize) -> Result<(Flow, usize), Ctrl> {
+    let mut pc = pc;
+    let pc = &mut pc;
+    let ops = &code.ops;
+    let _ = ops;
+    macro_rules! stop {
+        ($next:expr) => {{
+            *pc = $next;
+            return Ok((Flow::Stop, *pc));
+        }};
+    }
+    macro_rules! eb {
+        ($n:expr, $d:expr) => {{
+            if $d + depth_off > 1100 {
+                return Err(Ctrl::Err("error_max_stack_size_reached".into()));
+            }
+            stm(st).current_executing_node = $n;
+        }};
+    }
+    match op {
+                Op::CallFunc(n) => {
+                    if !matches!(vm.stack.last(), Some(V::Func(_))) {
+                        stm(st).current_executing_node = n;
+                        return Err(Ctrl::Err("error_not_a_function".into()));
+                    }
+                    let is_static = stm(st).module_state.is_expression_static;
+                    vm.stack.push(V::Bool(is_static));
+                }
+                Op::CallB => {
+                    let (func, parameters) = vm.pending.take().unwrap();
+                    let tree = func.syntax_tree.clone().unwrap();
+                    let vars: &[Rc<str>] = match &tree.kind {
+                        NK::Function { vars, .. } => vars,
+                        _ => &[],
+                    };
+                    let scope = new_scope(Some(tree.clone()), func.parent_scope.clone(), vars);
+                    stm(st).module_state.call_stack.push(scope);
+                    push_frame(st)?;
+                    vm.pending = Some((func, parameters));
+                    if yield_stops(st) {
+                        stop!(*pc);
+                    }
+                }
+                Op::CallC => {
+                    let (func, parameters) = vm.pending.take().unwrap();
+                    let tree = func.syntax_tree.clone().unwrap();
+                    vm.frames[fi].pc = (*pc) + 1; // after TakeRv
+                    let fcode = code_of(&tree);
+                    vm.frames.push(Frame {
+                        code: fcode,
+                        pc: 0,
+                        stack_base: vm.stack.len(),
+                        iter_base: vm.iters.len(),
+                        depth_off: 0,
+                        kind: FrameKind::Function,
+                        args: parameters,
+                    });
+                    return Ok((Flow::Frames, *pc));
+                }
+                Op::Unary(n) => {
+                    stm(st).current_executing_node = n;
+                    let value = vm.stack.pop().unwrap();
+                    let op = match &node_ref(n).kind {
+                        NK::Unary(op) => op,
+                        _ => unreachable!(),
+                    };
+                    if let V::Func(f) = &value {
+                        if op.as_ref() != "not" {
+                            return Err(Ctrl::Err(err("error_function_in_operator", &[f.name.to_string(), op.to_string()])));
+                        }
+                    }
+                    let r = match op.as_ref() {
+                        "+" => {
+                            if value.num().is_none() {
+                                return Err(Ctrl::Err(err("error_bad_unary_operator", &[op.to_string(), nice_el(&value)])));
+                            }
+                            value
+                        }
+                        "-" => match value.num() {
+                            Some(x) => V::Num(0.0 - x),
+                            None => return Err(Ctrl::Err(err("error_bad_unary_operator", &[op.to_string(), nice_el(&value)]))),
+                        },
+                        _ => V::Bool(!is_true_value(&value)?),
+                    };
+                    vm.stack.push(r);
+                }
+                Op::DotMod(n, fin) => {
+                    if matches!(vm.stack.last(), Some(V::Module(_) | V::Bag(_))) {
+                        let node = node_ref(n);
+                        if !matches!(&node.slots[1].kind, NK::Value(_)) {
+                            return Err(Ctrl::Err("error_invalid_const2".into()));
+                        }
+                        let is_static = stm(st).module_state.is_expression_static;
+                        (*pc) = fin as usize;
+                        if charge(st, if is_static { 0.0 } else { OPERATION_OPS }) {
+                            stop!(*pc);
+                        }
+                    }
+                }
+                Op::DotModFinish(n) => {
+                    let lhs = vm.stack.pop().unwrap();
+                    let node = node_ref(n);
+                    let member = match &node.slots[1].kind {
+                        NK::Value(v) => v,
+                        _ => unreachable!(),
+                    };
+                    let (v, flag) = match &lhs {
+                        V::Module(m) => module_export(m, member)?,
+                        V::Bag(ns) => (bag_evaluate(*ns, member)?, true),
+                        _ => unreachable!(),
+                    };
+                    stm(st).module_state.is_expression_static &= flag;
+                    vm.stack.push(v);
+                }
                 Op::MkList => {
                     let elements = match vm.stack.pop().unwrap() {
                         V::Seq(s) => Rc::try_unwrap(s).unwrap_or_else(|s| s.to_vec()),
@@ -5571,7 +5731,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vm.stack.push(new_list(elements));
                     set_static(st, false);
                     if charge(st, OPERATION_OPS * (count.max(1) as f64)) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::MkTuple => {
@@ -5582,7 +5742,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vm.stack.push(V::Tuple(Rc::new(elements)));
                     set_static(st, false);
                     if charge(st, OPERATION_OPS) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::MkDict(n) => {
@@ -5605,7 +5765,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vm.stack.push(V::Dict(Rc::new(RefCell::new(dictionary))));
                     set_static(st, false);
                     if charge(st, OPERATION_OPS * (1 + count) as f64) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::MkSet(n) => {
@@ -5629,13 +5789,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vm.stack.push(value);
                     set_static(st, false);
                     if charge(st, OPERATION_OPS * size.max(1) as f64) {
-                        stop!(pc);
-                    }
-                }
-                Op::Jump(t) => pc = t as usize,
-                Op::JumpIfFalse(t) => {
-                    if matches!(vm.stack.pop(), Some(V::Bool(false))) {
-                        pc = t as usize;
+                        stop!(*pc);
                     }
                 }
                 Op::CondLit(k) => {
@@ -5657,24 +5811,9 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     }
                     vm.stack.push(V::Bool(condition));
                 }
-                Op::CondJumpF(items_spin, t) => {
-                    let cv = vm.stack.pop().unwrap();
-                    let condition = cond_truth(st, &cv, items_spin)?;
-                    // ChargeFirst; if it stops, the JumpIfFalse after this decides on resume
-                    if charge(st, OPERATION_OPS) {
-                        vm.stack.push(V::Bool(condition));
-                        stop!(pc);
-                    }
-                    pc = if condition { pc + 1 } else { t as usize };
-                }
-                Op::LoopCond(items_spin, e, b) => {
-                    let cv = vm.stack.pop().unwrap();
-                    let condition = cond_truth(st, &cv, items_spin)?;
-                    pc = if condition { b as usize } else { e as usize };
-                }
                 Op::ChargeFirst => {
                     if charge(st, OPERATION_OPS) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::WaitPre(n, items_spin) => {
@@ -5692,11 +5831,6 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         stm(st).spin_loop = true;
                     }
                 }
-                Op::Yp => {
-                    if yield_stops(st) {
-                        stop!(pc);
-                    }
-                }
                 Op::ForInit(n) => {
                     let iterable = vm.stack.pop().unwrap();
                     if !is_enumerable(&iterable) {
@@ -5705,33 +5839,11 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     }
                     vm.iters.push(PyIter::new(&iterable));
                     if charge(st, OPERATION_OPS) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
-                Op::ForNext(end) => match vm.iters.last_mut().unwrap().next()? {
-                    Some(c) => vm.stack.push(c),
-                    None => {
-                        vm.iters.pop();
-                        pc = end as usize;
-                    }
-                },
                 Op::IterPop => {
                     vm.iters.pop();
-                }
-                Op::StoreName(n, k) => {
-                    let rhs = vm.stack.pop().unwrap();
-                    let value = match &node_ref(n).kind {
-                        NK::Value(v) => v,
-                        _ => unreachable!(),
-                    };
-                    let op = &code.strs[k as usize];
-                    let scope = cur_scope!(st);
-                    let before = if op.as_ref() == "=" { None } else { Some(scope_evaluate(&scope, value)?.0) };
-                    let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
-                    scope_set_var(&scope, value, v, false);
-                    if charge(st, OPERATION_OPS * exec_time) {
-                        stop!(pc);
-                    }
                 }
                 Op::StoreAttr(n, k) => {
                     let target = vm.stack.pop().unwrap();
@@ -5754,7 +5866,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
                     module.scope.borrow_mut().vars.set(&value2, v, false);
                     if charge(st, OPERATION_OPS * (exec_time + num)) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::IndexTarget(n) => {
@@ -5778,7 +5890,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
                     index_at(&indexable, &indices, &mut steps, Some(v))?;
                     if charge(st, OPERATION_OPS * (steps as f64 + exec_time)) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::Unpack(n) => {
@@ -5799,7 +5911,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         vm.stack.push(v);
                     }
                     if matches!(rhs, V::List(_)) && charge(st, OPERATION_OPS) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::Fail(m) => return Err(Ctrl::Err(FAIL_MSGS[m as usize].into())),
@@ -5826,27 +5938,27 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     });
                     scope_set_var(&scope, func_name, V::Func(f), is_static);
                     if charge(st, OPERATION_OPS) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::Pass(n, d) => {
                     eb!(n, d);
                     if charge(st, OPERATION_OPS) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::BrkCont(n, d, t) => {
                     eb!(n, d);
-                    pc = t as usize;
+                    (*pc) = t as usize;
                     if charge(st, 0.0) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::RetA => {
                     let v = vm.stack.pop().unwrap();
                     stm(st).module_state.return_value = v;
                     if charge(st, 0.0) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::RetB(n) => {
@@ -5870,19 +5982,19 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         FrameKind::SpawnRoot => {
                             s.module_state.return_value = v;
                             program_finished(st, Ok(()));
-                            return Ok(());
+                            return Ok((Flow::Done, *pc));
                         }
                         _ => {
                             s.frames -= 1;
                             vm.stack.push(v);
-                            continue 'frames;
+                            return Ok((Flow::Frames, *pc));
                         }
                     }
                 }
                 Op::ImportStart(n, d) => {
                     eb!(n, d);
                     if charge(st, 0.0) {
-                        stop!(pc);
+                        stop!(*pc);
                     }
                 }
                 Op::ImportLoad(n, i) => {
@@ -5892,7 +6004,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         _ => unreachable!(),
                     };
                     if name == "__builtins__" || name == "builtins" {
-                        continue;
+                        return Ok((Flow::Next, *pc));
                     }
                     let cached = stm(st).module_cache.contains_key(name);
                     if !cached {
@@ -5918,8 +6030,8 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         let module_state = ModuleState { global_scope: scope, call_stack: Vec::new(), return_value: V::None, is_expression_static: false };
                         let old = std::mem::replace(&mut stm(st).module_state, module_state);
                         // the module's statements run at the import's depth
-                        let d = depth_off + import_depth(&code.ops, pc - 1);
-                        vm.frames[fi].pc = pc;
+                        let d = depth_off + import_depth(&code.ops, (*pc) - 1);
+                        vm.frames[fi].pc = (*pc);
                         let mcode = code_of(&tree);
                         vm.frames.push(Frame {
                             code: mcode,
@@ -5930,7 +6042,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                             kind: FrameKind::Module { module, old },
                             args: Vec::new(),
                         });
-                        continue 'frames;
+                        return Ok((Flow::Frames, *pc));
                     }
                 }
                 Op::ImportBind(n, i) => {
@@ -5942,7 +6054,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         _ => unreachable!(),
                     };
                     if name == "__builtins__" || name == "builtins" {
-                        continue;
+                        return Ok((Flow::Next, *pc));
                     }
                     let module = stm(st).module_cache[name].clone();
                     let scope = cur_scope!(st);
@@ -5954,7 +6066,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                                     scope_import_var(&scope, k, v.clone(), *s);
                                 }
                             }
-                            continue;
+                            return Ok((Flow::Next, *pc));
                         }
                         for item in vars_to_unpack.iter() {
                             let (v, s) = module_export(&module, item)?;
@@ -5993,10 +6105,10 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     // each default is its code followed by PushArg; walk past `skip` of them
                     let mut k = 0;
                     while k < skip {
-                        if let Op::PushArg = ops[pc] {
+                        if let Op::PushArg = code.ops[*pc] {
                             k += 1;
                         }
-                        pc += 1;
+                        (*pc) += 1;
                     }
                 }
                 Op::PushArg => {
@@ -6026,12 +6138,12 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         FrameKind::SpawnRoot => {
                             s.module_state.return_value = V::None;
                             program_finished(st, Ok(()));
-                            return Ok(());
+                            return Ok((Flow::Done, *pc));
                         }
                         _ => {
                             s.frames -= 1;
                             vm.stack.push(V::None);
-                            continue 'frames;
+                            return Ok((Flow::Frames, *pc));
                         }
                     }
                 }
@@ -6041,18 +6153,19 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         FrameKind::Module { module, old } => {
                             stm(st).module_state = old;
                             module.fully_initialized.set(true);
-                            continue 'frames;
+                            return Ok((Flow::Frames, *pc));
                         }
                         _ => {
                             program_finished(st, Ok(()));
-                            return Ok(());
+                            return Ok((Flow::Done, *pc));
                         }
                     }
                 }
-            }
-        }
+        _ => unreachable!(),
     }
+    Ok((Flow::Next, *pc))
 }
+
 
 /// A fused instruction's name or literal operand, evaluated as Load / Lit would.
 #[inline(always)]
@@ -6250,6 +6363,8 @@ fn binary_value(op: &str, bop: BOp, lhs: V, rhs: V) -> R<(V, i32)> {
 }
 
 /// ComparisonNode.Execute's operator part: the result and the steps it costs.
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn compare_values(ops: &[Rc<str>], cops: &[COp], operands: &[V]) -> R<(bool, i32)> {
     let mut steps: i32 = 0;
     let mut flag = true;
@@ -6345,6 +6460,8 @@ fn opt_dir(parameters: &[V], function: &str) -> R<Option<u8>> {
     Ok(Some(arg_dir(parameters, 0, function)?))
 }
 
+/// (kept out of line: the interpreter loop stays small)
+#[inline(never)]
 fn call_builtin(bidx: u8, parameters: &[V], st: &StRef) -> R<f64> {
     let name: &'static str = FUNCTION_LIST[bidx as usize].0;
     let p = parameters;
