@@ -142,3 +142,42 @@ the wrap. All travel is already routed over the torus (`tdist`, `path_moves`):
 What the wrap cannot do is shorten a planting walk: a chunk is a run of field neighbours along
 an antidiagonal band, and continuing past the edge lands on a different band that another
 drone plants.
+
+## Is there a different structure underneath? (checked, none found)
+
+The run is: deploy, plant 725, wait 1 s, harvest, plant 725, wait 1 s, harvest. Each part against
+the game's rules (as ported in `tfwr_sim.rs`):
+
+- **One harvest instead of two.** 1024 sorted cells would be 96 actions per drone and one wait,
+  about 4.6 s before sorting. Sorting the whole field: a value sits about 13 cells (along x + y)
+  from where a sorted field wants it, so about 6600 swaps, plus the moves to make them, against
+  the 2800 actions 32 drones have between 3.6 s and 6.5 s.
+- **Uneven rounds.** Cells not planted yet do no harm to a harvest, so round one could skip cells
+  that only round two plants (677 then 768 meets the goal). Round one saves 0.20 s, round two
+  loses 0.09 s of planting and 0.19 s of extra middle-cell fixes its full growth wait cannot
+  take. The reverse (768 then 677) loses the same way in round one.
+- **Planting for round two before the first harvest.** A cactus that is not grown makes every
+  cactus next to it unsorted, and an unsorted cactus is neither harvested nor passes the harvest
+  on. The layout fills the field with walls one cell thick, so there is no cell to plant early
+  that is not next to a round-one cell.
+- **Tilling** is 725 actions, 0.75 s per drone. The only other thing that turns grassland to
+  soil is a dinosaur tail segment, and a tail needs an apple, which costs 64 cactus: none until
+  the first harvest, by which time everything is tilled. (One drone only, and its moves cost 400
+  ticks.) A cactus cannot be swapped onto grassland either: grass is not swappable and grows
+  back at once.
+- **Cactus numbers.** A cell keeps its number until the cactus on it is grown, and a swap moves
+  the number with the cactus, so a number is used once: no copies, no way to carry round one's
+  order into round two, no reroll without growing.
+- **The growth waits** hold the fix work. With every fix done while planting instead (half the
+  actions, no walking back) the tails are empty and watering becomes safe, but the water supply
+  (25.6 per second) covers about three cells per drone in round A and one in round B: 7.38 s by
+  the same arithmetic as the floor above, before any spread between drones.
+- **Deployment.** The layout's cells are 16.2 moves from the origin on average and the chunk
+  starts 15.9. If every drone planted on its way out, ring by ring, about 360 of today's 510
+  flying moves would still plant nothing, because the rings near the origin hold fewer cells
+  than 32 drones need (`plant as you go` bound; chunks would have to cross bands). At most
+  0.15 s.
+- **Waiting for the slowest drone** (0.5 s over both rounds). Sharing tail work between
+  neighbours needs each to know what the other has fixed; the only signals are actions (200
+  ticks each), and two drones fixing next to each other corrupt the order.
+
