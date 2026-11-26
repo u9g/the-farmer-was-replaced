@@ -3280,6 +3280,38 @@ struct Shared {
     trees: RefCell<Vec<Rc<Node>>>,
 }
 
+thread_local! {
+    static SOURCES: RefCell<HashMap<std::path::PathBuf, Option<Rc<String>>>> = RefCell::new(HashMap::new());
+}
+/// an imported file's text, read once per thread (files do not change during a command)
+fn read_source(path: &std::path::Path) -> Option<Rc<String>> {
+    if let Some(c) = SOURCES.with(|s| s.borrow().get(path).cloned()) {
+        return c;
+    }
+    let c = std::fs::read_to_string(path).ok().map(Rc::new);
+    SOURCES.with(|s| s.borrow_mut().insert(path.to_path_buf(), c.clone()));
+    c
+}
+
+thread_local! {
+    static TREE_SIZES: RefCell<FxMap<usize, usize>> = RefCell::new(FxMap::default());
+}
+/// the number of nodes in a tree (trees never change, so each is counted once)
+fn tree_size(tree: &Rc<Node>) -> usize {
+    let key = Rc::as_ptr(tree) as usize;
+    if let Some(n) = TREE_SIZES.with(|t| t.borrow().get(&key).copied()) {
+        return n;
+    }
+    let mut n = 0;
+    let mut stack: Vec<&Rc<Node>> = vec![tree];
+    while let Some(node) = stack.pop() {
+        n += 1;
+        stack.extend(node.slots.iter());
+    }
+    TREE_SIZES.with(|t| t.borrow_mut().insert(key, n));
+    n
+}
+
 /// Execution.RegisterLeaderboardCode: a leaderboard run may hold at most 100,000 syntax nodes,
 /// counted over the main file and every module it imports (each module once).
 const LEADERBOARD_CODE_LIMIT: usize = 100000;
@@ -3291,17 +3323,10 @@ fn register_leaderboard_code(sh: &Shared, module_name: &str, tree: &Rc<Node>) ->
     if count <= LEADERBOARD_CODE_LIMIT && !sh.lb_modules.borrow_mut().insert(module_name.to_string()) {
         return Ok(());
     }
-    let mut stack: Vec<Rc<Node>> = vec![tree.clone()];
-    while let Some(node) = stack.pop() {
-        if count > LEADERBOARD_CODE_LIMIT {
-            break;
-        }
-        count += 1;
-        for slot in node.slots.iter() {
-            stack.push(slot.clone());
-        }
-    }
-    sh.lb_nodes.set(Some(count));
+    // Only whether the count passes the limit matters, so adding the tree's size (counted once per
+    // tree) is the same as counting node by node up to the limit.
+    count += tree_size(tree);
+    sh.lb_nodes.set(Some(count.min(LEADERBOARD_CODE_LIMIT + 1)));
     if count <= LEADERBOARD_CODE_LIMIT {
         return Ok(());
     }
@@ -6141,9 +6166,9 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Rc<Code>, depth_of
                     let cached = stm(st).module_cache.contains_key(name);
                     if !cached {
                         let path = stm(st).sh.dir.join(format!("{}.py", name));
-                        let code_text = match std::fs::read_to_string(&path) {
-                            Ok(c) => c,
-                            Err(_) => return Err(Ctrl::Err("error_module_not_found".into())),
+                        let code_text = match read_source(&path) {
+                            Some(c) => c,
+                            None => return Err(Ctrl::Err("error_module_not_found".into())),
                         };
                         let tree = match parse_source(name, &code_text) {
                             Ok(t) => t,
