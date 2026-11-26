@@ -939,6 +939,23 @@ fn seq_len(v: &V) -> usize {
         _ => 0,
     }
 }
+/// seq_len / seq_get of a list or tuple, inline for the interpreter's indexing fast paths
+#[inline(always)]
+fn lt_len(v: &V) -> usize {
+    match v {
+        V::List(l) => unsafe { &*l.as_ptr() }.len(),
+        V::Tuple(t) => t.len(),
+        _ => unreachable!(),
+    }
+}
+#[inline(always)]
+fn lt_get(v: &V, i: usize) -> V {
+    match v {
+        V::List(l) => (unsafe { &*l.as_ptr() })[i].clone(),
+        V::Tuple(t) => t[i].clone(),
+        _ => unreachable!(),
+    }
+}
 fn seq_get(v: &V, i: usize) -> V {
     match v {
         V::Str(s) => V::Str(Rc::from(s.chars().nth(i).unwrap().to_string().as_str())),
@@ -5635,7 +5652,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 }
                 Op::MakeSeq(n) => {
                     let at = vm.stack.len() - n as usize;
-                    let v: Vec<V> = vm.stack.drain(at..).collect();
+                    let v: Vec<V> = vm.stack.split_off(at);
                     vm.stack.push(V::Seq(Rc::new(v)));
                 }
                 Op::Pop => {
@@ -5728,7 +5745,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         vm.stack.pop().unwrap()
                     } else {
                         let at = vm.stack.len() - argc as usize;
-                        V::Seq(Rc::new(vm.stack.drain(at..).collect()))
+                        V::Seq(Rc::new(vm.stack.split_off(at)))
                     };
                     let is_static = matches!(vm.stack.pop(), Some(V::Bool(true)));
                     let func = match vm.stack.pop() {
@@ -5858,7 +5875,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     let mut steps: i32 = 0;
                     let fast = match (&lhs, &idx) {
                         (V::List(_) | V::Tuple(_), V::Num(x)) => {
-                            let count = seq_len(&lhs) as f64;
+                            let count = lt_len(&lhs) as f64;
                             let mut num = *x;
                             if num < 0.0 {
                                 num += count;
@@ -5866,7 +5883,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                             if num < 0.0 || num >= count || num.is_nan() {
                                 None
                             } else {
-                                Some(seq_get(&lhs, num as i32 as usize))
+                                Some(lt_get(&lhs, num as i32 as usize))
                             }
                         }
                         _ => None,
@@ -5906,7 +5923,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     // a list or tuple and a number: index_at's single index (one step)
                     let fast = match (lhs, idx) {
                         (V::List(_) | V::Tuple(_), V::Num(x)) => {
-                            let count = seq_len(lhs) as f64;
+                            let count = lt_len(lhs) as f64;
                             let mut num = *x;
                             if num < 0.0 {
                                 num += count;
@@ -5914,7 +5931,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                             if num < 0.0 || num >= count || num.is_nan() {
                                 None
                             } else {
-                                Some(seq_get(lhs, num as i32 as usize))
+                                Some(lt_get(lhs, num as i32 as usize))
                             }
                         }
                         _ => None,
@@ -6007,7 +6024,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     // a list or tuple and a number: index_at's single index (one step)
                     let fast = match (lhs, idx) {
                         (V::List(_) | V::Tuple(_), V::Num(x)) => {
-                            let count = seq_len(lhs) as f64;
+                            let count = lt_len(lhs) as f64;
                             let mut num = *x;
                             if num < 0.0 {
                                 num += count;
@@ -6015,7 +6032,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                             if num < 0.0 || num >= count || num.is_nan() {
                                 None
                             } else {
-                                Some(seq_get(lhs, num as i32 as usize))
+                                Some(lt_get(lhs, num as i32 as usize))
                             }
                         }
                         _ => None,
