@@ -681,7 +681,6 @@ struct DroneHandle {
     return_value: RefCell<Option<V>>,
 }
 
-#[derive(Clone)]
 enum V {
     None,
     Num(f64),
@@ -701,6 +700,59 @@ enum V {
     Unassigned,
     /// InternalPySequence (argument lists, statement blocks, index lists)
     Seq(Rc<Vec<V>>),
+}
+
+impl Clone for V {
+    /// Inlined for the plain values the interpreter copies all the time; the rest (a reference
+    /// count to bump) out of line.
+    #[inline(always)]
+    fn clone(&self) -> V {
+        match self {
+            V::None => V::None,
+            V::Num(n) => V::Num(*n),
+            V::Bool(b) => V::Bool(*b),
+            V::Dir(d) => V::Dir(*d),
+            V::Const(n, s) => V::Const(*n, s),
+            V::Bag(n) => V::Bag(*n),
+            V::Range(a, b, c) => V::Range(*a, *b, *c),
+            V::Unassigned => V::Unassigned,
+            _ => self.clone_rc(),
+        }
+    }
+}
+
+/// Drops a value, skipping the (out of line) drop glue for the plain values that hold nothing.
+#[inline(always)]
+fn vdrop(v: V) {
+    match v {
+        V::None | V::Num(_) | V::Bool(_) | V::Dir(_) | V::Const(..) | V::Bag(_) | V::Range(..) | V::Unassigned => std::mem::forget(v),
+        other => drop(other),
+    }
+}
+
+impl V {
+    #[inline(never)]
+    fn clone_rc(&self) -> V {
+        match self {
+            V::Str(s) => V::Str(s.clone()),
+            V::List(l) => V::List(l.clone()),
+            V::Tuple(t) => V::Tuple(t.clone()),
+            V::Dict(d) => V::Dict(d.clone()),
+            V::Set(d) => V::Set(d.clone()),
+            V::Func(f) => V::Func(f.clone()),
+            V::Module(m) => V::Module(m.clone()),
+            V::Handle(h) => V::Handle(h.clone()),
+            V::Seq(q) => V::Seq(q.clone()),
+            V::None => V::None,
+            V::Num(n) => V::Num(*n),
+            V::Bool(b) => V::Bool(*b),
+            V::Dir(d) => V::Dir(*d),
+            V::Const(n, s) => V::Const(*n, s),
+            V::Bag(n) => V::Bag(*n),
+            V::Range(a, b, c) => V::Range(*a, *b, *c),
+            V::Unassigned => V::Unassigned,
+        }
+    }
 }
 
 /// What C# Dictionary/HashSet use to decide that two keys are the same key.
@@ -5275,7 +5327,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vm.stack.push(V::Seq(Rc::new(v)));
                 }
                 Op::Pop => {
-                    vm.stack.pop();
+                    vdrop(vm.stack.pop().unwrap());
                 }
                 Op::PushNone => vm.stack.push(V::None),
                 Op::LoadCallee(vn, cn, d) => {
@@ -5439,16 +5491,34 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 Op::BinF(n, k) => {
                     let (a, b) = code.fused[k as usize];
                     let lhs = match a {
-                        Opnd::Stack => vm.stack.pop().unwrap(),
-                        _ => fused_operand(st, &code, a, depth_off)?,
+                        Opnd::Stack => Val::O(vm.stack.pop().unwrap()),
+                        _ => operand(st, &code, a, depth_off)?,
                     };
-                    let rhs = fused_operand(st, &code, b, depth_off)?;
+                    let rhs = operand(st, &code, b, depth_off)?;
                     stm(st).current_executing_node = n;
                     let (op, bop) = match &node_ref(n).kind {
                         NK::Binary(op, _, bop) => (op.as_ref(), *bop),
                         _ => unreachable!(),
                     };
-                    let (result, steps) = binary_value(op, bop, lhs, rhs)?;
+                    // two numbers: binary_value's arithmetic, one step
+                    let fast = match (bop, lhs.get(), rhs.get()) {
+                        (BOp::Add, V::Num(x), V::Num(y)) => Some(x + y),
+                        (BOp::Sub, V::Num(x), V::Num(y)) => Some(x - y),
+                        (BOp::Mul, V::Num(x), V::Num(y)) => Some(x * y),
+                        _ => None,
+                    };
+                    let (result, steps) = match fast {
+                        Some(r) => {
+                            if let Val::O(v) = lhs {
+                                vdrop(v);
+                            }
+                            if let Val::O(v) = rhs {
+                                vdrop(v);
+                            }
+                            (V::Num(r), 1)
+                        }
+                        None => binary_value(op, bop, lhs.into_v(), rhs.into_v())?,
+                    };
                     vm.stack.push(result);
                     if charge(st, OPERATION_OPS * steps as f64) {
                         stop!(pc);
@@ -5457,10 +5527,12 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 Op::IndexF(n, k) => {
                     let (a, b) = code.fused[k as usize];
                     let lhs = match a {
-                        Opnd::Stack => vm.stack.pop().unwrap(),
-                        _ => fused_operand(st, &code, a, depth_off)?,
+                        Opnd::Stack => Val::O(vm.stack.pop().unwrap()),
+                        _ => operand(st, &code, a, depth_off)?,
                     };
-                    let idx = fused_operand(st, &code, b, depth_off)?;
+                    let idx = operand(st, &code, b, depth_off)?;
+                    let lhs = lhs.get();
+                    let idx = idx.get();
                     stm(st).current_executing_node = n;
                     // binary_value's checks for "[]" (the index list itself is never a function)
                     if let V::Func(f) = &lhs {
@@ -5470,7 +5542,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(&lhs)])));
                     }
                     let mut steps: i32 = 0;
-                    let result = index_at(&lhs, std::slice::from_ref(&idx), &mut steps, None)?;
+                    let result = index_at(lhs, std::slice::from_ref(idx), &mut steps, None)?;
                     vm.stack.push(result);
                     if charge(st, OPERATION_OPS * steps as f64) {
                         stop!(pc);
@@ -5479,16 +5551,22 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 Op::CmpF(n, k) => {
                     let (a, b) = code.fused[k as usize];
                     let lhs = match a {
-                        Opnd::Stack => vm.stack.pop().unwrap(),
-                        _ => fused_operand(st, &code, a, depth_off)?,
+                        Opnd::Stack => Val::O(vm.stack.pop().unwrap()),
+                        _ => operand(st, &code, a, depth_off)?,
                     };
-                    let rhs = fused_operand(st, &code, b, depth_off)?;
+                    let rhs = operand(st, &code, b, depth_off)?;
                     stm(st).current_executing_node = n;
                     let (ops_t, cops) = match &node_ref(n).kind {
                         NK::Comparison(o, c) => (o, c),
                         _ => unreachable!(),
                     };
-                    let (flag, steps) = compare_two(ops_t, cops, lhs, rhs)?;
+                    let (flag, steps) = compare_two(ops_t, cops, lhs.get(), rhs.get())?;
+                    if let Val::O(v) = lhs {
+                        vdrop(v);
+                    }
+                    if let Val::O(v) = rhs {
+                        vdrop(v);
+                    }
                     vm.stack.push(V::Bool(flag));
                     if charge(st, OPERATION_OPS * steps as f64) {
                         stop!(pc);
@@ -5531,13 +5609,16 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 }
                 Op::Jump(t) => pc = t as usize,
                 Op::JumpIfFalse(t) => {
-                    if matches!(vm.stack.pop(), Some(V::Bool(false))) {
+                    let v = vm.stack.pop().unwrap();
+                    if matches!(v, V::Bool(false)) {
                         pc = t as usize;
                     }
+                    vdrop(v);
                 }
                 Op::CondJumpF(items_spin, t) => {
                     let cv = vm.stack.pop().unwrap();
                     let condition = cond_truth(st, &cv, items_spin)?;
+                    vdrop(cv);
                     // ChargeFirst; if it stops, the JumpIfFalse after this decides on resume
                     if charge(st, OPERATION_OPS) {
                         vm.stack.push(V::Bool(condition));
@@ -5548,6 +5629,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                 Op::LoopCond(items_spin, e, b) => {
                     let cv = vm.stack.pop().unwrap();
                     let condition = cond_truth(st, &cv, items_spin)?;
+                    vdrop(cv);
                     pc = if condition { b as usize } else { e as usize };
                 }
                 Op::Yp => {
@@ -6167,6 +6249,93 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Rc<Code>, depth_of
 }
 
 
+/// An operand's value: borrowed where it lives (a scope slot or a constant), or owned.
+enum Val<'a> {
+    R(&'a V),
+    O(V),
+}
+impl<'a> Val<'a> {
+    #[inline(always)]
+    fn get(&self) -> &V {
+        match self {
+            Val::R(r) => r,
+            Val::O(v) => v,
+        }
+    }
+    #[inline(always)]
+    fn into_v(self) -> V {
+        match self {
+            Val::R(r) => r.clone(),
+            Val::O(v) => v,
+        }
+    }
+}
+
+/// The slot the lookup cache points at, if it still holds an assigned value for this name.
+#[inline(always)]
+fn scope_slot_cached(scope: &ScopeRef, key: usize, c: u64) -> *const (Rc<str>, V, bool) {
+    if c == 0 {
+        return std::ptr::null();
+    }
+    let bit = bloom_bit(key);
+    let hops = (c & 0xff) - 1;
+    let idx = (c >> 8) as usize;
+    let mut s: &Scope = unsafe { &*scope.as_ptr() };
+    for _ in 0..hops {
+        if s.vars.bloom & bit != 0 {
+            return std::ptr::null();
+        }
+        match &s.parent_scope {
+            Some(p) => s = unsafe { &*p.as_ptr() },
+            None => return std::ptr::null(),
+        }
+    }
+    match s.vars.items.get(idx) {
+        Some(e) if name_key(&e.0) == key && !matches!(e.1, V::Unassigned) => e as *const _,
+        _ => std::ptr::null(),
+    }
+}
+
+/// A fused instruction's name or literal operand, evaluated as Load / Lit would, borrowed where
+/// possible. (A borrowed scope slot stays put: evaluating the other operand only reads scopes.)
+#[inline(always)]
+fn operand<'a>(st: &StRef, code: &'a Code, o: Opnd, depth_off: u32) -> R<Val<'a>> {
+    match o {
+        Opnd::Load(n, d) => {
+            if d + depth_off > 1100 {
+                return Err("error_max_stack_size_reached".into());
+            }
+            let s = stm(st);
+            s.current_executing_node = n;
+            let node = node_ref(n);
+            let name = match &node.kind {
+                NK::Value(name) => name,
+                _ => unreachable!(),
+            };
+            let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+            let e = scope_slot_cached(scope, name_key(name), node.lookup.get());
+            if !e.is_null() {
+                let e: &'a (Rc<str>, V, bool) = unsafe { &*e };
+                s.module_state.is_expression_static = e.2;
+                return Ok(Val::R(&e.1));
+            }
+            let (v, is_static) = scope_lookup_search(scope, name, Some(&node.lookup))?;
+            s.module_state.is_expression_static = is_static;
+            Ok(Val::O(v))
+        }
+        Opnd::Lit(n, d, k) => {
+            if d + depth_off > 1100 {
+                return Err("error_max_stack_size_reached".into());
+            }
+            let s = stm(st);
+            s.current_executing_node = n;
+            s.module_state.is_expression_static = false;
+            Ok(Val::R(&code.consts[k as usize]))
+        }
+        Opnd::Stack => unreachable!(),
+    }
+}
+
 /// A fused instruction's name or literal operand, evaluated as Load / Lit would.
 #[inline(always)]
 fn fused_operand(st: &StRef, code: &Code, o: Opnd, depth_off: u32) -> R<V> {
@@ -6202,8 +6371,8 @@ fn fused_operand(st: &StRef, code: &Code, o: Opnd, depth_off: u32) -> R<V> {
 
 /// a two-operand comparison: the fast path for two numbers, else compare_values
 #[inline(always)]
-fn compare_two(ops_t: &[Rc<str>], cops: &[COp], a: V, b: V) -> R<(bool, i32)> {
-    if let (V::Num(x), V::Num(y)) = (&a, &b) {
+fn compare_two(ops_t: &[Rc<str>], cops: &[COp], a: &V, b: &V) -> R<(bool, i32)> {
+    if let (V::Num(x), V::Num(y)) = (a, b) {
         let (x, y) = (*x, *y);
         let c = if x > y { 1 } else if x < y { -1 } else { 0 };
         let f = match cops[0] {
@@ -6219,7 +6388,7 @@ fn compare_two(ops_t: &[Rc<str>], cops: &[COp], a: V, b: V) -> R<(bool, i32)> {
             return Ok((f, 1));
         }
     }
-    compare_values(ops_t, cops, &[a, b])
+    compare_values(ops_t, cops, &[a.clone(), b.clone()])
 }
 
 /// CondTest's work: clear the busy-wait markers, then the condition's truth.
