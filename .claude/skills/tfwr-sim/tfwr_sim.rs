@@ -1880,7 +1880,7 @@ fn scope_set_var(scope: &ScopeRef, name: &str, value: V, is_static: bool) {
     loop {
         if let Some(i) = s.vars.find(key) {
             let it = &mut s.vars.items[i];
-            it.1 = value;
+            vdrop(std::mem::replace(&mut it.1, value));
             it.2 = is_static;
             return;
         }
@@ -5521,7 +5521,7 @@ fn store_assign(st: &StRef, an: *const Node, ln: *const Node, rhs: V) -> R<f64> 
         let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
         if !slot.is_null() {
             let e = unsafe { &mut *slot };
-            e.1 = rhs;
+            vdrop(std::mem::replace(&mut e.1, rhs));
             e.2 = false;
         } else {
             scope_set_var(scope, value, rhs, false);
@@ -5545,7 +5545,7 @@ fn store_assign(st: &StRef, an: *const Node, ln: *const Node, rhs: V) -> R<f64> 
         match fast {
             Some(x) => {
                 let e = unsafe { &mut *slot };
-                e.1 = V::Num(x);
+                vdrop(std::mem::replace(&mut e.1, V::Num(x)));
                 e.2 = false;
                 1.0
             }
@@ -7150,14 +7150,20 @@ fn compare_values(ops: &[Rc<str>], cops: &[COp], operands: &[V]) -> R<(bool, i32
 fn wrong_args(i: usize, function: &str, v: &V) -> String {
     err("error_wrong_args", &[(i + 1).to_string(), format!("{}()", function), nice_el(v)])
 }
+#[inline(always)]
 fn correct_count(parameters: &[V], n: usize, function: &str) -> R<()> {
     if parameters.len() != n {
-        return Err(err(
-            "error_wrong_number_args",
-            &[format!("{}()", function), n.to_string(), nice_el(&V::Tuple(Rc::new(parameters.to_vec())))],
-        ));
+        return wrong_count(parameters, n, function);
     }
     Ok(())
+}
+#[cold]
+#[inline(never)]
+fn wrong_count(parameters: &[V], n: usize, function: &str) -> R<()> {
+    Err(err(
+        "error_wrong_number_args",
+        &[format!("{}()", function), n.to_string(), nice_el(&V::Tuple(Rc::new(parameters.to_vec())))],
+    ))
 }
 fn no_params(parameters: &[V], function: &str) -> R<()> {
     if !parameters.is_empty() {
