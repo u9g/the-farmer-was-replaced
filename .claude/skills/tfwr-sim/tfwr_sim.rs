@@ -1587,11 +1587,16 @@ fn deep_copy(v: &V, copies: &mut Copies) -> V {
             }
             let out = Rc::new(RefCell::new(Vec::new()));
             copies.values.insert(p, V::List(out.clone()));
-            let items = l.borrow().clone();
-            for it in items.iter() {
-                let c = deep_copy(it, copies);
-                out.borrow_mut().push(c);
-            }
+            // (a list that holds itself gets the copy, which is not borrowed here)
+            let items: Vec<V> = {
+                let b = l.borrow();
+                let mut v = Vec::with_capacity(b.len());
+                for it in b.iter() {
+                    v.push(deep_copy(it, copies));
+                }
+                v
+            };
+            *out.borrow_mut() = items;
             V::List(out)
         }
         V::Tuple(t) => {
@@ -2068,15 +2073,16 @@ fn scope_deep_copy(s: &ScopeRef, copies: &mut Copies) -> ScopeRef {
     }
     // Setting every name in order into the empty copy gives the same slots, name index and
     // bloom bits as the original's: copy those, and deep-copy the values.
-    let (map, bloom, entries) = {
+    // (copying a value only reads the scopes it copies from, and fills in copies)
+    let vars = {
         let b = s.borrow();
-        (b.vars.map.clone(), b.vars.bloom, b.vars.entries())
+        let mut items = Vec::with_capacity(b.vars.items.len());
+        for (k, v, st) in b.vars.items.iter() {
+            items.push((k.clone(), deep_copy(v, copies), *st));
+        }
+        Vars { map: b.vars.map.clone(), bloom: b.vars.bloom, items }
     };
-    let mut items = Vec::with_capacity(entries.len());
-    for (k, v, st) in entries.iter() {
-        items.push((k.clone(), deep_copy(v, copies), *st));
-    }
-    ns.borrow_mut().vars = Vars { map, bloom, items };
+    ns.borrow_mut().vars = vars;
     ns
 }
 
@@ -2948,6 +2954,13 @@ impl Parser {
     fn expression(&mut self, mut op_index: usize, can_line_break: bool, exclude_token: TT, is_leftmost: bool) -> R<PN> {
         if can_line_break {
             self.line_breaks();
+        }
+        // A number, string or name right before `,` `]` `}` `)` (or a number or string before `:`)
+        // passes through every operator level untouched: straight to the atom.
+        match (self.cur(), self.stream.look_ahead_ty()) {
+            (TT::Num | TT::Str | TT::Identifier, TT::Comma | TT::SquareBracketClose | TT::CurlBraceClose | TT::BracketClose)
+            | (TT::Num | TT::Str, TT::Colon) => return self.atomic_expression(is_leftmost),
+            _ => {}
         }
         if op_index < OPERATORS.len() && OPERATORS[op_index].0.contains(&exclude_token) {
             op_index += 1;
@@ -4894,6 +4907,13 @@ enum Op {
     StoreIndex(u32),
     /// StoreIndex with one index, pushed bare (no MakeSeq)
     StoreIndex1(u32),
+    /// a list literal of literals: the elements' Lit (the last one's node and their depth; null for
+    /// none), MakeSeq and MkList in one; consts[k] holds the elements
+    MkConstList(*const Node, u32, u32),
+    /// the statement `x[i] op= y` (its node) with x, i and y names or literals: y's Load / Lit,
+    /// SetNode, x's Load / Lit (fused[k]), IndexTarget, i's Load / Lit (fused[k + 1].0) and
+    /// StoreIndex1(op) in one
+    StoreIdxF(*const Node, u32, u32),
     Unpack(*const Node),
     Fail(u32),
     FailAt(*const Node, u32),
@@ -5288,7 +5308,36 @@ impl Compiler {
                     let ix = &lhs.slots[1];
                     if matches!(ix.kind, NK::Seq) && ix.slots.len() == 1 {
                         self.expr(&ix.slots[0], depth + 2);
-                        self.emit(Op::StoreIndex1(op));
+                        let simple = |o: Op| match o {
+                            Op::Load(n, d) => Some(Opnd::Load(n, d)),
+                            Op::Lit(n, d, k) => Some(Opnd::Lit(n, d, k)),
+                            _ => None,
+                        };
+                        let m = self.ops.len();
+                        let fused = if self.pending_eb.is_none() && m >= 5 {
+                            match (simple(self.ops[m - 5]), self.ops[m - 4], simple(self.ops[m - 3]), self.ops[m - 2], simple(self.ops[m - 1])) {
+                                (Some(y), Op::SetNode(an), Some(x), Op::IndexTarget(tn), Some(i))
+                                    if tn == lp && matches!(node_ref(an).kind, NK::Assignment(_)) && Rc::as_ptr(&node_ref(an).slots[0]) == lp =>
+                                {
+                                    Some((an, y, x, i))
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
+                        match fused {
+                            Some((an, y, x, i)) => {
+                                self.ops.truncate(m - 5);
+                                self.fused.push((y, x));
+                                self.fused.push((i, Opnd::Stack));
+                                let k = (self.fused.len() - 2) as u32;
+                                self.ops.push(Op::StoreIdxF(an, k, op));
+                            }
+                            None => {
+                                self.emit(Op::StoreIndex1(op));
+                            }
+                        }
                     } else {
                         self.expr(ix, depth + 1);
                         self.emit(Op::StoreIndex(op));
@@ -5456,6 +5505,36 @@ impl Compiler {
             NK::List | NK::Tuple | NK::Dict | NK::Set => {
                 self.eb(np, depth);
                 self.expr(&node.slots[0], depth + 1);
+                if let (NK::List, NK::Seq) = (&node.kind, &node.slots[0].kind) {
+                    // [Lit x n, MakeSeq(n)]: one MkConstList
+                    let n = node.slots[0].slots.len();
+                    let m = self.ops.len();
+                    if self.pending_eb.is_none() && m >= n + 1 && matches!(self.ops[m - 1], Op::MakeSeq(c) if c as usize == n) {
+                        let mut elems = Vec::with_capacity(n);
+                        let mut last: Option<(*const Node, u32)> = None;
+                        let mut ok = true;
+                        for op in &self.ops[m - 1 - n..m - 1] {
+                            match *op {
+                                Op::Lit(ln, d, k) if last.map_or(true, |(_, d0)| d0 == d) => {
+                                    elems.push(self.consts[k as usize].clone());
+                                    last = Some((ln, d));
+                                }
+                                _ => {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if ok {
+                            self.ops.truncate(m - 1 - n);
+                            self.consts.push(V::Seq(Rc::new(elems)));
+                            let k = (self.consts.len() - 1) as u32;
+                            let (ln, d) = last.unwrap_or((std::ptr::null(), 0));
+                            self.ops.push(Op::MkConstList(ln, d, k));
+                            return;
+                        }
+                    }
+                }
                 self.emit(match &node.kind {
                     NK::List => Op::MkList,
                     NK::Tuple => Op::MkTuple,
@@ -5839,6 +5918,50 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                             pc += 1;
                             push_or_store!(v);
                         }
+                    }
+                }
+                Op::MkConstList(ln, d, k) => {
+                    if !ln.is_null() {
+                        // the Lits' Eb (the first one's check; the last one's node)
+                        eb!(ln, d);
+                        stm(st).module_state.is_expression_static = false;
+                    }
+                    let elements = match &code.consts[k as usize] {
+                        V::Seq(t) => t.to_vec(),
+                        _ => unreachable!(),
+                    };
+                    let count = elements.len();
+                    vm.stack.push(new_list(elements));
+                    set_static(st, false);
+                    if charge(st, OPERATION_OPS * (count.max(1) as f64)) {
+                        stop!(pc);
+                    }
+                }
+                Op::StoreIdxF(an, k, opk) => {
+                    let (ya, xa) = code.fused[k as usize];
+                    let ia = code.fused[k as usize + 1].0;
+                    let rhs = operand(st, &code, ya, depth_off)?.into_v();
+                    // SetNode
+                    stm(st).current_executing_node = an;
+                    let x = operand(st, &code, xa, depth_off)?;
+                    // IndexTarget
+                    {
+                        let t = x.get();
+                        if !(t.is_seq() || matches!(t, V::Dict(_))) {
+                            stm(st).current_executing_node = Rc::as_ptr(&node_ref(an).slots[0]);
+                            return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(t)])));
+                        }
+                    }
+                    let i = operand(st, &code, ia, depth_off)?;
+                    let ops_used = store_index1(x.get(), i.get(), rhs, &code.strs[opk as usize])?;
+                    if let Val::O(v) = i {
+                        vdrop(v);
+                    }
+                    if let Val::O(v) = x {
+                        vdrop(v);
+                    }
+                    if charge(st, OPERATION_OPS * ops_used) {
+                        stop!(pc);
                     }
                 }
                 Op::StoreF(k) => {
@@ -6629,51 +6752,8 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                     let idx = vm.stack.pop().unwrap();
                     let indexable = vm.stack.pop().unwrap();
                     let rhs = vm.stack.pop().unwrap();
-                    let op = &code.strs[k as usize];
-                    // a list and an in-range number: index_at's single index, done in place
-                    let fast = match (&indexable, &idx) {
-                        (V::List(l), V::Num(x)) => {
-                            let count = l.borrow().len() as f64;
-                            let mut num = *x;
-                            if num < 0.0 {
-                                num += count;
-                            }
-                            if num < 0.0 || num >= count || num.is_nan() { None } else { Some((l, num as i32 as usize)) }
-                        }
-                        _ => None,
-                    };
-                    let ops_used = match fast {
-                        None if op.as_ref() == "=" && matches!(indexable, V::Dict(_)) => {
-                            let V::Dict(d) = &indexable else { unreachable!() };
-                            if idx.is_unhashable() {
-                                return Err(Ctrl::Err(err("error_bad_key", &[nice_el(&idx)])));
-                            }
-                            let key = to_key(&idx)?;
-                            let n = py_size(&idx).max(1);
-                            d.borrow_mut().put(key, idx, rhs);
-                            n as f64
-                        }
-                        Some((l, i)) if op.as_ref() == "=" => {
-                            vdrop(std::mem::replace(&mut l.borrow_mut()[i], rhs));
-                            1.0
-                        }
-                        Some((l, i)) if op.as_ref() == "+=" && matches!((&l.borrow()[i], &rhs), (V::Num(_), V::Num(_))) => {
-                            let mut b = l.borrow_mut();
-                            if let (V::Num(a), V::Num(r)) = (&mut b[i], &rhs) {
-                                *a += *r;
-                            }
-                            2.0
-                        }
-                        _ => {
-                            let indices = std::slice::from_ref(&idx);
-                            let mut steps = 0;
-                            let before = if op.as_ref() == "=" { None } else { Some(index_at(&indexable, indices, &mut steps, None)?) };
-                            steps = 0;
-                            let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
-                            index_at(&indexable, indices, &mut steps, Some(v))?;
-                            steps as f64 + exec_time
-                        }
-                    };
+                    let ops_used = store_index1(&indexable, &idx, rhs, &code.strs[k as usize])?;
+                    vdrop(idx);
                     if charge(st, OPERATION_OPS * ops_used) {
                         stop!(*pc);
                     }
@@ -7115,6 +7195,58 @@ fn fused_operand(st: &StRef, code: &Code, o: Opnd, depth_off: u32) -> R<V> {
         }
         Opnd::Stack => unreachable!(),
     }
+}
+
+/// StoreIndex's work for `indexable[idx] op= rhs` (one index): the ops it costs
+#[inline(always)]
+fn store_index1(indexable: &V, idx: &V, rhs: V, op: &str) -> R<f64> {
+    // a list and an in-range number: index_at's single index, done in place
+    let fast = match (indexable, idx) {
+        (V::List(l), V::Num(x)) => {
+            let count = l.borrow().len() as f64;
+            let mut num = *x;
+            if num < 0.0 {
+                num += count;
+            }
+            if num < 0.0 || num >= count || num.is_nan() { None } else { Some((l, num as i32 as usize)) }
+        }
+        _ => None,
+    };
+    Ok(match fast {
+        None if op == "=" && matches!(indexable, V::Dict(_)) => {
+            let V::Dict(d) = indexable else { unreachable!() };
+            if idx.is_unhashable() {
+                return Err(err("error_bad_key", &[nice_el(idx)]));
+            }
+            let key = to_key(idx)?;
+            let n = py_size(idx).max(1);
+            d.borrow_mut().put(key, idx.clone(), rhs);
+            n as f64
+        }
+        Some((l, i)) if op == "=" => {
+            vdrop(std::mem::replace(&mut l.borrow_mut()[i], rhs));
+            1.0
+        }
+        Some((l, i)) if op == "+=" && matches!((&l.borrow()[i], &rhs), (V::Num(_), V::Num(_))) => {
+            let mut b = l.borrow_mut();
+            if let (V::Num(a), V::Num(r)) = (&mut b[i], &rhs) {
+                *a += *r;
+            }
+            2.0
+        }
+        _ => store_index_slow(indexable, idx, rhs, op)?,
+    })
+}
+
+#[inline(never)]
+fn store_index_slow(indexable: &V, idx: &V, rhs: V, op: &str) -> R<f64> {
+    let indices = std::slice::from_ref(idx);
+    let mut steps = 0;
+    let before = if op == "=" { None } else { Some(index_at(indexable, indices, &mut steps, None)?) };
+    steps = 0;
+    let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
+    index_at(indexable, indices, &mut steps, Some(v))?;
+    Ok(steps as f64 + exec_time)
 }
 
 /// a two-operand comparison: the fast path for two numbers, else compare_values
