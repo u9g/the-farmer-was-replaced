@@ -24,7 +24,9 @@ def has_dn(c, R):
 class Gen:
     def __init__(self):
         self.KL = int(E("KL", "3"))
-        if E("WSPEC"):
+        if E("WALLS"):
+            self.walls = [int(x) for x in E("WALLS").split(",")]
+        elif E("WSPEC"):
             off, pos = E("WSPEC").split(":")
             pos = set(int(x) for x in pos.split(",") if x)
             ws = []
@@ -111,6 +113,23 @@ class Gen:
             for c in (a, b2):
                 if c in self.complex or any(m in self.complex for d, m in nb(c, R)):
                     self.adj_ok[q] = False
+        if E("RELAX") == "1":
+            # only forbid cuts inside the path interval of each component's 1-ring
+            self.adj_ok = [True] + [mdist(o[q - 1], o[q]) == 1 for q in range(1, self.NL)] + [True]
+            for comp in self.comps:
+                reg = set(comp)
+                reg |= set(m for c in list(reg) for d, m in nb(c, R))
+                idxs = sorted(self.pos_of[c] for c in reg)
+                lo, hi = idxs[0], idxs[-1]
+                if hi - lo < 60:
+                    for q in range(lo + 1, hi + 1):
+                        self.adj_ok[q] = False
+            for c in (self.mid if E("RELAXMID") == "1" else []):
+                reg = set([c]) | set(m for d, m in nb(c, R))
+                idxs = sorted(self.pos_of[x] for x in reg)
+                if idxs[-1] - idxs[0] < 12:
+                    for q in range(idxs[0] + 1, idxs[-1] + 1):
+                        self.adj_ok[q] = False
         print("L", self.NL, "complex", len(self.complex), "mid", len(self.mid), file=sys.stderr)
 
     # ---- ops
@@ -146,6 +165,8 @@ class Gen:
         for t, i in enumerate(cells):
             c = o[i]
             if c in self.comp_of:
+                if E("INLCC", "1") == "0":
+                    continue
                 key = ("cc", self.comp_of[c])
                 if key in seen:
                     continue
@@ -390,6 +411,10 @@ class Gen:
         lastpos = self.o[cells[n - 1]]
         exact = E("BEXACT") == "1"
         INL = E("INL") == "1"
+        e0cc = n
+        if INL and E("INLCC", "1") == "0":
+            fc = [t for t in range(n) if self.kind[cells[t]] in ("cx", "sf")]
+            e0cc = min(fc) if fc else n
         if INL:
             items = self.items_of(cells)
             icost = []
@@ -421,7 +446,7 @@ class Gen:
                 elif t < n - 1:
                     bk += stp[t + 1]
             if INL:
-                ok = True
+                ok = e <= e0cc
                 iadd = 0.0
                 for it, ic in zip(items, icost):
                     if it["last"] < e:
