@@ -84,6 +84,12 @@ SORT_SLOTS = 54
 if N >= 32:
 	PLANT_SLOTS = 70
 	SORT_SLOTS = 220
+# Extra slots for the first planting when it tills as it goes (0: till in a pass of its own).
+TILL_SLOTS = 0
+START_SLOTS = 90
+if N >= 32:
+	TILL_SLOTS = 30
+	START_SLOTS = 40
 SLOT_TICKS = 205
 WALK_MARGIN = 2
 HARVEST_LAG_TICKS = 40
@@ -185,15 +191,26 @@ def wait_until(e):
 		pass
 
 
+# Walk to (x, y) the short way round: moving off one edge comes back on the other.
 def go(x, y):
-	while get_pos_x() < x:
-		move(East)
-	while get_pos_x() > x:
-		move(West)
-	while get_pos_y() < y:
-		move(North)
-	while get_pos_y() > y:
-		move(South)
+	dx = x - get_pos_x()
+	if dx < 0:
+		dx += N
+	if dx <= N // 2:
+		for _ in range(dx):
+			move(East)
+	else:
+		for _ in range(N - dx):
+			move(West)
+	dy = y - get_pos_y()
+	if dy < 0:
+		dy += N
+	if dy <= N // 2:
+		for _ in range(dy):
+			move(North)
+	else:
+		for _ in range(N - dy):
+			move(South)
 
 
 # One batch of sunflowers, starting and ending on the first tile of the ring. Petal counts 15 down
@@ -297,10 +314,13 @@ def worker(bx, by, t0, role, goal):
 	delay = TICK * (3 + 7 * ((bx // 2 + by) % 5))
 
 	go(bx, by)
-	for i in range(M):
-		if get_ground_type() != Grounds.Soil:
-			till()
-		move(RM[i])
+	# Slots added to the first planting for tilling on the way (TILL_SLOTS), or a till pass now.
+	extra = TILL_SLOTS
+	if TILL_SLOTS == 0:
+		for i in range(M):
+			if get_ground_type() != Grounds.Soil:
+				till()
+			move(RM[i])
 	i = 0
 	lastc = num_items(Items.Cactus)
 	slot = SLOT_NOW
@@ -328,15 +348,27 @@ def worker(bx, by, t0, role, goal):
 
 		# Plant the block (a leftover from the last harvest makes plant() fail cheaply).
 		wait_until(t0)
-		if not ISW[i]:
-			plant(Entities.Cactus)
-		for _ in range(M - 1):
-			move(RM[i])
-			i = NX[i]
+		if extra > 0:
+			if not ISW[i]:
+				till()
+				plant(Entities.Cactus)
+			for _ in range(M - 1):
+				move(RM[i])
+				i = NX[i]
+				if not ISW[i]:
+					till()
+					plant(Entities.Cactus)
+		else:
 			if not ISW[i]:
 				plant(Entities.Cactus)
-		end = t0 + SLOT * (PLANT_SLOTS + SORT_SLOTS)
-		wait_until(t0 + SLOT * PLANT_SLOTS + TICK * 60)
+			for _ in range(M - 1):
+				move(RM[i])
+				i = NX[i]
+				if not ISW[i]:
+					plant(Entities.Cactus)
+		end = t0 + SLOT * (PLANT_SLOTS + extra + SORT_SLOTS)
+		wait_until(t0 + SLOT * (PLANT_SLOTS + extra) + TICK * 60)
+		extra = 0
 		power = num_items(Items.Power)
 
 		ld = None
@@ -450,20 +482,39 @@ SMALL_HARVEST = num_unlocked(Unlocks.Cactus)
 SMALL_HARVEST = N * N * N * N * 2 ** (SMALL_HARVEST - 1) // 5
 
 
+# Spawn a drone for every block but the first, which this drone takes. Each drone hands half of
+# its list to a new drone, so the last one starts after five spawns instead of 31.
+def launch(blocks, start, goal):
+	while len(blocks) > 1:
+		half = len(blocks) // 2
+		keep = []
+		rest = []
+		for k in range(len(blocks)):
+			if k < half:
+				keep.append(blocks[k])
+			else:
+				rest.append(blocks[k])
+		spawn_drone(launch, rest, start, goal)
+		blocks = keep
+	b = blocks[0]
+	worker(b[0], b[1], start, b[2], goal)
+
+
 def run(goal):
-	# Time for the last drone to be spawned, reach its block and till it.
-	start = get_time() + SLOT_NOW * 90
-	if N >= 32:
-		start = get_time() + SLOT_NOW * 140
+	# Time for the last drone to be spawned, reach its block and till it (or just reach it, when
+	# the first planting tills).
+	start = get_time() + SLOT_NOW * START_SLOTS
+	blocks = []
 	for by in range(0, N, S):
 		for bx in range(0, N, 2):
-			if bx + by > 0:
-				role = 0
-				if bx + 2 == N and by + S == N:
-					role = 2
-				spawn_drone(worker, bx, by, start, role, goal)
-	# The other drones stop on the same check, and the program ends once all of them have.
-	worker(0, 0, start, 1, goal)
+			role = 0
+			if bx + by == 0:
+				role = 1
+			elif bx + 2 == N and by + S == N:
+				role = 2
+			blocks.append([bx, by, role])
+	# The drones all stop on the same check, and the program ends once all of them have.
+	launch(blocks, start, goal)
 
 
 if __name__ == "__main__":
