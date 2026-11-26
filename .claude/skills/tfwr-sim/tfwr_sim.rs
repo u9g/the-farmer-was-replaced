@@ -2923,6 +2923,8 @@ impl From<String> for Ctrl {
     }
 }
 type Res = Result<(), Ctrl>;
+/// a node's value, or how its evaluation was cut short
+type Ev = Result<V, Ctrl>;
 /// One C# IEnumerator<double>: resuming it is MoveNext(), a yield is `yield return`.
 
 #[derive(Clone)]
@@ -3357,40 +3359,49 @@ fn is_items_spin(node: &Rc<Node>) -> bool {
     (is_num_items(a) && is_operand(b)) || (is_num_items(b) && is_operand(a))
 }
 
-fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
+/// Runs a block of statements (a function body, a loop or branch body, a module). The game's
+/// SequenceNode also collects each statement's value into a list, but nothing ever reads a block's
+/// value, so it is not built here.
+fn exec_block(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
+    if let NK::Seq = &node.kind {
+        for slot in node.slots.iter() {
+            exec(slot, st, depth + 1)?;
+        }
+        Ok(())
+    } else {
+        exec(node, st, depth).map(|_| ())
+    }
+}
+
+/// Node.Execute: runs a node and returns its value (the game's returnValue).
+fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Ev {
     {
         {
             match &node.kind {
                 NK::Seq => {
                     let mut elements = Vec::with_capacity(node.slots.len());
                     for slot in node.slots.iter() {
-                        exec(&slot, st, depth + 1)?;
-                        elements.push(rv(&st));
+                        elements.push(exec(slot, st, depth + 1)?);
                     }
-                    set_rv(&st, V::Seq(Rc::new(elements)));
-                    Ok(())
+                    Ok(V::Seq(Rc::new(elements)))
                 }
                 NK::Value(name) => {
                     eb(&st, &node, depth)?;
                     let s = stm(st);
                     let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
                     let (v, is_static) = scope_evaluate(scope, name)?;
-                    s.module_state.return_value = v;
                     s.module_state.is_expression_static = is_static;
-                    Ok(())
+                    Ok(v)
                 }
                 NK::Literal(v) => {
                     eb(&st, &node, depth)?;
-                    let mut s = st.borrow_mut();
-                    s.module_state.return_value = v.clone();
-                    s.module_state.is_expression_static = false;
-                    Ok(())
+                    stm(st).module_state.is_expression_static = false;
+                    Ok(v.clone())
                 }
                 NK::Bracket => exec(&node.slots[0], st, depth + 1),
                 NK::Call => {
                     eb(&st, &node, depth)?;
-                    exec(&node.slots[0], st, depth + 1)?;
-                    let func = match rv(&st) {
+                    let func = match exec(&node.slots[0], st, depth + 1)? {
                         V::Func(f) => f,
                         _ => {
                             st.borrow_mut().current_executing_node = Rc::as_ptr(node);
@@ -3398,8 +3409,8 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                         }
                     };
                     let is_static = st.borrow().module_state.is_expression_static;
-                    exec(&node.slots[1], st, depth + 1)?;
-                    let mut parameters: Vec<V> = match rv(&st) {
+                    let args = exec(&node.slots[1], st, depth + 1)?;
+                    let mut parameters: Vec<V> = match &args {
                         V::Seq(s) => s.to_vec(),
                         _ => Vec::new(),
                     };
@@ -3423,6 +3434,10 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                         st.borrow_mut().frames -= 1;
                         return r;
                     }
+                    // A builtin's result arrives in returnValue: set by the builtin itself, or by the
+                    // scheduler when it applies the side effect. One that sets none leaves the
+                    // argument list there, as in the game.
+                    stm(st).module_state.return_value = args;
                     let mut num = call_builtin(func.binding.unwrap(), parameters, &st)?;
                     if func.is_free && !is_static {
                         num = num.max(OPERATION_OPS);
@@ -3430,12 +3445,11 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                     if check_inc(&st, num) {
                         yp(st);
                     }
-                    Ok(())
+                    Ok(std::mem::replace(&mut stm(st).module_state.return_value, V::None))
                 }
                 NK::Unary(op) => {
                     eb(&st, &node, depth)?;
-                    exec(&node.slots[0], st, depth + 1)?;
-                    let value = rv(&st);
+                    let value = exec(&node.slots[0], st, depth + 1)?;
                     st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                     if let V::Func(f) = &value {
                         if op.as_ref() != "not" {
@@ -3447,39 +3461,36 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                             if value.num().is_none() {
                                 return Err(Ctrl::Err(err("error_bad_unary_operator", &[op.to_string(), nice_el(&value)])));
                             }
+                            Ok(value)
                         }
                         "-" => match value.num() {
-                            Some(n) => set_rv(&st, V::Num(0.0 - n)),
+                            Some(n) => Ok(V::Num(0.0 - n)),
                             None => {
                                 return Err(Ctrl::Err(err("error_bad_unary_operator", &[op.to_string(), nice_el(&value)])))
                             }
                         },
                         _ => {
                             let b = !is_true_value(&value)?;
-                            set_rv(&st, V::Bool(b));
+                            Ok(V::Bool(b))
                         }
                     }
-                    Ok(())
                 }
                 NK::Binary(op, _, bop) => {
                     let op: &str = op.as_ref();
                     let bop = *bop;
                     eb(&st, &node, depth)?;
-                    exec(&node.slots[0], st, depth + 1)?;
-                    let lhs = rv(&st);
+                    let lhs = exec(&node.slots[0], st, depth + 1)?;
                     if bop == BOp::And && !is_true_value(&lhs)? {
-                        set_rv(&st, lhs);
                         if check_inc(&st, OPERATION_OPS) {
                             yp(st);
                         }
-                        return Ok(());
+                        return Ok(lhs);
                     }
                     if bop == BOp::Or && is_true_value(&lhs)? {
-                        set_rv(&st, lhs);
                         if check_inc(&st, OPERATION_OPS) {
                             yp(st);
                         }
-                        return Ok(());
+                        return Ok(lhs);
                     }
                     if bop == BOp::Dot && matches!(lhs, V::Module(_) | V::Bag(_)) {
                         let member = match &node.slots[1].kind {
@@ -3495,13 +3506,10 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                             V::Bag(ns) => (bag_evaluate(*ns, &member)?, true),
                             _ => unreachable!(),
                         };
-                        let mut s = st.borrow_mut();
-                        s.module_state.return_value = v;
-                        s.module_state.is_expression_static &= flag;
-                        return Ok(());
+                        stm(st).module_state.is_expression_static &= flag;
+                        return Ok(v);
                     }
-                    exec(&node.slots[1], st, depth + 1)?;
-                    let rhs = rv(&st);
+                    let rhs = exec(&node.slots[1], st, depth + 1)?;
                     st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                     if !matches!(bop, BOp::And | BOp::Or | BOp::Dot) {
                         let f = match (&lhs, &rhs) {
@@ -3585,18 +3593,16 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                             })
                         }
                     };
-                    set_rv(&st, result);
                     if check_inc(&st, OPERATION_OPS * steps as f64) {
                         yp(st);
                     }
-                    Ok(())
+                    Ok(result)
                 }
                 NK::Comparison(ops, cops) => {
                     eb(&st, &node, depth)?;
                     let mut operands = Vec::with_capacity(node.slots.len());
                     for slot in node.slots.iter() {
-                        exec(&slot, st, depth + 1)?;
-                        operands.push(rv(&st));
+                        operands.push(exec(slot, st, depth + 1)?);
                     }
                     st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                     let mut steps: i32 = 0;
@@ -3648,11 +3654,10 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                             break;
                         }
                     }
-                    set_rv(&st, V::Bool(flag));
                     if check_inc(&st, OPERATION_OPS * steps as f64) {
                         yp(st);
                     }
-                    Ok(())
+                    Ok(V::Bool(flag))
                 }
                 NK::Branch(looping) => {
                     let looping = *looping;
@@ -3687,8 +3692,8 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                                 s.spin_read = None;
                                 s.spin_period = None;
                             }
-                            cond_result?;
-                            condition = is_true_value(&rv(&st))?;
+                            let cv = cond_result?;
+                            condition = is_true_value(&cv)?;
                             if !condition && items_spin {
                                 let mut s = st.borrow_mut();
                                 s.spin_read = None;
@@ -3704,13 +3709,13 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                         if !condition {
                             break;
                         }
-                        match exec(&node.slots[1], st, depth + 1) {
+                        match exec_block(&node.slots[1], st, depth + 1) {
                             Ok(()) => {}
                             Err(Ctrl::Break) => {
                                 if !looping {
                                     return Err(Ctrl::Break);
                                 }
-                                return Ok(());
+                                return Ok(V::None);
                             }
                             Err(Ctrl::Continue) => {
                                 if !looping {
@@ -3720,22 +3725,19 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                             Err(e) => return Err(e),
                         }
                         if !looping {
-                            set_rv(&st, V::None);
-                            return Ok(());
+                            return Ok(V::None);
                         }
                         eb(&st, &node, depth)?;
                         yp(st);
                     }
                     if node.slots.len() > 2 {
-                        exec(&node.slots[2], st, depth + 1)?;
+                        exec_block(&node.slots[2], st, depth + 1)?;
                     }
-                    set_rv(&st, V::None);
-                    Ok(())
+                    Ok(V::None)
                 }
                 NK::For => {
                     eb(&st, &node, depth)?;
-                    exec(&node.slots[0], st, depth + 1)?;
-                    let iterable = rv(&st);
+                    let iterable = exec(&node.slots[0], st, depth + 1)?;
                     if !is_enumerable(&iterable) {
                         st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                         return Err(Ctrl::Err(err("error_for_requires_iterable", &[nice_el(&iterable)])));
@@ -3751,23 +3753,21 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                             None => break,
                         };
                         assign(st, depth, &node.slots[2], current, &assign_op)?;
-                        match exec(&node.slots[1], st, depth + 1) {
+                        match exec_block(&node.slots[1], st, depth + 1) {
                             Ok(()) | Err(Ctrl::Continue) => {}
-                            Err(Ctrl::Break) => return Ok(()),
+                            Err(Ctrl::Break) => return Ok(V::None),
                             Err(e) => return Err(e),
                         }
                         eb(&st, &node, depth)?;
                     }
-                    Ok(())
+                    Ok(V::None)
                 }
                 NK::Assignment(op) => {
                     eb(&st, &node, depth)?;
-                    exec(&node.slots[1], st, depth + 1)?;
-                    let value = rv(&st);
+                    let value = exec(&node.slots[1], st, depth + 1)?;
                     st.borrow_mut().current_executing_node = Rc::as_ptr(node);
                     assign(st, depth, &node.slots[0], value, &op)?;
-                    set_rv(&st, V::None);
-                    Ok(())
+                    Ok(V::None)
                 }
                 NK::Def(func_name, is_static) => {
                     eb(&st, &node, depth)?;
@@ -3781,20 +3781,16 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                         is_free: false,
                     });
                     scope_set_var(&scope, func_name, V::Func(f), *is_static);
-                    set_rv(&st, V::None);
                     if check_inc(&st, OPERATION_OPS) {
                         yp(st);
                     }
-                    Ok(())
+                    Ok(V::None)
                 }
                 NK::Function { .. } => Err(Ctrl::Err("a function body cannot be executed without a call".into())),
                 NK::Return => {
                     eb(&st, &node, depth)?;
-                    if !node.slots.is_empty() {
-                        exec(&node.slots[0], st, depth + 1)?;
-                    } else {
-                        set_rv(&st, V::None);
-                    }
+                    let v = if !node.slots.is_empty() { exec(&node.slots[0], st, depth + 1)? } else { V::None };
+                    stm(st).module_state.return_value = v;
                     if check_inc(&st, 0.0) {
                         yp(st);
                     }
@@ -3806,7 +3802,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                     if check_inc(&st, OPERATION_OPS) {
                         yp(st);
                     }
-                    Ok(())
+                    Ok(V::None)
                 }
                 NK::Break => {
                     eb(&st, &node, depth)?;
@@ -3825,7 +3821,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                 NK::Global => {
                     eb(&st, &node, depth)?;
                     yp(st);
-                    Ok(())
+                    Ok(V::None)
                 }
                 NK::Import { module_names, unpack, unpack_all, vars_to_unpack, is_static } => {
                     eb(&st, &node, depth)?;
@@ -3869,7 +3865,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                                 is_expression_static: false,
                             };
                             let old = std::mem::replace(&mut st.borrow_mut().module_state, module_state);
-                            let r = exec(&tree, st, depth);
+                            let r = exec_block(&tree, st, depth);
                             st.borrow_mut().module_state = old;
                             r?;
                             module.fully_initialized.set(true);
@@ -3894,41 +3890,38 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                             scope_import_var(&scope, name, V::Module(module), *is_static);
                         }
                     }
-                    Ok(())
+                    Ok(V::None)
                 }
                 NK::List => {
                     eb(&st, &node, depth)?;
-                    exec(&node.slots[0], st, depth + 1)?;
-                    let elements = match rv(&st) {
-                        V::Seq(s) => s.to_vec(),
+                    let elements = match exec(&node.slots[0], st, depth + 1)? {
+                        V::Seq(s) => Rc::try_unwrap(s).unwrap_or_else(|s| s.to_vec()),
                         _ => Vec::new(),
                     };
                     let count = elements.len();
-                    set_rv(&st, new_list(elements));
+                    let value = new_list(elements);
                     set_static(&st, false);
                     if check_inc(&st, OPERATION_OPS * (count.max(1) as f64)) {
                         yp(st);
                     }
-                    Ok(())
+                    Ok(value)
                 }
                 NK::Tuple => {
                     eb(&st, &node, depth)?;
-                    exec(&node.slots[0], st, depth + 1)?;
-                    let elements = match rv(&st) {
+                    let elements = match exec(&node.slots[0], st, depth + 1)? {
                         V::Seq(s) => s,
                         _ => Rc::new(Vec::new()),
                     };
-                    set_rv(&st, V::Tuple(Rc::new(elements.to_vec())));
+                    let value = V::Tuple(Rc::new(Rc::try_unwrap(elements).unwrap_or_else(|s| s.to_vec())));
                     set_static(&st, false);
                     if check_inc(&st, OPERATION_OPS) {
                         yp(st);
                     }
-                    Ok(())
+                    Ok(value)
                 }
                 NK::Dict => {
                     eb(&st, &node, depth)?;
-                    exec(&node.slots[0], st, depth + 1)?;
-                    let elements = match rv(&st) {
+                    let elements = match exec(&node.slots[0], st, depth + 1)? {
                         V::Seq(s) => s,
                         _ => Rc::new(Vec::new()),
                     };
@@ -3944,17 +3937,16 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                         i += 2;
                     }
                     let count = dictionary.len();
-                    set_rv(&st, V::Dict(Rc::new(RefCell::new(dictionary))));
+                    let value = V::Dict(Rc::new(RefCell::new(dictionary)));
                     set_static(&st, false);
                     if check_inc(&st, OPERATION_OPS * (1 + count) as f64) {
                         yp(st);
                     }
-                    Ok(())
+                    Ok(value)
                 }
                 NK::Set => {
                     eb(&st, &node, depth)?;
-                    exec(&node.slots[0], st, depth + 1)?;
-                    let elements = match rv(&st) {
+                    let elements = match exec(&node.slots[0], st, depth + 1)? {
                         V::Seq(s) => s,
                         _ => Rc::new(Vec::new()),
                     };
@@ -3971,12 +3963,11 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                     }
                     let value = V::Set(Rc::new(RefCell::new(hash_set)));
                     let size = py_size(&value);
-                    set_rv(&st, value);
                     set_static(&st, false);
                     if check_inc(&st, OPERATION_OPS * size.max(1) as f64) {
                         yp(st);
                     }
-                    Ok(())
+                    Ok(value)
                 }
             }
         }
@@ -3992,7 +3983,7 @@ fn module_export(m: &Rc<PyModule>, value: &str) -> R<(V, bool)> {
 }
 
 /// FunctionNode.Execute
-fn exec_function(node: &Rc<Node>, st: &StRef, mut arguments: Vec<V>, depth: i32) -> Res {
+fn exec_function(node: &Rc<Node>, st: &StRef, mut arguments: Vec<V>, depth: i32) -> Ev {
     {
         {
             let (param_names, func_name) = match &node.kind {
@@ -4010,8 +4001,7 @@ fn exec_function(node: &Rc<Node>, st: &StRef, mut arguments: Vec<V>, depth: i32)
             eb(&st, &node, depth)?;
             let mut i = num_default_values - num;
             while i < num_default_values {
-                exec(&node.slots[(i + 1) as usize], st, depth + 1)?;
-                arguments.push(rv(&st));
+                arguments.push(exec(&node.slots[(i + 1) as usize], st, depth + 1)?);
                 i += 1;
             }
             {
@@ -4020,21 +4010,21 @@ fn exec_function(node: &Rc<Node>, st: &StRef, mut arguments: Vec<V>, depth: i32)
                     scope_set_var(&scope, &param_names[j], arguments[j].clone(), false);
                 }
             }
-            match exec(&node.slots[0], st, depth + 1) {
+            match exec_block(&node.slots[0], st, depth + 1) {
                 Ok(()) => {}
                 Err(Ctrl::Break) => return Err(Ctrl::Err("error_no_loop_to_break".into())),
                 Err(Ctrl::Continue) => return Err(Ctrl::Err("error_no_loop_to_continue".into())),
                 Err(Ctrl::Return) => {
-                    st.borrow_mut().module_state.call_stack.pop();
-                    return Ok(());
+                    let s = stm(st);
+                    s.module_state.call_stack.pop();
+                    return Ok(std::mem::replace(&mut s.module_state.return_value, V::None));
                 }
                 Err(e) => return Err(e),
             }
-            let mut s = st.borrow_mut();
-            s.module_state.return_value = V::None;
+            let s = stm(st);
             s.module_state.is_expression_static = false;
             s.module_state.call_stack.pop();
-            Ok(())
+            Ok(V::None)
         }
     }
 }
@@ -4099,9 +4089,9 @@ fn assign(st: &StRef, depth: i32, lhs: &Rc<Node>, rhs: V, op: &Rc<str>) -> Res {
                     Ok(())
                 }
                 NK::Binary(bop, _, _) => {
-                    exec(&lhs.slots[0], st, depth + 1)?;
+                    let target = exec(&lhs.slots[0], st, depth + 1)?;
                     if bop.as_ref() == "." {
-                        let module = match rv(&st) {
+                        let module = match target {
                             V::Module(m) => m,
                             other => {
                                 st.borrow_mut().current_executing_node = Rc::as_ptr(lhs);
@@ -4122,13 +4112,12 @@ fn assign(st: &StRef, depth: i32, lhs: &Rc<Node>, rhs: V, op: &Rc<str>) -> Res {
                         return Ok(());
                     }
                     if bop.as_ref() == "[]" {
-                        let indexable = rv(&st);
+                        let indexable = target;
                         if !(indexable.is_seq() || matches!(indexable, V::Dict(_))) {
                             st.borrow_mut().current_executing_node = Rc::as_ptr(lhs);
                             return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(&indexable)])));
                         }
-                        exec(&lhs.slots[1], st, depth + 1)?;
-                        let indices = match rv(&st) {
+                        let indices = match exec(&lhs.slots[1], st, depth + 1)? {
                             V::Seq(s) => s,
                             _ => Rc::new(Vec::new()),
                         };
@@ -6974,7 +6963,7 @@ impl Sim {
             next_execution_time: self.current_time,
             stopped: false,
         });
-        let st = self.add_program_state(0, Box::new(move |st| exec(&tree, st, 0)), 0.0);
+        let st = self.add_program_state(0, Box::new(move |st| exec_block(&tree, st, 0)), 0.0);
         self.execution.as_mut().unwrap().main_state = Some(st);
         self.paused = false;
         self.finished = false;
@@ -7480,7 +7469,12 @@ impl Sim {
                     let g = self.execution.as_ref().unwrap().global_op_count;
                     let fnode = function_node.clone();
                     let new_state =
-                        self.add_program_state(num11, Box::new(move |s| exec_function(&fnode, s, list2, 0)), g + ACTION_OPS);
+                        self.add_program_state(
+                            num11,
+                            // the function's result is the drone's, for wait_for
+                            Box::new(move |s| exec_function(&fnode, s, list2, 0).map(|v| stm(s).module_state.return_value = v)),
+                            g + ACTION_OPS,
+                        );
                     let vars = match &function_node.kind {
                         NK::Function { vars, .. } => vars.clone(),
                         _ => Vec::new(),
