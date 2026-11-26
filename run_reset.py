@@ -301,7 +301,14 @@ def tend_mixed(cdef):
 			if comp == None:
 				return
 			cp = comp[1]
-			if cp[0] >= COLS[0] and cp[0] < COLS[1] and cp != pos:
+			ok = cp[0] >= COLS[0] and cp[0] < COLS[1] and cp != pos
+			if ok and PW_C1[0] > 0:
+				n = get_world_size()
+				tc = cp[0] * n + cp[1]
+				if cp[0] % 2 == 1:
+					tc = cp[0] * n + n - 1 - cp[1]
+				ok = tc >= PW_C0[0] and tc < PW_C1[0]
+			if ok:
 				if cp not in WANT:
 					WANT[cp] = (comp[0], pos)
 					REQ[pos] = cp
@@ -666,69 +673,48 @@ def pw_cell_servant(c, hay):
 	pw_make(e, t)
 
 
-def poly_job(i, d, need, flags):
-	passes = 2
-	strip = flags[0]
-	global PW_T
-	global PW_BY
+def mixed_seg(i, d, need, flags):
+	# mixed_job for more drones than columns: drone i tends cells i*N//d.. of the whole field's
+	# snake path (up column 0, down column 1, ...) and claims companions only inside that stretch
+	# (PW_C0[0]..PW_C1[0] as path indices)
+	global NEED
+	global POLY
+	NEED = need
+	POLY = True
+	for k in PEND:
+		PEND[k] = 0
 	n = get_world_size()
-	c0 = i * n // d
-	c1 = (i + 1) * n // d
-	if strip:
-		c0 = 2
-	PW_C0[0] = c0
-	PW_C1[0] = c1
-	if len(PW_T) != n * n:
-		PW_T = []
-		PW_BY = []
-		for c in range(n * n):
-			PW_T.append(None)
-			PW_BY.append(-1)
-	if strip:
-		go(0, 0)
-		for x in range(2):
-			for y in range(n):
-				sun_cell()
-				move(North)
-			move(East)
-	go(c0, 0)
-	for p in range(passes):
-		have = {Items.Carrot: num_items(Items.Carrot), Items.Wood: num_items(Items.Wood), Items.Hay: num_items(Items.Hay)}
-		done = True
-		for it in need:
-			if have[it] < need[it]:
-				done = False
-		if done:
-			return 0
-		hay = Items.Hay in need and have[Items.Hay] < need[Items.Hay]
-		if p % 2 == 0:
-			xs = range(c0, c1)
-		else:
-			xs = range(c1 - 1, c0 - 1, -1)
-		for x in xs:
-			have = {Items.Carrot: num_items(Items.Carrot), Items.Wood: num_items(Items.Wood), Items.Hay: num_items(Items.Hay)}
-			t = pw_crop(need, have, n)
-			if get_pos_y() == 0:
-				ys = range(n)
-				dy = North
+	w = width()
+	N = w * n
+	lo = i * N // d
+	hi = (i + 1) * N // d
+	PW_C0[0] = lo
+	PW_C1[0] = hi
+	COLS[0] = 0
+	COLS[1] = w
+	cx = -1
+	cs = []
+	for t in range(lo, hi):
+		x = t // n
+		y = t % n
+		if x % 2 == 1:
+			y = n - 1 - y
+		if x != cx:
+			cx = x
+			go(x, y)
+			ce = choose(True)
+			co = choose(False)
+			if x % 2 == 0:
+				cs = [ce, co]
 			else:
-				ys = range(n - 1, -1, -1)
-				dy = South
-			k = 0
-			for y in ys:
-				c = x * n + y
-				if (x + y) % 2 == 0:
-					pw_cell_crop(c, n, t, 2)
-				else:
-					pw_cell_servant(c, hay)
-				k += 1
-				if k < n:
-					move(dy)
-			if p % 2 == 0:
-				if x < c1 - 1:
-					move(East)
-			elif x > c0:
-				move(West)
+				cs = [co, ce]
+		mixed_cell(False, flags[1], cs[y % 2])
+		if t < hi - 1 and (t + 1) // n == x:
+			if x % 2 == 0:
+				move(North)
+			else:
+				move(South)
+	PW_C1[0] = 0
 	return 0
 
 
@@ -899,26 +885,55 @@ def sun_plant2(i, d, wet, b):
 	for v in range(16):
 		by.append([])
 	ready = 0
-	for x in my_cols(i, d):
-		go(x, 0)
-		for y in range(n):
-			if get_entity_type() != Entities.Sunflower:
-				clear_cell()
-				soil()
-				plant(Entities.Sunflower)
-			if wet > 0:
-				k = min(wet, (SUN_WET - get_water()) // 0.25)
-				if k >= 1 and num_items(Items.Water) >= k:
-					use_item(Items.Water, k)
-			t = get_time() + 8.4 / (1 + 3.8 * get_water())
-			if t > ready:
-				ready = t
-			m = measure()
-			if m != None:
-				by[m].append((x, y))
-			move(North)
-	cx = my_cols(0, d)[-1]
-	cy = 0
+	# rd[v]: when the last flower with v petals is grown; a level's cuts wait only for its own flowers
+	rd = []
+	for v in range(16):
+		rd.append(0)
+	# my cells: whole columns, or with more drones than columns a stretch of the whole field's
+	# snake path (up column 0, down column 1, ...)
+	N = w * n
+	lo = i * N // d
+	hi = (i + 1) * N // d
+	if d <= w:
+		cs = my_cols(i, d)
+		lo = cs[0] * n
+		hi = lo + len(cs) * n
+	if b > 0 and hi > lo + b:
+		# a part round: only the first b cells
+		hi = lo + b
+	for c in range(lo, hi):
+		x = c // n
+		y = c % n
+		if d > w and x % 2 == 1:
+			y = n - 1 - y
+		go(x, y)
+		if get_entity_type() != Entities.Sunflower:
+			clear_cell()
+			soil()
+			plant(Entities.Sunflower)
+		if wet > 0:
+			k = min(wet, (SUN_WET - get_water()) // 0.25)
+			if k >= 1 and num_items(Items.Water) >= k:
+				use_item(Items.Water, k)
+		t = get_time() + 8.4 / (1 + 3.8 * get_water())
+		if t > ready:
+			ready = t
+		m = measure()
+		if m != None:
+			by[m].append((x, y))
+			if t > rd[m]:
+				rd[m] = t
+	# the main drone's end cell, where every cut drone is spawned
+	c = 1 * N // d
+	if d <= w:
+		c = (my_cols(0, d)[-1] + 1) * n
+	if b > 0 and c > b:
+		c = b
+	c -= 1
+	cx = c // n
+	cy = c % n
+	if d > w and cx % 2 == 1:
+		cy = n - 1 - cy
 	plan = []
 	for v in range(15, 6, -1):
 		left = by[v]
@@ -944,7 +959,7 @@ def sun_plant2(i, d, wet, b):
 			cx = c[0]
 			cy = c[1]
 		plan.append((route, walk, work))
-	return (plan, ready)
+	return (plan, ready, rd)
 
 
 def sun_cut2(i, d, a):
@@ -967,7 +982,16 @@ def sun_cut2(i, d, a):
 
 def power_round2(n):
 	wet = min(SUN_WN, (num_items(Items.Water) - SUN_WRES) // n)
-	res = all_drones(sun_plant2, wet, 0)
+	d = drones()
+	if width() > 1:
+		d = min(max_drones(), width() * get_world_size())
+	b = 0
+	if SUN_TARGET > 0 and SUN_PART:
+		# plant only what the target needs: 8 power a cut, the drones' own use meanwhile, and the
+		# last 9 flowers (cut once fewer than 10 are left) give almost nothing
+		k = (SUN_TARGET - num_items(Items.Power) + d * SUN_PDR) // (8 * lvl_mult(Unlocks.Sunflowers)) + 12
+		b = k // d + 1
+	res = spawn_node(0, d, d, (sun_plant2, wet, b))
 	d = len(res)
 	act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
 	if num_items(Items.Power) > 0:
@@ -988,12 +1012,21 @@ def power_round2(n):
 			for i in range(d):
 				gain += per * len(plans[i][L][0])
 			L += 1
-	T = [ready + SUN_GROW]
+	rl = []
+	for v in range(16):
+		rl.append(0)
+	for r in res:
+		for v in range(16):
+			if r[2][v] > rl[v]:
+				rl[v] = r[2][v]
+	T = [rl[15] + SUN_GROW]
 	now = get_time() + 6 * act
 	ts = []
 	for i in range(d):
 		ts.append(now)
 	for li in range(L):
+		if rl[15 - li] + SUN_GROW > T[li]:
+			T[li] = rl[15 - li] + SUN_GROW
 		tv = T[li]
 		f = tv
 		for i in range(d):
@@ -1015,6 +1048,10 @@ def power_round2(n):
 MZ_TPF = 0.21
 SUN_PAD = 150
 SUN_TARGET = 0
+SUN_PART = True
+SUN_PDR = 12
+PW_LATE = 400
+PW_MARGIN = 1.0
 
 
 def power_need(need):
@@ -1031,7 +1068,12 @@ def power_need(need):
 def power_check():
 	if num_unlocked(Unlocks.Sunflowers) == 0 or width() < 6 or (SUN_STRIP and drones() == 1):
 		return
-	if num_items(Items.Power) < 60 * drones():
+	lim = 60 * drones()
+	if num_unlocked(Unlocks.Mazes) >= 4:
+		# only snakes (one drone and its helpers) and the last maze are left: that maze's own
+		# power check makes just what it needs
+		lim = PW_LATE
+	if num_items(Items.Power) < lim:
 		power_round()
 
 
@@ -1064,6 +1106,19 @@ def fan(job, lo, hi, d, a):
 def snake(i, d):
 	# path through drone i's columns: up the first, down the next, ...
 	n = get_world_size()
+	if d > n:
+		# more drones than columns: drone i takes cells i*N//d.. of the whole field's path
+		px = []
+		py = []
+		N = n * n
+		for t in range(i * N // d, (i + 1) * N // d):
+			x = t // n
+			px.append(x)
+			if x % 2 == 0:
+				py.append(t % n)
+			else:
+				py.append(n - 1 - t % n)
+		return (px, py)
 	px = []
 	py = []
 	up = True
@@ -1098,6 +1153,8 @@ def step_dir(x0, y0, x1, y1):
 
 PK_WLO = 0.25
 PK_FA = 2
+PK_RES = 6000
+PK_ALL = True
 
 
 def pk_wet():
@@ -1188,6 +1245,8 @@ def pk_job(i, d, a):
 def pumpkin_round():
 	# every drone returns once its columns have grown, so the field is one pumpkin by then
 	d = drones()
+	if PK_ALL and width() > 1:
+		d = min(max_drones(), width() * get_world_size())
 	fan(pk_job, 0, d, d, 0)
 	if get_entity_type() == Entities.Pumpkin:
 		harvest()
@@ -3431,7 +3490,12 @@ def carrots_for(n):
 	# make sure n carrots are on hand (seeds for pumpkins / sunflowers)
 	while num_items(Items.Carrot) < n:
 		c = with_seeds({Items.Carrot: n * 2})
-		mixed_round((c, c))
+		if num_unlocked(Unlocks.Polyculture) > 0 and max_drones() > width():
+			# more drones than columns: every drone tends a stretch of the field
+			d = min(max_drones(), width() * get_world_size())
+			spawn_node(0, d, d, (mixed_seg, (c, c), (False, False)))
+		else:
+			mixed_round((c, c))
 
 
 WSB = 60000
@@ -3448,6 +3512,13 @@ def farm(item, amount):
 	elif item == Items.Pumpkin:
 		carrots_for(cells * 2 * lvl_mult(Unlocks.Pumpkins))
 		pumpkin_round()
+		e7 = get_cost(Unlocks.Expand)[Items.Pumpkin]
+		if num_unlocked(Unlocks.Expand) == 6 and num_items(Items.Pumpkin) >= e7 and num_items(Items.Pumpkin) < e7 + PK_RES:
+			# Expand 7 is affordable: first the pumpkins for the cactus seeds after it, made here
+			# on the 12x12 field (6,900 in ~5 s) instead of in a 16x16 round later (~20 s with
+			# the carrots for its seeds)
+			carrots_for(cells * 2 * lvl_mult(Unlocks.Pumpkins))
+			pumpkin_round()
 	elif item == Items.Weird_Substance and num_unlocked(Unlocks.Cactus) == 0:
 		weird_round(amount)
 	elif item == Items.Cactus or item == Items.Weird_Substance:
@@ -3472,7 +3543,14 @@ def farm(item, amount):
 				f1 = (MZ_BUY - num_items(Items.Gold)) // (n * n * m) + 1
 				pw = min(max_drones(), n * n) * (f1 * 0.22 + 12) + 2 * min(max_drones(), n * n) * ((finds - f1) * 0.22 + 12)
 			if num_unlocked(Unlocks.Sunflowers) > 0 and num_items(Items.Power) < pw:
-				power_round()
+				if num_unlocked(Unlocks.Mazes) >= 4 and SUN_PART:
+					# the last maze: a power round just big enough for it
+					global SUN_TARGET
+					SUN_TARGET = pw * PW_MARGIN
+					power_round()
+					SUN_TARGET = 0
+				else:
+					power_round()
 			maze_round(n, amount)
 	elif item == Items.Bone:
 		DINO_GOAL = amount
