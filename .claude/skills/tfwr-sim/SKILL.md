@@ -61,7 +61,7 @@ The first run after the file changes takes about 25 s to build (one fully optimi
 | `--give item=n` | override an inventory count, e.g. `--give pumpkin=1e9` |
 | `--size N`, `--drones N` | override the board size and drone limit from the save |
 | `--quiet` | hide `print` / `quick_print` output (shown under each run's report when there are several runs) |
-| `--brief` | one line per script, sorted by rate: rate, cycle time, mean and smallest harvest, warnings and errors. Implies `--quiet` |
+| `--brief` | one line per script, sorted by rate: rate, cycle time, mean and smallest harvest, warnings and errors. Implies `--quiet`. Harvests under half the run's biggest are left out of the figures but counted as `[N short harvests, smallest X]`: check that tag, since a short harvest can be a failure (a snake that died at length 14) rather than a small extra cut |
 | `--leaderboard NAME` | run as a leaderboard attempt (see below) |
 | `--profile` | where the time goes: by drone, unlock, function and line (see Finding where to speed up a run) |
 | `--whatif` | leaderboard runs: what a 20% improvement in each of ticks, compute, growth and each item would save |

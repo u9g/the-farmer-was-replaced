@@ -14707,6 +14707,9 @@ fn main() {
         for (ci, cfg) in cfgs.iter().enumerate() {
             let (mut total, mut span, mut count, mut amount, mut gap_sum, mut gaps) = (0.0, 0.0, 0usize, 0.0, 0.0, 0usize);
             let (mut least, mut errors, mut warnings, mut runs) = (f64::INFINITY, 0usize, 0u64, 0usize);
+            // harvests under half their run's biggest: left out of the figures, but counted, since
+            // they can be failures (a snake that died short) rather than small extra cuts
+            let (mut shorts, mut short_least) = (0usize, f64::INFINITY);
             let mut first_error = String::new();
             for s in 0..seeds as usize {
                 let r = match results[ci * seeds as usize + s].lock().unwrap().take() {
@@ -14738,6 +14741,10 @@ fn main() {
                     count += full.len();
                     amount += full.iter().map(|e| e.1).sum::<f64>();
                     least = full.iter().map(|e| e.1).fold(least, f64::min);
+                    for e in h.events.iter().filter(|e| e.1 * 2.0 < biggest) {
+                        shorts += 1;
+                        short_least = short_least.min(e.1);
+                    }
                     gap_sum += full.windows(2).map(|w| w[1].0 - w[0].0).sum::<f64>();
                     gaps += full.len().saturating_sub(1);
                 }
@@ -14755,6 +14762,9 @@ fn main() {
                 group(if count > 0 { least } else { 0.0 }),
                 cfg.script.display()
             );
+            if shorts > 0 {
+                line.push_str(&format!("  [{} short harvest{}, smallest {}]", shorts, if shorts == 1 { "" } else { "s" }, group(short_least)));
+            }
             if warnings > 0 {
                 line.push_str(&format!("  [{} warnings]", warnings));
             }
