@@ -857,8 +857,8 @@ impl DMap {
         self.slots[i].as_mut().unwrap().1 = v;
     }
     fn put(&mut self, key: Key, k: V, v: V) {
-        if self.index.contains_key(&key) {
-            self.set_existing(&key, v);
+        if let Some(&i) = self.index.get(&key) {
+            vdrop(std::mem::replace(&mut self.slots[i].as_mut().unwrap().1, v));
         } else {
             self.insert_new(key, k, v);
         }
@@ -1432,14 +1432,19 @@ fn index_at(target: &V, indices: &[V], steps: &mut i32, value_to_set: Option<V>)
             return Err(err("error_bad_key", &[nice_el(k)]));
         }
         let key = to_key(k)?;
-        if !d.borrow().contains(&key) && value_to_set.is_none() {
-            return Err(err("error_key", &[nice_el(k)]));
-        }
-        *steps = py_size(k).max(1);
         if let Some(v) = value_to_set {
-            d.borrow_mut().put(key.clone(), k.clone(), v);
+            *steps = py_size(k).max(1);
+            let r = v.clone();
+            d.borrow_mut().put(key, k.clone(), v);
+            return Ok(r);
         }
-        return Ok(d.borrow().get(&key).unwrap());
+        return match d.borrow().get(&key) {
+            Some(v) => {
+                *steps = py_size(k).max(1);
+                Ok(v)
+            }
+            None => Err(err("error_key", &[nice_el(k)])),
+        };
     }
     let count = seq_len(target) as f64;
     let all_num_or_none = indices.iter().all(|o| o.num().is_some() || o.is_none());
@@ -1749,7 +1754,7 @@ static UNLOCKS: &[UnlockSO] = &[
 // ---------------------------------------------------------------------------------------------
 /// Dictionary<string, (IPyObject val, bool isStatic)> with insertion order kept
 /// Scopes this small are searched name by name; a larger one also keeps a map.
-const SMALL_VARS: usize = 8;
+const SMALL_VARS: usize = 16;
 
 #[derive(Clone)]
 struct Vars {
@@ -4857,6 +4862,8 @@ enum Op {
     StoreAttr(*const Node, u32),
     IndexTarget(*const Node),
     StoreIndex(u32),
+    /// StoreIndex with one index, pushed bare (no MakeSeq)
+    StoreIndex1(u32),
     Unpack(*const Node),
     Fail(u32),
     FailAt(*const Node, u32),
@@ -5232,8 +5239,14 @@ impl Compiler {
                     self.emit(Op::StoreAttr(lp, op));
                 } else if bop.as_ref() == "[]" {
                     self.emit(Op::IndexTarget(lp));
-                    self.expr(&lhs.slots[1], depth + 1);
-                    self.emit(Op::StoreIndex(op));
+                    let ix = &lhs.slots[1];
+                    if matches!(ix.kind, NK::Seq) && ix.slots.len() == 1 {
+                        self.expr(&ix.slots[0], depth + 2);
+                        self.emit(Op::StoreIndex1(op));
+                    } else {
+                        self.expr(ix, depth + 1);
+                        self.emit(Op::StoreIndex(op));
+                    }
                 } else {
                     self.emit(Op::FailAt(lp, 2));
                 }
@@ -6476,6 +6489,59 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                     let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
                     index_at(&indexable, &indices, &mut steps, Some(v))?;
                     if charge(st, OPERATION_OPS * (steps as f64 + exec_time)) {
+                        stop!(*pc);
+                    }
+                }
+                Op::StoreIndex1(k) => {
+                    let idx = vm.stack.pop().unwrap();
+                    let indexable = vm.stack.pop().unwrap();
+                    let rhs = vm.stack.pop().unwrap();
+                    let op = &code.strs[k as usize];
+                    // a list and an in-range number: index_at's single index, done in place
+                    let fast = match (&indexable, &idx) {
+                        (V::List(l), V::Num(x)) => {
+                            let count = l.borrow().len() as f64;
+                            let mut num = *x;
+                            if num < 0.0 {
+                                num += count;
+                            }
+                            if num < 0.0 || num >= count || num.is_nan() { None } else { Some((l, num as i32 as usize)) }
+                        }
+                        _ => None,
+                    };
+                    let ops_used = match fast {
+                        None if op.as_ref() == "=" && matches!(indexable, V::Dict(_)) => {
+                            let V::Dict(d) = &indexable else { unreachable!() };
+                            if idx.is_unhashable() {
+                                return Err(Ctrl::Err(err("error_bad_key", &[nice_el(&idx)])));
+                            }
+                            let key = to_key(&idx)?;
+                            let n = py_size(&idx).max(1);
+                            d.borrow_mut().put(key, idx, rhs);
+                            n as f64
+                        }
+                        Some((l, i)) if op.as_ref() == "=" => {
+                            vdrop(std::mem::replace(&mut l.borrow_mut()[i], rhs));
+                            1.0
+                        }
+                        Some((l, i)) if op.as_ref() == "+=" && matches!((&l.borrow()[i], &rhs), (V::Num(_), V::Num(_))) => {
+                            let mut b = l.borrow_mut();
+                            if let (V::Num(a), V::Num(r)) = (&mut b[i], &rhs) {
+                                *a += *r;
+                            }
+                            2.0
+                        }
+                        _ => {
+                            let indices = std::slice::from_ref(&idx);
+                            let mut steps = 0;
+                            let before = if op.as_ref() == "=" { None } else { Some(index_at(&indexable, indices, &mut steps, None)?) };
+                            steps = 0;
+                            let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
+                            index_at(&indexable, indices, &mut steps, Some(v))?;
+                            steps as f64 + exec_time
+                        }
+                    };
+                    if charge(st, OPERATION_OPS * ops_used) {
                         stop!(*pc);
                     }
                 }
