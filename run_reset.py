@@ -424,6 +424,8 @@ def mixed_job(i, d, need, flags):
 				if k < n - 1 or w == 1:
 					move(North)
 		cur = NEED[0]
+		if RAWC[0] != None:
+			cur = RAWC[0]
 		done = True
 		for it in cur:
 			if num_items(it) < cur[it]:
@@ -474,6 +476,11 @@ def tend_fast(c):
 			# one water at planting ripens the tree within a pass on a small farm, and the
 			# soil keeps enough for the next tree as long as it is above WT_LO
 			use_item(Items.Water)
+
+
+# the unlock's own cost while run_plan farms for it: the one-drone loop stops as soon as that is on
+# hand, not when the seeds for the next carrots (in NEED[0]) are too
+RAWC = [None]
 
 
 def tend_wait(c):
@@ -3001,7 +3008,9 @@ def run_plan(plan):
 			item = lacking(u)
 			if item == Items.Hay or item == Items.Wood or item == Items.Carrot:
 				power_check()
+				RAWC[0] = get_cost(u)
 				mixed_round(set_need(plan, i))
+				RAWC[0] = None
 			elif item == Items.Weird_Substance and num_unlocked(Unlocks.Cactus) == 0:
 				power_check()
 				weird_round(get_cost(u)[item])
