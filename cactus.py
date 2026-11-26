@@ -18,7 +18,7 @@
 # Power: drones run twice as fast while there is power, so whenever power runs low the whole
 # field grows one batch of sunflowers, cut biggest first for the 8x bonus.
 #
-# Needs one drone per block: get_world_size() squared / 8 (32 drones on a 16x16 field).
+# Needs one drone per block: 32 drones on a 16x16 field (2x4 blocks) or a 32x32 one (2x16 blocks).
 #
 # Run as the main file it farms forever. Imported, it waits for run(goal), which stops every drone
 # once the shared inventory holds goal cacti (cactus_lb_entry.py uses that for the leaderboard).
@@ -27,9 +27,13 @@ clear()
 
 N = get_world_size()
 
-# Wall tiles are left empty. XS are wall columns and YS wall rows.
+# Wall tiles are left empty. XS are wall columns and YS wall rows. A 32x32 field (the leaderboard)
+# gets three of each, making sixteen regions of about 8x8.
 XS = [N // 2]
 YS = [N // 2]
+if N >= 32:
+	XS = [8, 16, 24]
+	YS = [8, 16, 24]
 WALL = []
 for wx in range(N):
 	col = []
@@ -62,7 +66,10 @@ def is_wall(x, y):
 	return WALL[x][y]
 
 
+# Blocks are 2 wide and S tall; 32 drones cover a 32x32 field with 2x16 blocks.
 S = 4
+if N >= 32:
+	S = 16
 M = 2 * S
 DRONES = (N // 2) * (N // S)
 
@@ -74,6 +81,9 @@ while DRONES > max_drones() or N % S != 0:
 # Slots of one cactus field: planting the block, then sorting until the deadline.
 PLANT_SLOTS = 15
 SORT_SLOTS = 54
+if N >= 32:
+	PLANT_SLOTS = 70
+	SORT_SLOTS = 220
 SLOT_TICKS = 205
 WALK_MARGIN = 2
 HARVEST_LAG_TICKS = 40
@@ -144,12 +154,30 @@ if not USE_POWER:
 
 SLOT_NOW = TICK_NOW * SLOT_TICKS
 
-# Ring through a block: up the left column, down the right one.
-RX = [0, 0, 0, 0, 1, 1, 1, 1]
-RY = [0, 1, 2, 3, 3, 2, 1, 0]
-RM = [North, North, North, East, South, South, South, West]
-RB = [East, South, South, South, West, North, North, North]
-NX = [1, 2, 3, 4, 5, 6, 7, 0]
+# Ring through a block: up the left column, down the right one. RM is the move to the next tile,
+# RB the move back to the previous one, NX the next index.
+RX = []
+RY = []
+RM = []
+RB = [East]
+NX = []
+for k in range(S):
+	RX.append(0)
+	RY.append(k)
+for k in range(S):
+	RX.append(1)
+	RY.append(S - 1 - k)
+for k in range(S - 1):
+	RM.append(North)
+	RB.append(South)
+RM.append(East)
+RB.append(West)
+for k in range(S - 1):
+	RM.append(South)
+	RB.append(North)
+RM.append(West)
+for k in range(M):
+	NX.append((k + 1) % M)
 
 
 def wait_until(e):
@@ -237,7 +265,7 @@ def worker(bx, by, t0, role, goal):
 	DS = []
 	WALK = []
 	ISW = []
-	for i in range(8):
+	for i in range(M):
 		x = bx + RX[i]
 		y = by + RY[i]
 		DE.append(None)
@@ -256,12 +284,12 @@ def worker(bx, by, t0, role, goal):
 		if role == 1:
 			WALK.append(SLOT * (RX[i] + RY[i] + WALK_MARGIN))
 		elif role == 2:
-			WALK.append(SLOT * (1 - RX[i] + 3 - RY[i] + WALK_MARGIN))
+			WALK.append(SLOT * (1 - RX[i] + S - 1 - RY[i] + WALK_MARGIN))
 		else:
 			WALK.append(0)
 	inner = True
 	for ix in range(bx - 1, bx + 3):
-		for iy in range(by - 1, by + 5):
+		for iy in range(by - 1, by + S + 1):
 			if is_wall(ix, iy):
 				inner = False
 	# Two drones at the ends of one inverted pair can both swap it, back and forth forever. A drone
@@ -269,7 +297,7 @@ def worker(bx, by, t0, role, goal):
 	delay = TICK * (3 + 7 * ((bx // 2 + by) % 5))
 
 	go(bx, by)
-	for i in range(8):
+	for i in range(M):
 		if get_ground_type() != Grounds.Soil:
 			till()
 		move(RM[i])
@@ -302,7 +330,7 @@ def worker(bx, by, t0, role, goal):
 		wait_until(t0)
 		if not ISW[i]:
 			plant(Entities.Cactus)
-		for _ in range(7):
+		for _ in range(M - 1):
 			move(RM[i])
 			i = NX[i]
 			if not ISW[i]:
@@ -408,7 +436,7 @@ def worker(bx, by, t0, role, goal):
 			harvest()
 		elif role == 2:
 			go(N - 1, N - 1)
-			i = 4
+			i = S
 			wait_until(end + TICK * (HARVEST_LAG_TICKS + 20))
 			# The shared inventory tells this drone whether the first harvest worked.
 			if num_items(Items.Cactus) - lastc < SMALL_HARVEST:
@@ -423,12 +451,15 @@ SMALL_HARVEST = N * N * N * N * 2 ** (SMALL_HARVEST - 1) // 5
 
 
 def run(goal):
+	# Time for the last drone to be spawned, reach its block and till it.
 	start = get_time() + SLOT_NOW * 90
-	for by in range(0, N, 4):
+	if N >= 32:
+		start = get_time() + SLOT_NOW * 140
+	for by in range(0, N, S):
 		for bx in range(0, N, 2):
 			if bx + by > 0:
 				role = 0
-				if bx + 2 == N and by + 4 == N:
+				if bx + 2 == N and by + S == N:
 					role = 2
 				spawn_drone(worker, bx, by, start, role, goal)
 	# The other drones stop on the same check, and the program ends once all of them have.
