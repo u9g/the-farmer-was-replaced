@@ -2142,6 +2142,10 @@ def dn_rows(j, d, a0, b0):
 	ah = []
 	wy = []
 	nb = []
+	to = []
+	nx = []
+	n2 = []
+	co = []
 	for i in range(j * S // d, (j + 1) * S // d):
 		pairs = []
 		row = []
@@ -2166,7 +2170,35 @@ def dn_rows(j, d, a0, b0):
 			ws.append(best[1])
 		ah.append(ds)
 		wy.append(ws)
-	return [ah, wy, nb]
+		tr = []
+		for e in ds:
+			tr.append((i + e) % S)
+		to.append(tr)
+		for k in range(len(ds)):
+			if ds[k] == 1:
+				nx.append(ws[k])
+		r = []
+		q = []
+		for k in range(4):
+			x = PX[i] + DX[k]
+			y = PY[i] + DY[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				r.append(IDX[x][y])
+			else:
+				r.append(S)
+			x = PX[i] + CXS[k]
+			y = PY[i] + CYS[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				q.append(IDX[x][y])
+			else:
+				q.append(S)
+		n2.append(r)
+		co.append(q)
+	return [ah, wy, nb, to, nx, n2, co]
+
+
+CXS = [1, 1, -1, -1]
+CYS = [1, -1, -1, 1]
 
 
 def dino_setup():
@@ -2238,25 +2270,18 @@ def dino_setup():
 	AHEAD = []
 	WAY = []
 	NB = []
-	for r in all_drones(dn_rows, 0, 0):
-		for row in r[0]:
-			AHEAD.append(row)
-		for row in r[1]:
-			WAY.append(row)
-		for row in r[2]:
-			NB.append(row)
 	TO = []
-	for i in range(S):
-		row = []
-		for d in AHEAD[i]:
-			row.append((i + d) % S)
-		TO.append(row)
 	NEXT = []
-	for i in range(S):
-		ds = AHEAD[i]
-		for k in range(len(ds)):
-			if ds[k] == 1:
-				NEXT.append(WAY[i][k])
+	nb2 = []
+	cor = []
+	for r in all_drones(dn_rows, 0, 0):
+		AHEAD = AHEAD + r[0]
+		WAY = WAY + r[1]
+		NB = NB + r[2]
+		TO = TO + r[3]
+		NEXT = NEXT + r[4]
+		nb2 = nb2 + r[5]
+		cor = cor + r[6]
 	WALK = []
 	for i in range(2 * S):
 		WALK.append(NEXT[i % S])
@@ -2280,28 +2305,8 @@ def dino_setup():
 	for i in range(S + 1):
 		vis2.append(0)
 		bad.append(-5)
-	NB2 = []
-	COR = []
-	CX = [1, 1, -1, -1]
-	CY = [1, -1, -1, 1]
-	for i in range(S):
-		r = []
-		q = []
-		for k in range(4):
-			x = PX[i] + DX[k]
-			y = PY[i] + DY[k]
-			if x >= 0 and x < N and y >= 0 and y < N:
-				r.append(IDX[x][y])
-			else:
-				r.append(S)
-			x = PX[i] + CX[k]
-			y = PY[i] + CY[k]
-			if x >= 0 and x < N and y >= 0 and y < N:
-				q.append(IDX[x][y])
-			else:
-				q.append(S)
-		NB2.append(r)
-		COR.append(q)
+	NB2 = nb2
+	COR = cor
 	MT = []
 	MT2 = []
 	PW = [1, 2, 4, 8]
@@ -3158,6 +3163,9 @@ def carrots_for(n):
 		mixed_round((c, c))
 
 
+WSB = 60000
+
+
 def farm(item, amount):
 	if item != Items.Gold:
 		power_check()
@@ -3174,7 +3182,9 @@ def farm(item, amount):
 		pc = 2 * lvl_mult(Unlocks.Cactus)
 		while num_items(Items.Pumpkin) < cells * pc:
 			farm(Items.Pumpkin, cells * pc)
-		cactus_round(item == Items.Weird_Substance)
+		# from Mazes 3 on, cactus rounds also make weird substance (an extra pass over 1 cell in 5) until
+		# WSB is banked, so the last maze needs no weird round of its own
+		cactus_round(item == Items.Weird_Substance or (num_unlocked(Unlocks.Mazes) >= 3 and num_items(Items.Weird_Substance) < WSB))
 	elif item == Items.Gold:
 		n = get_world_size()
 		m = lvl_mult(Unlocks.Mazes)
