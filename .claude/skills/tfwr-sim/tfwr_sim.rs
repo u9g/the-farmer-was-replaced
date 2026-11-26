@@ -15,7 +15,9 @@ panic = "abort"
 // tfwr_sim.rs - The Farmer Was Replaced, reimplemented as a headless one-file Rust harness.
 //
 // This is a port of the game's own code (decompiled Core.dll / Utils.dll), not an approximation:
-// the tokenizer, parser, tree-walking interpreter (as coroutines, like the game's C# iterators),
+// the tokenizer, parser, tree-walking interpreter (each drone's program runs as plain recursion on a
+// stack of its own, a fiber, and steps out to the scheduler exactly where the game's C# iterators
+// yield),
 // per-drone op counting, Execution.Execute scheduling loop, Simulation timers, Farm, grid, drones,
 // plants (grass, bush, tree, carrot, pumpkin, sunflower, cactus), mazes, the dinosaur hat, water,
 // fertilizer, power, polyculture, unlocks and System.Random are translated function by function.

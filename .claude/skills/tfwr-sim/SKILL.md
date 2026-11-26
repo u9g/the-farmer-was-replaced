@@ -218,8 +218,13 @@ checked this way.
 
 ## Changing the simulator
 
-Function and field names follow the decompiled C# so the two can be read side by side. Two things
-are not in the game: `skip_busy_waits` (the shortcut for `while get_time() < x: pass` and
+Function and field names follow the decompiled C# so the two can be read side by side. Each
+drone's program runs as plain recursion on a stack of its own (a Windows fiber; elsewhere a thread
+that takes turns with the scheduler, slower but the same results). `yp()` stands for every point
+where the game's iterators yield: it counts the resume and hands back to the scheduler only when
+`PerformExecutionStep` would stop (past the target op count, a side effect, or 1000 resumes), so op
+counts and stopping points match the game exactly. Keep it that way when changing a node: an
+extra or missing `yp()` changes timing. Two things are not in the game: `skip_busy_waits` (the shortcut for `while get_time() < x: pass` and
 `while num_items(i) > y: pass`) and the
 reporting in `main`. After touching the interpreter or `execute`, build the old and new versions
 into separate target directories and `cmp` their full output for the same scripts and seeds,
