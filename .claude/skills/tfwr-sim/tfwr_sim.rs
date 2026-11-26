@@ -93,6 +93,28 @@ impl Fx {
 type FxBuild = std::hash::BuildHasherDefault<Fx>;
 type FxMap<K, V> = HashMap<K, V, FxBuild>;
 
+thread_local! {
+    static NAMES: RefCell<HashSet<Rc<str>, FxBuild>> = RefCell::new(HashSet::default());
+}
+/// The one shared copy of a name. Every name that reaches a variable table is interned (the parser
+/// interns identifiers; builtins and `__name__` are interned where they are registered), so the
+/// tables can key on the string's address instead of hashing and comparing its text.
+fn intern(s: &str) -> Rc<str> {
+    NAMES.with(|n| {
+        let mut n = n.borrow_mut();
+        if let Some(r) = n.get(s) {
+            return r.clone();
+        }
+        let r: Rc<str> = Rc::from(s);
+        n.insert(r.clone());
+        r
+    })
+}
+#[inline]
+fn name_key(name: &str) -> usize {
+    name.as_ptr() as usize
+}
+
 /// Every drone's program runs on a stack of its own, so the interpreter can be plain recursion
 /// that steps out to the scheduler wherever the game's iterators would yield, without a heap
 /// coroutine per syntax node. Windows has fibers for this; elsewhere each drone gets a thread and
@@ -1397,14 +1419,14 @@ fn seq_contains(container: &V, obj: &V, steps: &mut i32) -> R<bool> {
 
 // DeepCopy (spawn_drone and wait_for copy everything that crosses between drones)
 struct Copies {
-    values: HashMap<usize, V>,
-    scopes: HashMap<usize, ScopeRef>,
-    filled: HashSet<usize>,
+    values: FxMap<usize, V>,
+    scopes: FxMap<usize, ScopeRef>,
+    filled: HashSet<usize, FxBuild>,
 }
 
 impl Copies {
     fn new() -> Copies {
-        Copies { values: HashMap::new(), scopes: HashMap::new(), filled: HashSet::new() }
+        Copies { values: FxMap::default(), scopes: FxMap::default(), filled: HashSet::default() }
     }
 }
 
@@ -1575,7 +1597,8 @@ static UNLOCKS: &[UnlockSO] = &[
 // ---------------------------------------------------------------------------------------------
 /// Dictionary<string, (IPyObject val, bool isStatic)> with insertion order kept
 struct Vars {
-    map: FxMap<Rc<str>, usize>,
+    /// keyed by the interned name's address (see intern)
+    map: FxMap<usize, usize>,
     items: Vec<(Rc<str>, V, bool)>,
 }
 
@@ -1586,22 +1609,24 @@ impl Vars {
     fn len(&self) -> usize {
         self.items.len()
     }
+    #[inline]
     fn get(&self, name: &str) -> Option<&(Rc<str>, V, bool)> {
-        self.map.get(name).map(|i| &self.items[*i])
+        self.map.get(&name_key(name)).map(|i| &self.items[*i])
     }
+    #[inline]
     fn contains(&self, name: &str) -> bool {
-        self.map.contains_key(name)
+        self.map.contains_key(&name_key(name))
     }
     fn set(&mut self, name: &str, v: V, is_static: bool) {
-        match self.map.get(name) {
+        match self.map.get(&name_key(name)) {
             Some(i) => {
                 let it = &mut self.items[*i];
                 it.1 = v;
                 it.2 = is_static;
             }
             None => {
-                let k: Rc<str> = Rc::from(name);
-                self.map.insert(k.clone(), self.items.len());
+                let k = intern(name);
+                self.map.insert(name_key(&k), self.items.len());
                 self.items.push((k, v, is_static));
             }
         }
@@ -1652,19 +1677,19 @@ fn scope_import_var(scope: &ScopeRef, name: &str, value: V, mut is_static: bool)
 
 /// Scope.Evaluate
 fn scope_evaluate(scope: &ScopeRef, name: &str) -> R<(V, bool)> {
-    let parent = {
-        let s = scope.borrow();
+    // Nothing else holds a scope mutably while a name is looked up.
+    let mut s: &Scope = unsafe { &*scope.as_ptr() };
+    loop {
         if let Some(e) = s.vars.get(name) {
             if matches!(e.1, V::Unassigned) {
                 return Err(err("error_use_before_assign", &[name.to_string()]));
             }
             return Ok((e.1.clone(), e.2));
         }
-        s.parent_scope.clone()
-    };
-    match parent {
-        Some(p) => scope_evaluate(&p, name),
-        None => Err(err("error_name_not_defined", &[name.to_string()])),
+        match &s.parent_scope {
+            Some(p) => s = unsafe { &*p.as_ptr() },
+            None => return Err(err("error_name_not_defined", &[name.to_string()])),
+        }
     }
 }
 
@@ -1958,15 +1983,60 @@ fn tokenize(code: &str) -> R<TokenStream> {
 // ---------------------------------------------------------------------------------------------
 // Syntax tree
 // ---------------------------------------------------------------------------------------------
+/// A binary operator, decided from its text once at parse time.
+#[derive(Clone, Copy, PartialEq)]
+enum BOp {
+    And, Or, Dot, Index, Add, Sub, Mul, Div, FloorDiv, Mod, Pow, Other,
+}
+impl BOp {
+    fn of(op: &str) -> BOp {
+        match op {
+            "and" => BOp::And,
+            "or" => BOp::Or,
+            "." => BOp::Dot,
+            "[]" => BOp::Index,
+            "+" => BOp::Add,
+            "-" => BOp::Sub,
+            "*" => BOp::Mul,
+            "/" => BOp::Div,
+            "//" => BOp::FloorDiv,
+            "%" => BOp::Mod,
+            "**" => BOp::Pow,
+            _ => BOp::Other,
+        }
+    }
+}
+/// A comparison operator, decided from its text once at parse time. `Other` is text the game
+/// does not recognise (e.g. "not  in" with two spaces), which it treats as true.
+#[derive(Clone, Copy, PartialEq)]
+enum COp {
+    Eq, Ne, Ge, Le, Gt, Lt, In, NotIn, Other,
+}
+impl COp {
+    fn of(op: &str) -> COp {
+        match op {
+            "==" => COp::Eq,
+            "!=" => COp::Ne,
+            ">=" => COp::Ge,
+            "<=" => COp::Le,
+            ">" => COp::Gt,
+            "<" => COp::Lt,
+            "in" => COp::In,
+            "not in" => COp::NotIn,
+            _ => COp::Other,
+        }
+    }
+}
+
 #[derive(Clone)]
 enum NK {
     Seq,
     Value(Rc<str>),
     Literal(V),
     Call,
-    Binary(Rc<str>, TT),
+    Binary(Rc<str>, TT, BOp),
     Unary(Rc<str>),
-    Comparison(Vec<Rc<str>>),
+    Comparison(Vec<Rc<str>>, Vec<COp>),
     Branch(bool),
     /// slots: [iterable, body, pattern]
     For,
@@ -2115,7 +2185,7 @@ impl Parser {
                 break;
             }
             let value = self.consume(TT::Identifier, None)?.value;
-            list.push(Rc::from(value.as_str()));
+            list.push(intern(value.as_str()));
             hash_set.borrow_mut().insert(value.clone());
             all_vars.borrow_mut().insert(value);
             self.optional_variable_type_annotation()?;
@@ -2138,9 +2208,9 @@ impl Parser {
         self.optional_return_type_annotation()?;
         let token3 = self.consume_colon()?;
         let body = self.block(indentation, &hash_set, &new_set(), all_vars, imported, false, true)?;
-        let mut vars: Vec<Rc<str>> = hash_set.borrow().iter().map(|s| Rc::from(s.as_str())).collect();
+        let mut vars: Vec<Rc<str>> = hash_set.borrow().iter().map(|s| intern(s.as_str())).collect();
         vars.sort();
-        let name: Rc<str> = Rc::from(token2.value.as_str());
+        let name: Rc<str> = intern(token2.value.as_str());
         let mut function_node = PN::new(
             NK::Function { params: list, name: name.clone(), vars },
             token.start,
@@ -2239,7 +2309,7 @@ impl Parser {
                 let end = self.stream.current_string_start_index().saturating_sub(1);
                 return Ok(PN::new(
                     NK::Import {
-                        module_names: list.iter().map(|s| Rc::from(s.as_str())).collect(),
+                        module_names: list.iter().map(|s| intern(s.as_str())).collect(),
                         unpack: false,
                         unpack_all: false,
                         vars_to_unpack: Vec::new(),
@@ -2253,7 +2323,7 @@ impl Parser {
                 let t = self.consume(TT::From, None)?;
                 let t8 = self.consume(TT::Identifier, Some("error_invalid_import"))?;
                 self.consume(TT::Import, Some("error_invalid_import"))?;
-                let module: Rc<str> = Rc::from(t8.value.as_str());
+                let module: Rc<str> = intern(t8.value.as_str());
                 if self.stream.current().map(|c| c.value == "*").unwrap_or(false) {
                     if !global {
                         return self.perr("error_wildcard_imports_not_allowed_in_function", self.stream.current_string_start_index());
@@ -2275,7 +2345,7 @@ impl Parser {
                         module_names: vec![module],
                         unpack: true,
                         unpack_all: false,
-                        vars_to_unpack: list2.iter().map(|s| Rc::from(s.as_str())).collect(),
+                        vars_to_unpack: list2.iter().map(|s| intern(s.as_str())).collect(),
                         is_static,
                     },
                     t.start,
@@ -2367,7 +2437,7 @@ impl Parser {
                 Ok(())
             }
             NK::Bracket => self.check_assignment_lhs_rec(&lhs.slots[0], vars, global_vars, all_vars),
-            NK::Binary(op, _) if op.as_ref() == "." || (op.as_ref() == "[]" && lhs.slots[1].slots.len() == 1) => Ok(()),
+            NK::Binary(op, _, _) if op.as_ref() == "." || (op.as_ref() == "[]" && lhs.slots[1].slots.len() == 1) => Ok(()),
             _ => self.perr("error_invalid_assign_expr", lhs.start),
         }
     }
@@ -2617,17 +2687,18 @@ impl Parser {
                     list.push(self.binary_expression(op_index + 1, can_line_break, exclude_token, false)?);
                     list2.push(Rc::from(token.value.as_str()));
                 }
-                return Ok(PN::with(NK::Comparison(list2), start, self.stream.current_string_end_index(), list));
+                let cops = list2.iter().map(|o| COp::of(o)).collect();
+                return Ok(PN::with(NK::Comparison(list2, cops), start, self.stream.current_string_end_index(), list));
             }
             let token2 = self.consume(*item, None)?;
             let mut node2 = self.binary_expression(op_index, can_line_break, exclude_token, false)?;
             let mut node3 = PN::new(
-                NK::Binary(Rc::from(token2.value.as_str()), token2.ty),
+                NK::Binary(Rc::from(token2.value.as_str()), token2.ty, BOp::of(&token2.value)),
                 token2.start,
                 token2.start + token2.value.len(),
             );
             node3.slots.push(node);
-            let same_level = |n: &PN| matches!(&n.kind, NK::Binary(_, t) if types.contains(t));
+            let same_level = |n: &PN| matches!(&n.kind, NK::Binary(_, t, _) if types.contains(t));
             if !same_level(&node2) {
                 node3.slots.push(node2);
                 return Ok(node3);
@@ -2692,7 +2763,7 @@ impl Parser {
                     self.line_breaks();
                     self.consume(TT::SquareBracketClose, None)?;
                     node = PN::with(
-                        NK::Binary(Rc::from("[]"), TT::BracketOpen),
+                        NK::Binary(Rc::from("[]"), TT::BracketOpen, BOp::Index),
                         token.start,
                         token.start + token.value.len(),
                         vec![node, node2],
@@ -2716,12 +2787,12 @@ impl Parser {
                         }
                     } else {
                         let item2 = PN::new(
-                            NK::Value(Rc::from(token4.value.as_str())),
+                            NK::Value(intern(token4.value.as_str())),
                             token4.start,
                             token4.start + token4.value.len(),
                         );
                         node = PN::with(
-                            NK::Binary(Rc::from("."), TT::Dot),
+                            NK::Binary(Rc::from("."), TT::Dot, BOp::Dot),
                             token3.start,
                             token3.start + token3.value.len(),
                             vec![node, item2],
@@ -2793,7 +2864,7 @@ impl Parser {
                 if let Some(v) = evaluate_constant(&token3.value) {
                     return Ok(PN::new(NK::Literal(v), token3.start, end));
                 }
-                Ok(PN::new(NK::Value(Rc::from(token3.value.as_str())), token3.start, end))
+                Ok(PN::new(NK::Value(intern(token3.value.as_str())), token3.start, end))
             }
             _ => self.perr("error_invalid_expression", self.stream.current_string_start_index()),
         }
@@ -2968,11 +3039,19 @@ impl Shared {
     }
 }
 
+/// The fields the scheduler reads for every drone on every pass come first and stay together
+/// (repr(C)), so that a pass costs about one cache line per drone.
+#[repr(C)]
 struct PState {
+    op_count: f64,
+    target_op_count: f64,
+    last_consumed_op_count: f64,
+    awaited_drone_id: i32,
+    /// resumes in the current PerformExecutionStep (the game stops at 1000)
+    resumes: i32,
+    current_side_effect: SE,
     sh: Rc<Shared>,
     module_state: ModuleState,
-    awaited_drone_id: i32,
-    current_side_effect: SE,
     current_execute_exception: Option<String>,
     random_random: SysRandom,
     /// the program, on its own stack; None until the drone's state is set up
@@ -2980,15 +3059,10 @@ struct PState {
     /// ProgramState's execution stack, as a count: 1 for the program, +1 per user function call
     /// still running; 0 once the program has ended
     frames: usize,
-    /// resumes in the current PerformExecutionStep (the game stops at 1000)
-    resumes: i32,
     module_cache: HashMap<String, Rc<PyModule>>,
-    op_count: f64,
     start_op_count: f64,
-    last_consumed_op_count: f64,
     drone_id: i32,
     drone_handle: Option<Rc<DroneHandle>>,
-    target_op_count: f64,
     /// the node being run, for error reports; the trees it points into are kept alive by
     /// Shared::trees for the whole run
     current_executing_node: *const Node,
@@ -3039,14 +3113,14 @@ fn register_builtins(scope: &ScopeRef) {
             method_object: None,
             is_free: *is_free,
         });
-        scope_set_var(scope, name, V::Func(f), true);
+        scope_set_var(scope, &intern(name), V::Func(f), true);
     }
 }
 
 impl PState {
     fn new(op_count: f64, random: &mut SysRandom, drone_id: i32, sh: Rc<Shared>) -> PState {
         let global_scope = new_scope(None, None, &[]);
-        scope_import_var(&global_scope, "__name__", new_str("__main__"), false);
+        scope_import_var(&global_scope, &intern("__name__"), new_str("__main__"), false);
         PState {
             sh,
             module_state: ModuleState {
@@ -3096,19 +3170,30 @@ impl PState {
     }
 }
 
+/// The drone's state, for the leaf helpers below. They never call out while holding it, and a
+/// drone's state is only ever touched by its own program or by the scheduler while the program is
+/// suspended, so the RefCell check would never fire here.
+#[inline(always)]
+fn stm(st: &StRef) -> &mut PState {
+    unsafe { &mut *st.as_ptr() }
+}
+#[inline]
 fn rv(st: &StRef) -> V {
-    st.borrow().module_state.return_value.clone()
+    stm(st).module_state.return_value.clone()
 }
+#[inline]
 fn set_rv(st: &StRef, v: V) {
-    st.borrow_mut().module_state.return_value = v;
+    stm(st).module_state.return_value = v;
 }
+#[inline]
 fn set_static(st: &StRef, b: bool) {
-    st.borrow_mut().module_state.is_expression_static = b;
+    stm(st).module_state.is_expression_static = b;
 }
 
 /// Node.CheckIncrementOpCount
+#[inline]
 fn check_inc(st: &StRef, ops: f64) -> bool {
-    let mut s = st.borrow_mut();
+    let s = stm(st);
     s.op_count += ops;
     s.op_count >= s.target_op_count || s.has_side_effect()
 }
@@ -3118,7 +3203,7 @@ fn eb(st: &StRef, node: &Rc<Node>, depth: i32) -> R<()> {
     if depth > 1100 {
         return Err("error_max_stack_size_reached".into());
     }
-    st.borrow_mut().current_executing_node = Rc::as_ptr(node);
+    stm(st).current_executing_node = Rc::as_ptr(node);
     Ok(())
 }
 
@@ -3138,7 +3223,7 @@ fn push_frame(st: &StRef) -> R<()> {
 #[inline]
 fn yp(st: &StRef) {
     let stop = {
-        let mut s = st.borrow_mut();
+        let s = stm(st);
         s.resumes += 1;
         !(s.op_count <= s.target_op_count) || s.has_side_effect() || s.resumes >= 1000
     };
@@ -3212,7 +3297,7 @@ fn busy_wait_name(node: &Rc<Node>) -> Option<Rc<str>> {
     }
     let cond = &node.slots[0];
     match &cond.kind {
-        NK::Comparison(ops) if ops.len() == 1 && ops[0].as_ref() == "<" && cond.slots.len() == 2 => {}
+        NK::Comparison(ops, _) if ops.len() == 1 && ops[0].as_ref() == "<" && cond.slots.len() == 2 => {}
         _ => return None,
     }
     let call = &cond.slots[0];
@@ -3253,7 +3338,7 @@ fn is_items_spin(node: &Rc<Node>) -> bool {
     }
     let cond = &node.slots[0];
     match &cond.kind {
-        NK::Comparison(ops) if ops.len() == 1 && cond.slots.len() == 2 => {}
+        NK::Comparison(ops, _) if ops.len() == 1 && cond.slots.len() == 2 => {}
         _ => return false,
     }
     let is_num_items = |n: &Rc<Node>| {
@@ -3285,9 +3370,9 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                 }
                 NK::Value(name) => {
                     eb(&st, &node, depth)?;
-                    let scope = st.borrow().current_scope();
-                    let (v, is_static) = scope_evaluate(&scope, name)?;
-                    let mut s = st.borrow_mut();
+                    let s = stm(st);
+                    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+                    let (v, is_static) = scope_evaluate(scope, name)?;
                     s.module_state.return_value = v;
                     s.module_state.is_expression_static = is_static;
                     Ok(())
@@ -3374,26 +3459,27 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                     }
                     Ok(())
                 }
-                NK::Binary(op, _) => {
+                NK::Binary(op, _, bop) => {
                     let op: &str = op.as_ref();
+                    let bop = *bop;
                     eb(&st, &node, depth)?;
                     exec(&node.slots[0], st, depth + 1)?;
                     let lhs = rv(&st);
-                    if op == "and" && !is_true_value(&lhs)? {
+                    if bop == BOp::And && !is_true_value(&lhs)? {
                         set_rv(&st, lhs);
                         if check_inc(&st, OPERATION_OPS) {
                             yp(st);
                         }
                         return Ok(());
                     }
-                    if op == "or" && is_true_value(&lhs)? {
+                    if bop == BOp::Or && is_true_value(&lhs)? {
                         set_rv(&st, lhs);
                         if check_inc(&st, OPERATION_OPS) {
                             yp(st);
                         }
                         return Ok(());
                     }
-                    if op == "." && matches!(lhs, V::Module(_) | V::Bag(_)) {
+                    if bop == BOp::Dot && matches!(lhs, V::Module(_) | V::Bag(_)) {
                         let member = match &node.slots[1].kind {
                             NK::Value(v) => v.clone(),
                             _ => return Err(Ctrl::Err("error_invalid_const2".into())),
@@ -3415,7 +3501,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                     exec(&node.slots[1], st, depth + 1)?;
                     let rhs = rv(&st);
                     st.borrow_mut().current_executing_node = Rc::as_ptr(node);
-                    if op != "and" && op != "or" && op != "." {
+                    if !matches!(bop, BOp::And | BOp::Or | BOp::Dot) {
                         let f = match (&lhs, &rhs) {
                             (V::Func(f), _) => Some(f.clone()),
                             (_, V::Func(f)) => Some(f.clone()),
@@ -3427,12 +3513,12 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                     }
                     let bad = || Ctrl::Err(err("error_bad_bin_operator", &[op.to_string(), nice_el(&lhs), nice_el(&rhs)]));
                     let mut steps: i32 = 0;
-                    let result: V = match op {
-                        "and" | "or" => {
+                    let result: V = match bop {
+                        BOp::And | BOp::Or => {
                             steps = 1;
                             rhs.clone()
                         }
-                        "[]" => {
+                        BOp::Index => {
                             if !(lhs.is_seq() || matches!(lhs, V::Dict(_))) {
                                 return Err(Ctrl::Err(err("error_index_on_non_indexable", &[nice_el(&lhs)])));
                             }
@@ -3442,7 +3528,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                             };
                             index_at(&lhs, &indices, &mut steps, None)?
                         }
-                        "+" => {
+                        BOp::Add => {
                             if let (Some(a), Some(b)) = (lhs.num(), rhs.num()) {
                                 steps = 1;
                                 V::Num(a + b)
@@ -3463,7 +3549,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                                 return Err(bad());
                             }
                         }
-                        "." => match &rhs {
+                        BOp::Dot => match &rhs {
                             V::Func(f) => {
                                 steps = 0;
                                 V::Func(Rc::new(PyFunc {
@@ -3478,7 +3564,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                             _ => return Err(Ctrl::Err("error_unknown_method".into())),
                         },
                         _ => {
-                            if (op == "/" || op == "//" || op == "%") && rhs.num() == Some(0.0) {
+                            if matches!(bop, BOp::Div | BOp::FloorDiv | BOp::Mod) && rhs.num() == Some(0.0) {
                                 return Err(Ctrl::Err("error_division_by_zero".into()));
                             }
                             let (a, b) = match (lhs.num(), rhs.num()) {
@@ -3486,13 +3572,13 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                                 _ => return Err(bad()),
                             };
                             steps = 1;
-                            V::Num(match op {
-                                "-" => a - b,
-                                "*" => a * b,
-                                "/" => a / b,
-                                "//" => (a / b).floor(),
-                                "%" => py_modulo(a, b),
-                                "**" => a.powf(b),
+                            V::Num(match bop {
+                                BOp::Sub => a - b,
+                                BOp::Mul => a * b,
+                                BOp::Div => a / b,
+                                BOp::FloorDiv => (a / b).floor(),
+                                BOp::Mod => py_modulo(a, b),
+                                BOp::Pow => a.powf(b),
                                 _ => return Err(bad()),
                             })
                         }
@@ -3503,7 +3589,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                     }
                     Ok(())
                 }
-                NK::Comparison(ops) => {
+                NK::Comparison(ops, cops) => {
                     eb(&st, &node, depth)?;
                     let mut operands = Vec::with_capacity(node.slots.len());
                     for slot in node.slots.iter() {
@@ -3515,6 +3601,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                     let mut flag = true;
                     for i in 0..ops.len() {
                         let text: &str = ops[i].as_ref();
+                        let cop = cops[i];
                         let a = &operands[i];
                         let b = &operands[i + 1];
                         if text != "==" && text != "!=" && text != "in" && text != "not in" || true {
@@ -3528,18 +3615,18 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                                 return Err(Ctrl::Err(err("error_function_in_operator", &[f.name.to_string(), text.to_string()])));
                             }
                         }
-                        let is_in = text == "in" || text == "not in";
+                        let is_in = matches!(cop, COp::In | COp::NotIn);
                         if is_in && !(matches!(b, V::Dict(_) | V::Set(_)) || b.is_seq()) {
                             return Err(Ctrl::Err(err("error_bad_unary_operator", &[text.to_string(), nice_el(b)])));
                         }
-                        let flag2 = match text {
-                            "==" => py_equals(a, b, &mut steps)?,
-                            "!=" => !py_equals(a, b, &mut steps)?,
-                            ">=" => deep_compare(a, b, text, &mut steps)? >= 0,
-                            "<=" => deep_compare(a, b, text, &mut steps)? <= 0,
-                            ">" => deep_compare(a, b, text, &mut steps)? > 0,
-                            "<" => deep_compare(a, b, text, &mut steps)? < 0,
-                            "in" | "not in" => {
+                        let flag2 = match cop {
+                            COp::Eq => py_equals(a, b, &mut steps)?,
+                            COp::Ne => !py_equals(a, b, &mut steps)?,
+                            COp::Ge => deep_compare(a, b, text, &mut steps)? >= 0,
+                            COp::Le => deep_compare(a, b, text, &mut steps)? <= 0,
+                            COp::Gt => deep_compare(a, b, text, &mut steps)? > 0,
+                            COp::Lt => deep_compare(a, b, text, &mut steps)? < 0,
+                            COp::In | COp::NotIn => {
                                 let found = match b {
                                     V::Dict(d) | V::Set(d) => {
                                         let key = to_key(a)?;
@@ -3549,7 +3636,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                                     }
                                     _ => seq_contains(b, a, &mut steps)?,
                                 };
-                                if text == "in" { found } else { !found }
+                                if cop == COp::In { found } else { !found }
                             }
                             // e.g. "not  in" written with extra spaces: the game leaves the result true
                             _ => true,
@@ -3765,7 +3852,7 @@ fn exec(node: &Rc<Node>, st: &StRef, depth: i32) -> Res {
                                 return Err(Ctrl::Err(e));
                             }
                             let scope = new_scope(None, None, &[]);
-                            scope_import_var(&scope, "__name__", new_str(name), false);
+                            scope_import_var(&scope, &intern("__name__"), new_str(name), false);
                             let module = Rc::new(PyModule {
                                 scope: scope.clone(),
                                 name: name.to_string(),
@@ -4009,7 +4096,7 @@ fn assign(st: &StRef, depth: i32, lhs: &Rc<Node>, rhs: V, op: &Rc<str>) -> Res {
                     }
                     Ok(())
                 }
-                NK::Binary(bop, _) => {
+                NK::Binary(bop, _, _) => {
                     exec(&lhs.slots[0], st, depth + 1)?;
                     if bop.as_ref() == "." {
                         let module = match rv(&st) {
@@ -4796,7 +4883,7 @@ struct Sim {
     main_drone_id: usize,
     drone_generation: i32,
     items: Items,
-    unlocks: HashMap<String, i32>,
+    unlocks: FxMap<String, i32>,
     used_power: f64,
     num_speed_upgrades: i32,
     next_uid: u64,
@@ -4860,7 +4947,7 @@ impl Sim {
             main_drone_id: 0,
             drone_generation: 0,
             items,
-            unlocks: HashMap::new(),
+            unlocks: FxMap::default(),
             used_power: 0.0,
             waiting_scratch: Vec::new(),
             num_speed_upgrades: 0,
@@ -6895,7 +6982,7 @@ impl Sim {
         let ex = self.execution.as_ref().unwrap();
         let mut min: Option<f64> = None;
         for s in ex.states.iter().flatten() {
-            let b = s.borrow();
+            let b = unsafe { &*s.as_ptr() };
             if b.awaited_drone_id < 0 {
                 min = Some(match min {
                     Some(m) => m.min(b.op_count),
@@ -6998,7 +7085,7 @@ impl Sim {
                 let ex = self.execution.as_ref().unwrap();
                 for s in ex.states.iter().flatten() {
                     let run = {
-                        let b = s.borrow();
+                        let b = unsafe { &*s.as_ptr() };
                         !b.has_side_effect() && !(b.op_count > num) && b.awaited_drone_id < 0
                     };
                     if run {
@@ -7011,13 +7098,9 @@ impl Sim {
             self.execution.as_mut().unwrap().global_op_count = g;
 
             let mut num2 = 0.0;
-            let mut num3 = num;
-            for s in self.execution.as_ref().unwrap().states.iter().flatten() {
-                let b = s.borrow();
-                if b.awaited_drone_id < 0 {
-                    num3 = num3.min(b.op_count);
-                }
-            }
+            // min(num, every running drone's op count): min_op_count just took that minimum
+            // (or returned num when no drone is running)
+            let num3 = num.min(g);
             self.add_ops_to_current_time(num3 - global_op_count);
             if !self.paused {
                 for s in self.execution.as_ref().unwrap().states.iter().flatten() {
@@ -7034,7 +7117,7 @@ impl Sim {
                     }
                     let due = match &ex.states[num6] {
                         Some(s) => {
-                            let b = s.borrow();
+                            let b = unsafe { &*s.as_ptr() };
                             b.awaited_drone_id < 0 && b.has_side_effect() && !(b.op_count > ex.global_op_count)
                         }
                         None => false,
