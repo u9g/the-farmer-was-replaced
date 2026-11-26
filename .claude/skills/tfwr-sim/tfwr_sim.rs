@@ -4787,6 +4787,9 @@ enum Op {
     /// IndexF, then the StoreAssign that follows it (kept as the fallback, where a stopped drone
     /// resumes and where jumps land)
     IndexStoreF(*const Node, u32),
+    /// a name or literal (code.fused[k].0, evaluated as its Load / Lit), then the StoreAssign that
+    /// follows (kept as the fallback where jumps land; neither charges before the store)
+    StoreF(u32),
     /// x[e] with one computed index: x and then e on the stack (no index list)
     IndexSS(*const Node),
     /// CmpF, then the CondJumpF (+ JumpIfFalse) / LoopCond that follows it, likewise
@@ -4924,7 +4927,7 @@ impl Compiler {
             let starts_with_eb = matches!(op, Op::Load(..) | Op::Lit(..) | Op::Eb(..) | Op::Def(..) | Op::Pass(..) | Op::BrkCont(..) | Op::ImportStart(..) | Op::LoadCallee(..));
             // (BinF / CmpF with a name or literal on the left are pushed through emit too)
             let starts_with_eb = starts_with_eb
-                || matches!(op, Op::BinF(_, k) | Op::CmpF(_, k) | Op::IndexF(_, k) | Op::IndexStoreF(_, k) | Op::CmpJF(_, k) if !matches!(self.fused[k as usize].0, Opnd::Stack));
+                || matches!(op, Op::BinF(_, k) | Op::CmpF(_, k) | Op::IndexF(_, k) | Op::IndexStoreF(_, k) | Op::CmpJF(_, k) | Op::StoreF(k) if !matches!(self.fused[k as usize].0, Opnd::Stack));
             if !(starts_with_eb && d < 1000) {
                 self.ops.push(Op::Eb(n, d));
             }
@@ -5040,8 +5043,17 @@ impl Compiler {
                 self.expr(&node.slots[1], depth + 1);
                 if let NK::Value(_) = &node.slots[0].kind {
                     if self.pending_eb.is_none() {
-                        if let Some(Op::IndexF(n, k)) = self.ops.last().copied() {
-                            *self.ops.last_mut().unwrap() = Op::IndexStoreF(n, k);
+                        match self.ops.last().copied() {
+                            Some(Op::IndexF(n, k)) => *self.ops.last_mut().unwrap() = Op::IndexStoreF(n, k),
+                            Some(Op::Load(n, d)) => {
+                                self.fused.push((Opnd::Load(n, d), Opnd::Stack));
+                                *self.ops.last_mut().unwrap() = Op::StoreF((self.fused.len() - 1) as u32);
+                            }
+                            Some(Op::Lit(n, d, k)) => {
+                                self.fused.push((Opnd::Lit(n, d, k), Opnd::Stack));
+                                *self.ops.last_mut().unwrap() = Op::StoreF((self.fused.len() - 1) as u32);
+                            }
+                            _ => {}
                         }
                     }
                     self.emit(Op::StoreAssign(np, Rc::as_ptr(&node.slots[0])));
@@ -5470,6 +5482,68 @@ fn node_ref<'a>(p: *const Node) -> &'a Node {
 }
 
 /// Runs the drone's program until it must stop (see yield_stops) or ends.
+/// StoreAssign's work for `name = rhs` / `name op= rhs`: the time it takes (in ops)
+#[inline(always)]
+fn store_assign(st: &StRef, an: *const Node, ln: *const Node, rhs: V) -> R<f64> {
+    stm(st).current_executing_node = an;
+    let value = match &node_ref(ln).kind {
+        NK::Value(v) => v,
+        _ => unreachable!(),
+    };
+    let op = match &node_ref(an).kind {
+        NK::Assignment(op) => op,
+        _ => unreachable!(),
+    };
+    let s = stm(st);
+    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+    let exec_time = if op.as_ref() == "=" {
+        // get_value_to_assign for "=": the value itself, no time. scope_set_var sets
+        // the first scope up the chain holding the name: the slot the target's
+        // lookup cache points at, if still valid.
+        let lnode = node_ref(ln);
+        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
+        if !slot.is_null() {
+            let e = unsafe { &mut *slot };
+            e.1 = rhs;
+            e.2 = false;
+        } else {
+            scope_set_var(scope, value, rhs, false);
+            remember_slot(scope, value, &lnode.lookup);
+        }
+        0.0
+    } else {
+        // `x += n` / `x -= n` on numbers: get_value_to_assign's arithmetic (one op),
+        // on the slot that scope_evaluate and scope_set_var would both use
+        let lnode = node_ref(ln);
+        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
+        let fast = if slot.is_null() {
+            None
+        } else {
+            match (op.as_ref(), unsafe { &(*slot).1 }, &rhs) {
+                ("+=", V::Num(a), V::Num(b)) => Some(a + b),
+                ("-=", V::Num(a), V::Num(b)) => Some(a - b),
+                _ => None,
+            }
+        };
+        match fast {
+            Some(x) => {
+                let e = unsafe { &mut *slot };
+                e.1 = V::Num(x);
+                e.2 = false;
+                1.0
+            }
+            None => {
+                let before = scope_evaluate(scope, value)?.0;
+                let (v, exec_time) = get_value_to_assign(Some(&before), &rhs, op)?;
+                scope_set_var(scope, value, v, false);
+                remember_slot(scope, value, &lnode.lookup);
+                exec_time
+            }
+        }
+    };
+    Ok(exec_time)
+}
+
 fn vm_run(st: &StRef, vm: &mut Vm) {
     let r = vm_loop(st, vm);
     match r {
@@ -5586,64 +5660,21 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     s.module_state.is_expression_static = is_static;
                     vm.stack.push(V::Bool(is_static));
                 }
+                Op::StoreF(k) => {
+                    let v = operand(st, &code, code.fused[k as usize].0, depth_off)?.into_v();
+                    let (an, ln) = match ops[pc] {
+                        Op::StoreAssign(an, ln) => (an, ln),
+                        _ => unreachable!(),
+                    };
+                    pc += 1;
+                    let exec_time = store_assign(st, an, ln, v)?;
+                    if charge(st, OPERATION_OPS * exec_time) {
+                        stop!(pc);
+                    }
+                }
                 Op::StoreAssign(an, ln) => {
-                    stm(st).current_executing_node = an;
                     let rhs = vm.stack.pop().unwrap();
-                    let value = match &node_ref(ln).kind {
-                        NK::Value(v) => v,
-                        _ => unreachable!(),
-                    };
-                    let op = match &node_ref(an).kind {
-                        NK::Assignment(op) => op,
-                        _ => unreachable!(),
-                    };
-                    let s = stm(st);
-                    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
-                    let exec_time = if op.as_ref() == "=" {
-                        // get_value_to_assign for "=": the value itself, no time. scope_set_var sets
-                        // the first scope up the chain holding the name: the slot the target's
-                        // lookup cache points at, if still valid.
-                        let lnode = node_ref(ln);
-                        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
-                        if !slot.is_null() {
-                            let e = unsafe { &mut *slot };
-                            e.1 = rhs;
-                            e.2 = false;
-                        } else {
-                            scope_set_var(scope, value, rhs, false);
-                            remember_slot(scope, value, &lnode.lookup);
-                        }
-                        0.0
-                    } else {
-                        // `x += n` / `x -= n` on numbers: get_value_to_assign's arithmetic (one op),
-                        // on the slot that scope_evaluate and scope_set_var would both use
-                        let lnode = node_ref(ln);
-                        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
-                        let fast = if slot.is_null() {
-                            None
-                        } else {
-                            match (op.as_ref(), unsafe { &(*slot).1 }, &rhs) {
-                                ("+=", V::Num(a), V::Num(b)) => Some(a + b),
-                                ("-=", V::Num(a), V::Num(b)) => Some(a - b),
-                                _ => None,
-                            }
-                        };
-                        match fast {
-                            Some(x) => {
-                                let e = unsafe { &mut *slot };
-                                e.1 = V::Num(x);
-                                e.2 = false;
-                                1.0
-                            }
-                            None => {
-                                let before = scope_evaluate(scope, value)?.0;
-                                let (v, exec_time) = get_value_to_assign(Some(&before), &rhs, op)?;
-                                scope_set_var(scope, value, v, false);
-                                remember_slot(scope, value, &lnode.lookup);
-                                exec_time
-                            }
-                        }
-                    };
+                    let exec_time = store_assign(st, an, ln, rhs)?;
                     if charge(st, OPERATION_OPS * exec_time) {
                         stop!(pc);
                     }
@@ -5879,8 +5910,9 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         }
                         None => index_at(lhs, std::slice::from_ref(idx), &mut steps, None)?,
                     };
-                    vm.stack.push(result);
+                    // (on the stack only if the drone stops here; the store takes it directly otherwise)
                     if charge(st, OPERATION_OPS * steps as f64) {
+                        vm.stack.push(result);
                         stop!(pc);
                     }
                     // the StoreAssign after this one, done here
@@ -5889,67 +5921,9 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         _ => unreachable!(),
                     };
                     pc += 1;
-                    {
-                    stm(st).current_executing_node = an;
-                    let rhs = vm.stack.pop().unwrap();
-                    let value = match &node_ref(ln).kind {
-                        NK::Value(v) => v,
-                        _ => unreachable!(),
-                    };
-                    let op = match &node_ref(an).kind {
-                        NK::Assignment(op) => op,
-                        _ => unreachable!(),
-                    };
-                    let s = stm(st);
-                    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
-                    let exec_time = if op.as_ref() == "=" {
-                        // get_value_to_assign for "=": the value itself, no time. scope_set_var sets
-                        // the first scope up the chain holding the name: the slot the target's
-                        // lookup cache points at, if still valid.
-                        let lnode = node_ref(ln);
-                        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
-                        if !slot.is_null() {
-                            let e = unsafe { &mut *slot };
-                            e.1 = rhs;
-                            e.2 = false;
-                        } else {
-                            scope_set_var(scope, value, rhs, false);
-                            remember_slot(scope, value, &lnode.lookup);
-                        }
-                        0.0
-                    } else {
-                        // `x += n` / `x -= n` on numbers: get_value_to_assign's arithmetic (one op),
-                        // on the slot that scope_evaluate and scope_set_var would both use
-                        let lnode = node_ref(ln);
-                        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
-                        let fast = if slot.is_null() {
-                            None
-                        } else {
-                            match (op.as_ref(), unsafe { &(*slot).1 }, &rhs) {
-                                ("+=", V::Num(a), V::Num(b)) => Some(a + b),
-                                ("-=", V::Num(a), V::Num(b)) => Some(a - b),
-                                _ => None,
-                            }
-                        };
-                        match fast {
-                            Some(x) => {
-                                let e = unsafe { &mut *slot };
-                                e.1 = V::Num(x);
-                                e.2 = false;
-                                1.0
-                            }
-                            None => {
-                                let before = scope_evaluate(scope, value)?.0;
-                                let (v, exec_time) = get_value_to_assign(Some(&before), &rhs, op)?;
-                                scope_set_var(scope, value, v, false);
-                                remember_slot(scope, value, &lnode.lookup);
-                                exec_time
-                            }
-                        }
-                    };
+                    let exec_time = store_assign(st, an, ln, result)?;
                     if charge(st, OPERATION_OPS * exec_time) {
                         stop!(pc);
-                    }
                     }
                 }
                 Op::CmpJF(n, k) => {
@@ -5971,16 +5945,16 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     if let Val::O(v) = rhs {
                         vdrop(v);
                     }
-                    vm.stack.push(V::Bool(flag));
+                    // (the result goes on the stack only if the drone stops here; the jump takes it
+                    // straight from `flag` otherwise)
                     if charge(st, OPERATION_OPS * steps as f64) {
+                        vm.stack.push(V::Bool(flag));
                         stop!(pc);
                     }
                     // the condition jump after this one, done here
                     match ops[pc] {
                         Op::CondJumpF(items_spin, t) => {
-                            let cv = vm.stack.pop().unwrap();
-                            let condition = cond_truth(st, &cv, items_spin)?;
-                            vdrop(cv);
+                            let condition = cond_truth_bool(st, flag, items_spin);
                             pc += 1;
                             // ChargeFirst; if it stops, the JumpIfFalse after decides on resume
                             if charge(st, OPERATION_OPS) {
@@ -5990,9 +5964,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                             pc = if condition { pc + 1 } else { t as usize };
                         }
                         Op::LoopCond(items_spin, e, b) => {
-                            let cv = vm.stack.pop().unwrap();
-                            let condition = cond_truth(st, &cv, items_spin)?;
-                            vdrop(cv);
+                            let condition = cond_truth_bool(st, flag, items_spin);
                             pc = if condition { b as usize } else { e as usize };
                         }
                         _ => unreachable!(),
@@ -6944,6 +6916,19 @@ fn cond_truth(st: &StRef, cv: &V, items_spin: bool) -> R<bool> {
         s.spin_period = None;
     }
     Ok(condition)
+}
+
+/// cond_truth of V::Bool(flag)
+#[inline(always)]
+fn cond_truth_bool(st: &StRef, flag: bool, items_spin: bool) -> bool {
+    let s = stm(st);
+    s.wait_deadline = None;
+    s.spin_loop = false;
+    if !flag && items_spin {
+        s.spin_read = None;
+        s.spin_period = None;
+    }
+    flag
 }
 
 /// the static depth of the ImportStart before an ImportLoad at `at`
