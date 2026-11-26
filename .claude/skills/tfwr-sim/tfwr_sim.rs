@@ -6600,8 +6600,9 @@ fn reverse_dir(d: u8) -> u8 {
 // ---------------------------------------------------------------------------------------------
 struct Sim {
     sh: Rc<Shared>,
-    /// skip_busy_waits' list of drones it moves on (index, ops per pass), kept between calls
-    waiting_scratch: Vec<(usize, f64)>,
+    /// skip_busy_waits' list of drones it moves on (index, ops per pass, own target or NaN),
+    /// kept between calls
+    waiting_scratch: Vec<(usize, f64, f64)>,
     // Simulation
     timers: PriorityQueue<Rc<Timer>>,
     current_time: i64,
@@ -8746,10 +8747,15 @@ impl Sim {
 
     /// Not in the game: a shortcut with the same outcome. Drones spinning in
     /// `while get_time() < x: pass` take two ops per pass and affect nothing, yet the loop below
-    /// would visit every pass of every one of them. This moves each of them straight to the pass
-    /// it would have reached by the time anything else can happen: another drone's next side
-    /// effect, the first pass whose clock reading ends a wait, or the end of this Execute call.
-    /// `base` is the op count the current time stands for.
+    /// would visit every pass of every one of them. A drone waiting for the clock moves straight
+    /// to the first pass whose reading ends its wait (or the end of this Execute call, past which
+    /// the op duration may change): its readings depend on nothing but its own op count, so other
+    /// drones' side effects in between change none of them. A drone in `while num_items(i) < x:
+    /// pass` reads what other drones change, so it moves only to the pass it would have reached
+    /// by the time anything else can happen: another drone's next side effect, the end of a clock
+    /// wait, or the end of this Execute call. `base` is the op count the current time stands for.
+    /// (The ops skipped are consumed, for power, in this pass of Execute rather than spread over
+    /// the later ones, as with any skipping.)
     fn skip_busy_waits(&mut self, num: f64, base: f64) {
         if self.paused {
             return;
@@ -8779,7 +8785,7 @@ impl Sim {
             {
                 if p > 0.0 && self.items[item_id(item)] == v {
                     drop(b);
-                    waiting.push((si, p));
+                    waiting.push((si, p, f64::NAN));
                     continue;
                 }
             }
@@ -8802,7 +8808,7 @@ impl Sim {
             if (wc.0, wc.1, wc.2) == key && c <= wc.3 && ((wc.3 - c) * 0.5).fract() == 0.0 {
                 limit = limit.min(wc.3);
                 drop(b);
-                waiting.push((si, 2.0));
+                waiting.push((si, 2.0, wc.3));
                 continue;
             }
             let estimate = (deadline * 1e9 - self.current_time as f64) / self.op_duration as f64 + base - c;
@@ -8820,12 +8826,13 @@ impl Sim {
             limit = limit.min(c + 2.0 * j);
             drop(b);
             ex.states[si].as_ref().unwrap().borrow_mut().wait_cache = (key.0, key.1, key.2, c + 2.0 * j);
-            waiting.push((si, 2.0));
+            waiting.push((si, 2.0, c + 2.0 * j));
         }
-        for (si, p) in waiting.iter() {
+        for (si, p, own) in waiting.iter() {
+            let target = if own.is_nan() { limit } else { own.min(num - 1.0) };
             let mut b = ex.states[*si].as_ref().unwrap().borrow_mut();
-            if b.h().op_count < limit {
-                b.h().op_count += p * ((limit - b.h().op_count) / p).ceil();
+            if b.h().op_count < target {
+                b.h().op_count += p * ((target - b.h().op_count) / p).ceil();
                 // the skipped passes read the same count, the last of them one pass ago
                 let c = b.h().op_count;
                 if let Some((at, _)) = b.spin_read.as_mut() {
