@@ -4343,9 +4343,10 @@ enum Op {
     PushNone,
     /// after the callee expression: it must be a function; push the static flag
     CallFunc(*const Node),
-    /// pops args, static flag, function; a builtin is called here (then TakeRv, 3 on), a user
-    /// function charges its op and goes on to CallB
-    CallA(*const Node),
+    /// pops the arguments (this many, or one argument list for u32::MAX), the static flag and the
+    /// function; a builtin is called here (then TakeRv, 3 on), a user function charges its op and
+    /// goes on to CallB
+    CallA(*const Node, u32),
     CallB,
     CallC,
     TakeRv,
@@ -4368,6 +4369,11 @@ enum Op {
     CondLit(u32),
     /// after a condition: clear the busy-wait markers, push its truth
     CondTest(bool),
+    /// CondTest + ChargeFirst + JumpIfFalse(target) for a first pass; a JumpIfFalse(target) follows
+    /// it, where the drone resumes if the charge stops it
+    CondJumpF(bool, u32),
+    /// CondTest + JumpIfFalse(else) + Jump(body) for a later pass of a loop
+    LoopCond(bool, u32, u32),
     /// the first pass of a branch or loop costs one op
     ChargeFirst,
     /// before a later pass of `while get_time() < x` / `while num_items(...)`: set the markers
@@ -4428,19 +4434,41 @@ struct Compiler {
     strs: Vec<Rc<str>>,
     /// innermost loop last: (break target fixups, continue target fixups)
     loops: Vec<(Vec<usize>, Vec<usize>)>,
+    /// an Eb not yet emitted: dropped if the next instruction does its own Eb (see emit)
+    pending_eb: Option<(*const Node, u32)>,
 }
 
 impl Compiler {
-    fn here(&self) -> u32 {
+    fn here(&mut self) -> u32 {
+        self.flush_eb();
         self.ops.len() as u32
     }
+    fn flush_eb(&mut self) {
+        if let Some((n, d)) = self.pending_eb.take() {
+            self.ops.push(Op::Eb(n, d));
+        }
+    }
+    fn eb(&mut self, n: *const Node, d: u32) {
+        self.flush_eb();
+        self.pending_eb = Some((n, d));
+    }
+    /// An Eb right before an instruction that starts with its own Eb (a child node's) is dropped:
+    /// the child at once overwrites the error location, and its depth check (one deeper) fails
+    /// whenever the parent's would, short of the 1100 limit the scripts come nowhere near.
     fn emit(&mut self, op: Op) -> usize {
+        if let Some((n, d)) = self.pending_eb.take() {
+            let starts_with_eb = matches!(op, Op::Load(..) | Op::Lit(..) | Op::Eb(..) | Op::Def(..) | Op::Pass(..) | Op::BrkCont(..) | Op::ImportStart(..));
+            if !(starts_with_eb && d < 1000) {
+                self.ops.push(Op::Eb(n, d));
+            }
+        }
         self.ops.push(op);
         self.ops.len() - 1
     }
     fn patch(&mut self, at: usize, target: u32) {
         match &mut self.ops[at] {
-            Op::Jump(t) | Op::JumpIfFalse(t) | Op::ForNext(t) | Op::AndOr(_, _, t) | Op::DotMod(_, t) | Op::BrkCont(_, _, t) => *t = target,
+            Op::Jump(t) | Op::JumpIfFalse(t) | Op::ForNext(t) | Op::AndOr(_, _, t) | Op::DotMod(_, t) | Op::BrkCont(_, _, t) | Op::CondJumpF(_, t) => *t = target,
+            Op::LoopCond(_, t, _) => *t = target,
             _ => panic!("patch of a non-jump"),
         }
     }
@@ -4470,7 +4498,7 @@ impl Compiler {
             }
             NK::Branch(looping) => self.branch(node, *looping, depth),
             NK::For => {
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 self.expr(&node.slots[0], depth + 1);
                 self.emit(Op::ForInit(np));
                 let next = self.here();
@@ -4483,7 +4511,7 @@ impl Compiler {
                 for c in conts {
                     self.patch(c, tail);
                 }
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 self.emit(Op::Jump(next));
                 let brk = self.here();
                 for b in brks {
@@ -4494,7 +4522,7 @@ impl Compiler {
                 self.patch(fnext, end);
             }
             NK::Assignment(op) => {
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 self.expr(&node.slots[1], depth + 1);
                 self.emit(Op::SetNode(np));
                 let k = self.s(op);
@@ -4504,7 +4532,7 @@ impl Compiler {
                 self.emit(Op::Def(np, depth));
             }
             NK::Return => {
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 if !node.slots.is_empty() {
                     self.expr(&node.slots[0], depth + 1);
                 } else {
@@ -4535,7 +4563,7 @@ impl Compiler {
                 }
             }
             NK::Global => {
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 self.emit(Op::Yp);
             }
             NK::Import { module_names, .. } => {
@@ -4557,7 +4585,7 @@ impl Compiler {
 
     fn branch(&mut self, node: &Rc<Node>, looping: bool, depth: u32) {
         let np = Rc::as_ptr(node);
-        self.emit(Op::Eb(np, depth));
+        self.eb(np, depth);
         let wait_name = if looping { busy_wait_name(node) } else { None };
         let items_spin = looping && wait_name.is_none() && is_items_spin(node);
         let lit = is_literal_node(&node.slots[0]);
@@ -4565,19 +4593,20 @@ impl Compiler {
             self.consts.push(v);
             (self.consts.len() - 1) as u32
         });
-        let cond = |c: &mut Compiler| match lit_k {
+        // first pass
+        let mut jf_first = Vec::new();
+        match lit_k {
             Some(k) => {
-                c.emit(Op::CondLit(k));
+                self.emit(Op::CondLit(k));
+                self.emit(Op::ChargeFirst);
+                jf_first.push(self.emit(Op::JumpIfFalse(0)));
             }
             None => {
-                c.expr(&node.slots[0], depth + 1);
-                c.emit(Op::CondTest(items_spin));
+                self.expr(&node.slots[0], depth + 1);
+                jf_first.push(self.emit(Op::CondJumpF(items_spin, 0)));
+                jf_first.push(self.emit(Op::JumpIfFalse(0)));
             }
-        };
-        // first pass
-        cond(self);
-        self.emit(Op::ChargeFirst);
-        let jf_first = self.emit(Op::JumpIfFalse(0));
+        }
         let body = self.here();
         if looping {
             self.loops.push((Vec::new(), Vec::new()));
@@ -4591,21 +4620,31 @@ impl Compiler {
             for c in conts {
                 self.patch(c, tail);
             }
-            self.emit(Op::Eb(np, depth));
+            self.eb(np, depth);
             self.emit(Op::Yp);
             // later passes
             if lit_k.is_none() && (wait_name.is_some() || items_spin) {
                 self.emit(Op::WaitPre(np, items_spin));
             }
-            cond(self);
-            jf_later = Some(self.emit(Op::JumpIfFalse(0)));
-            self.emit(Op::Jump(body));
+            match lit_k {
+                Some(k) => {
+                    self.emit(Op::CondLit(k));
+                    jf_later = Some(self.emit(Op::JumpIfFalse(0)));
+                    self.emit(Op::Jump(body));
+                }
+                None => {
+                    self.expr(&node.slots[0], depth + 1);
+                    jf_later = Some(self.emit(Op::LoopCond(items_spin, 0, body)));
+                }
+            }
             to_end = brks;
         } else {
             to_end.push(self.emit(Op::Jump(0)));
         }
         let else_at = self.here();
-        self.patch(jf_first, else_at);
+        for j in jf_first {
+            self.patch(j, else_at);
+        }
         if let Some(j) = jf_later {
             self.patch(j, else_at);
         }
@@ -4678,23 +4717,30 @@ impl Compiler {
             }
             NK::Bracket => self.expr(&node.slots[0], depth + 1),
             NK::Call => {
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 self.expr(&node.slots[0], depth + 1);
                 self.emit(Op::CallFunc(np));
-                self.expr(&node.slots[1], depth + 1);
-                self.emit(Op::CallA(np));
+                let args = &node.slots[1];
+                if let NK::Seq = &args.kind {
+                    for slot in args.slots.iter() {
+                        self.expr(slot, depth + 2);
+                    }
+                    self.emit(Op::CallA(np, args.slots.len() as u32));
+                } else {
+                    self.expr(args, depth + 1);
+                    self.emit(Op::CallA(np, u32::MAX));
+                }
                 self.emit(Op::CallB);
                 self.emit(Op::CallC);
                 self.emit(Op::TakeRv);
             }
             NK::Unary(_) => {
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 self.expr(&node.slots[0], depth + 1);
-                self.emit(Op::SetNode(np));
                 self.emit(Op::Unary(np));
             }
             NK::Binary(_, _, bop) => {
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 self.expr(&node.slots[0], depth + 1);
                 match bop {
                     BOp::And | BOp::Or => {
@@ -4708,7 +4754,6 @@ impl Compiler {
                     BOp::Dot => {
                         let at = self.emit(Op::DotMod(np, 0));
                         self.expr(&node.slots[1], depth + 1);
-                        self.emit(Op::SetNode(np));
                         self.emit(Op::Bin(np));
                         let j = self.emit(Op::Jump(0));
                         let fin = self.here();
@@ -4719,21 +4764,19 @@ impl Compiler {
                     }
                     _ => {
                         self.expr(&node.slots[1], depth + 1);
-                        self.emit(Op::SetNode(np));
                         self.emit(Op::Bin(np));
                     }
                 }
             }
             NK::Comparison(..) => {
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 for slot in node.slots.iter() {
                     self.expr(slot, depth + 1);
                 }
-                self.emit(Op::SetNode(np));
                 self.emit(Op::Cmp(np));
             }
             NK::List | NK::Tuple | NK::Dict | NK::Set => {
-                self.emit(Op::Eb(np, depth));
+                self.eb(np, depth);
                 self.expr(&node.slots[0], depth + 1);
                 self.emit(match &node.kind {
                     NK::List => Op::MkList,
@@ -4767,12 +4810,12 @@ fn code_of(node: &Rc<Node>) -> Rc<Code> {
     if let Some(c) = CODES.with(|c| c.borrow().get(&key).cloned()) {
         return c;
     }
-    let mut c = Compiler { ops: Vec::new(), consts: Vec::new(), strs: Vec::new(), loops: Vec::new() };
+    let mut c = Compiler { ops: Vec::new(), consts: Vec::new(), strs: Vec::new(), loops: Vec::new(), pending_eb: None };
     match &node.kind {
         NK::Function { .. } => {
             let np = Rc::as_ptr(node);
             c.emit(Op::ArgCheck(np));
-            c.emit(Op::Eb(np, 0));
+            c.eb(np, 0);
             // default values: Defaults jumps to the first one still missing
             let ndef = node.slots.len() - 1;
             let d = c.emit(Op::Defaults(np, 0));
@@ -4791,6 +4834,7 @@ fn code_of(node: &Rc<Node>) -> Rc<Code> {
             c.emit(Op::ModuleEnd);
         }
     }
+    c.flush_eb();
     let code = Rc::new(Code { ops: c.ops, consts: c.consts, strs: c.strs, root: node.clone() });
     CODES.with(|cs| cs.borrow_mut().insert(key, code.clone()));
     code
@@ -4943,8 +4987,13 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     let is_static = stm(st).module_state.is_expression_static;
                     vm.stack.push(V::Bool(is_static));
                 }
-                Op::CallA(n) => {
-                    let args = vm.stack.pop().unwrap();
+                Op::CallA(n, argc) => {
+                    let args = if argc == u32::MAX {
+                        vm.stack.pop().unwrap()
+                    } else {
+                        let at = vm.stack.len() - argc as usize;
+                        V::Seq(Rc::new(vm.stack.drain(at..).collect()))
+                    };
                     let is_static = matches!(vm.stack.pop(), Some(V::Bool(true)));
                     let func = match vm.stack.pop() {
                         Some(V::Func(f)) => f,
@@ -5020,6 +5069,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vm.stack.push(v);
                 }
                 Op::Unary(n) => {
+                    stm(st).current_executing_node = n;
                     let value = vm.stack.pop().unwrap();
                     let op = match &node_ref(n).kind {
                         NK::Unary(op) => op,
@@ -5091,6 +5141,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vm.stack.push(v);
                 }
                 Op::Bin(n) => {
+                    stm(st).current_executing_node = n;
                     let rhs = vm.stack.pop().unwrap();
                     let lhs = vm.stack.pop().unwrap();
                     let (op, bop) = match &node_ref(n).kind {
@@ -5104,6 +5155,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     }
                 }
                 Op::Cmp(n) => {
+                    stm(st).current_executing_node = n;
                     let node = node_ref(n);
                     let (ops_t, cops) = match &node.kind {
                         NK::Comparison(o, c) => (o, c),
@@ -5211,6 +5263,21 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         s.spin_period = None;
                     }
                     vm.stack.push(V::Bool(condition));
+                }
+                Op::CondJumpF(items_spin, t) => {
+                    let cv = vm.stack.pop().unwrap();
+                    let condition = cond_truth(st, &cv, items_spin)?;
+                    // ChargeFirst; if it stops, the JumpIfFalse after this decides on resume
+                    if charge(st, OPERATION_OPS) {
+                        vm.stack.push(V::Bool(condition));
+                        stop!(pc);
+                    }
+                    pc = if condition { pc + 1 } else { t as usize };
+                }
+                Op::LoopCond(items_spin, e, b) => {
+                    let cv = vm.stack.pop().unwrap();
+                    let condition = cond_truth(st, &cv, items_spin)?;
+                    pc = if condition { b as usize } else { e as usize };
                 }
                 Op::ChargeFirst => {
                     if charge(st, OPERATION_OPS) {
@@ -5591,6 +5658,20 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
             }
         }
     }
+}
+
+/// CondTest's work: clear the busy-wait markers, then the condition's truth.
+#[inline(always)]
+fn cond_truth(st: &StRef, cv: &V, items_spin: bool) -> R<bool> {
+    let s = stm(st);
+    s.wait_deadline = None;
+    s.spin_loop = false;
+    let condition = is_true_value(cv)?;
+    if !condition && items_spin {
+        s.spin_read = None;
+        s.spin_period = None;
+    }
+    Ok(condition)
 }
 
 /// the static depth of the ImportStart before an ImportLoad at `at`
