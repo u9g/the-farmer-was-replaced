@@ -94,18 +94,29 @@ def drones():
 	return min(max_drones(), width())
 
 
+def spawn_node(lo, hi, d, pack):
+	# drone lo runs job for drones lo..hi-1: it hands the upper half of its range to a new drone,
+	# again and again, so the drones are spawned in a tree (log2(d) spawns before any drone works)
+	hs = []
+	while hi - lo > 1:
+		mid = (lo + hi + 1) // 2
+		h = spawn_drone(spawn_node, mid, hi, d, pack)
+		if h == None:
+			break
+		hs.append(h)
+		hi = mid
+	job = pack[0]
+	res = [job(lo, d, pack[1], pack[2])]
+	k = len(hs) - 1
+	while k >= 0:
+		res = res + wait_for(hs[k])
+		k -= 1
+	return res
+
+
 def all_drones(job, a, b):
 	# job(i, d, a, b) runs on drone i of d; returns the list of results
-	d = drones()
-	hs = []
-	for i in range(1, d):
-		h = spawn_drone(job, i, d, a, b)
-		if h != None:
-			hs.append(h)
-	res = [job(0, d, a, b)]
-	for h in hs:
-		res.append(wait_for(h))
-	return res
+	return spawn_node(0, drones(), drones(), (job, a, b))
 
 
 def my_cols(i, d):
@@ -660,28 +671,58 @@ def sun_plant_job(i, d, a, b):
 				clear_cell()
 				soil()
 				plant(Entities.Sunflower)
-			cells.append((x, y, measure()))
+			v = measure()
+			sun_water(v)
+			cells.append((x, y, v))
 			move(North)
 	return cells
 
 
-def sun_cut_job(i, d, cells, v):
-	for c in cells[i]:
-		if c[2] == v:
-			go(c[0], c[1])
-			while not can_harvest():
-				pass
-			harvest()
+# soil water a sunflower gets at planting, by petal count: the flowers cut first wait for growth
+# (7 s dry, 1 / (1 + 4 * water) of that when wet); later levels have grown by their turn anyway
+SUN_WT = {15: 0.7, 14: 0.45, 13: 0.2, 12: 0.05, 11: 0.01}
+
+
+def sun_water(v):
+	if v in SUN_WT:
+		k = (SUN_WT[v] - get_water()) // 0.25 + 1
+		if k > 0 and num_items(Items.Water) >= k:
+			use_item(Items.Water, k)
+
+
+def sun_cut_job(i, d, lists, v):
+	for c in lists[i]:
+		go(c[0], c[1])
+		while not can_harvest():
+			pass
+		harvest()
 	return 0
+
+
+SUN_PER = 1
 
 
 def power_round():
 	n = width() * get_world_size()
 	if num_items(Items.Carrot) < n:
 		return
+	d = drones()
 	cells = all_drones(sun_plant_job, 0, 0)
 	for v in range(15, 6, -1):
-		all_drones(sun_cut_job, cells, v)
+		# this petal count's cells, in field order, shared out evenly in runs of neighbours
+		cv = []
+		for cl in cells:
+			for c in cl:
+				if c[2] == v:
+					cv.append(c)
+		m = len(cv)
+		if m == 0:
+			continue
+		k = min(d, (m + SUN_PER - 1) // SUN_PER)
+		lists = []
+		for j in range(k):
+			lists.append(cv[j * m // k:(j + 1) * m // k])
+		spawn_node(0, k, k, (sun_cut_job, lists, v))
 
 
 SUN_STRIP = True
