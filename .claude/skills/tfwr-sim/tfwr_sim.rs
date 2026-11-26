@@ -1553,6 +1553,14 @@ struct Copies {
     values: FxMap<usize, V>,
     scopes: FxMap<usize, ScopeRef>,
     filled: HashSet<usize, FxBuild>,
+    /// spawn_drone's copy only (see spawn_reach): the names (name_key) whose variables are
+    /// copied; the others are left unassigned
+    reach: Option<HashSet<usize, FxBuild>>,
+    /// functions copied whose names are not in `reach` yet, and those already looked at
+    trees: Vec<Rc<Node>>,
+    scanned: HashSet<usize, FxBuild>,
+    /// every scope copied with some variables left out: (original, copy)
+    partial: Vec<(ScopeRef, ScopeRef)>,
 }
 
 thread_local! {
@@ -1566,6 +1574,10 @@ impl Copies {
             values: FxMap::with_capacity_and_hasher(v, Default::default()),
             scopes: FxMap::with_capacity_and_hasher(sc, Default::default()),
             filled: HashSet::with_capacity_and_hasher(sc, Default::default()),
+            reach: None,
+            trees: Vec::new(),
+            scanned: HashSet::default(),
+            partial: Vec::new(),
         }
     }
 }
@@ -1576,23 +1588,113 @@ impl Drop for Copies {
     }
 }
 
+/// deep_copy, with the values that need no copying handled in line
+#[inline(always)]
+fn deep_copy_el(v: &V, copies: &mut Copies) -> V {
+    match v {
+        V::List(_) | V::Tuple(_) | V::Dict(_) | V::Set(_) | V::Func(_) | V::Module(_) => deep_copy(v, copies),
+        _ => v.clone(),
+    }
+}
+
+/// whether a value can never change and holds nothing that can: a copy of it is the value itself
+/// (no script can tell a tuple from an equal copy of it)
+fn immutable_value(v: &V) -> bool {
+    match v {
+        V::List(_) | V::Dict(_) | V::Set(_) | V::Func(_) | V::Module(_) => false,
+        V::Tuple(t) => t.iter().all(immutable_value),
+        _ => true,
+    }
+}
+
+/// every name a function's code mentions (variables read or set, functions called, members,
+/// parameters, definitions, imports), by name_key
+fn tree_names(t: &Rc<Node>) -> Rc<[usize]> {
+    fn walk(n: &Node, out: &mut Vec<usize>) {
+        match &n.kind {
+            NK::Value(v) | NK::Def(v, _) => out.push(name_key(v)),
+            NK::Function { params, name, vars } => {
+                out.push(name_key(name));
+                out.extend(params.iter().map(|p| name_key(p)));
+                out.extend(vars.iter().map(|p| name_key(p)));
+            }
+            NK::Import { module_names, vars_to_unpack, .. } => {
+                out.extend(module_names.iter().map(|p| name_key(p)));
+                out.extend(vars_to_unpack.iter().map(|p| name_key(p)));
+            }
+            _ => {}
+        }
+        for c in n.slots.iter() {
+            walk(c, out);
+        }
+    }
+    t.names
+        .get_or_init(|| {
+            let mut out = Vec::new();
+            walk(t, &mut out);
+            out.sort_unstable();
+            out.dedup();
+            out.into()
+        })
+        .clone()
+}
+
+/// Not in the game: a shortcut with the same outcome. spawn_drone copies everything the
+/// function can see, but a drone reads a variable only through code that names it: its
+/// function's, or that of a function it holds (in a variable, an argument, a list...). Every
+/// variable copied is looked at for such functions; the names their code mentions are copied too,
+/// until none is new. The variables left out are never read: their slots (which the lookup
+/// caches point into) stay where they are, unassigned. A drone it spawns in turn copies from these
+/// copies, which hold everything its own code could name.
+fn spawn_reach(copies: &mut Copies) {
+    while let Some(t) = copies.trees.pop() {
+        for &key in tree_names(&t).iter() {
+            if !copies.reach.as_mut().unwrap().insert(key) {
+                continue;
+            }
+            // (scopes copied from here on have it already)
+            let known = copies.partial.len();
+            let mut i = 0;
+            while i < known {
+                let (orig, copy) = copies.partial[i].clone();
+                let found = orig.borrow().vars.find(key);
+                if let Some(slot) = found {
+                    let v = {
+                        let b = orig.borrow();
+                        deep_copy_el(&b.vars.items[slot].1, copies)
+                    };
+                    copy.borrow_mut().vars.items[slot].1 = v;
+                }
+                i += 1;
+            }
+        }
+    }
+}
+
 /// (kept out of line: the interpreter loop stays small)
 #[inline(never)]
 fn deep_copy(v: &V, copies: &mut Copies) -> V {
     let p = v.ptr();
     match v {
         V::List(l) => {
-            if let Some(c) = copies.values.get(&p) {
-                return c.clone();
+            // Held only here, it cannot come up again in this copy (not even inside itself): no
+            // need to remember its copy.
+            let alone = Rc::strong_count(l) == 1 && Rc::weak_count(l) == 0;
+            if !alone {
+                if let Some(c) = copies.values.get(&p) {
+                    return c.clone();
+                }
             }
             let out = Rc::new(RefCell::new(Vec::new()));
-            copies.values.insert(p, V::List(out.clone()));
+            if !alone {
+                copies.values.insert(p, V::List(out.clone()));
+            }
             // (a list that holds itself gets the copy, which is not borrowed here)
             let items: Vec<V> = {
                 let b = l.borrow();
                 let mut v = Vec::with_capacity(b.len());
                 for it in b.iter() {
-                    v.push(deep_copy(it, copies));
+                    v.push(deep_copy_el(it, copies));
                 }
                 v
             };
@@ -1600,11 +1702,19 @@ fn deep_copy(v: &V, copies: &mut Copies) -> V {
             V::List(out)
         }
         V::Tuple(t) => {
-            if let Some(c) = copies.values.get(&p) {
-                return c.clone();
+            if t.iter().all(immutable_value) {
+                return v.clone();
             }
-            let out = V::Tuple(Rc::new(t.iter().map(|e| deep_copy(e, copies)).collect()));
-            copies.values.insert(p, out.clone());
+            let alone = Rc::strong_count(t) == 1 && Rc::weak_count(t) == 0;
+            if !alone {
+                if let Some(c) = copies.values.get(&p) {
+                    return c.clone();
+                }
+            }
+            let out = V::Tuple(Rc::new(t.iter().map(|e| deep_copy_el(e, copies)).collect()));
+            if !alone {
+                copies.values.insert(p, out.clone());
+            }
             out
         }
         V::Dict(d) | V::Set(d) => {
@@ -1617,8 +1727,8 @@ fn deep_copy(v: &V, copies: &mut Copies) -> V {
             copies.values.insert(p, res.clone());
             let entries = d.borrow().entries();
             for (k, val) in entries.iter() {
-                let k2 = deep_copy(k, copies);
-                let v2 = deep_copy(val, copies);
+                let k2 = deep_copy_el(k, copies);
+                let v2 = deep_copy_el(val, copies);
                 if let Ok(key) = to_key(&k2) {
                     out.borrow_mut().put(key, k2, v2);
                 }
@@ -1646,6 +1756,13 @@ fn deep_copy(v: &V, copies: &mut Copies) -> V {
                 is_free: f.is_free,
             }));
             copies.values.insert(p, out.clone());
+            if copies.reach.is_some() {
+                if let Some(t) = &f.syntax_tree {
+                    if copies.scanned.insert(Rc::as_ptr(t) as usize) {
+                        copies.trees.push(t.clone());
+                    }
+                }
+            }
             if let Some(s) = &f.parent_scope {
                 scope_deep_copy(s, copies);
             }
@@ -1942,12 +2059,73 @@ impl Drop for ScopeSweep {
     }
 }
 
+/// whether a value holds no user function or module, so nothing in it leads to a scope (None
+/// when it nests too deep to tell, e.g. a list that holds itself)
+fn holds_no_code(v: &V, depth: u32) -> Option<bool> {
+    if depth > 64 {
+        return None;
+    }
+    match v {
+        V::Func(f) => Some(f.syntax_tree.is_none() && f.parent_scope.is_none() && f.method_object.is_none()),
+        V::Module(_) => Some(false),
+        V::List(l) => {
+            for e in l.borrow().iter() {
+                if holds_no_code(e, depth + 1)? == false {
+                    return Some(false);
+                }
+            }
+            Some(true)
+        }
+        V::Tuple(t) | V::Seq(t) => {
+            for e in t.iter() {
+                if holds_no_code(e, depth + 1)? == false {
+                    return Some(false);
+                }
+            }
+            Some(true)
+        }
+        V::Dict(d) | V::Set(d) => {
+            for (k, val) in d.borrow().entries().iter() {
+                if holds_no_code(k, depth + 1)? == false || holds_no_code(val, depth + 1)? == false {
+                    return Some(false);
+                }
+            }
+            Some(true)
+        }
+        _ => Some(true),
+    }
+}
+
+/// Not in the game: frees what a spawned drone's copied scopes hold when it ends, as ScopeSweep
+/// would when the run ends. Its functions hold those scopes, which hold the functions, so they
+/// would otherwise stay until then. Drones share nothing (spawn_drone and wait_for hand over
+/// copies), so once a drone has ended only its return value could still lead into them: a value
+/// with no function or module in it cannot.
+fn release_spawn_scopes(st: &StRef, value: &V) {
+    if st.borrow().spawn_scopes.is_empty() || holds_no_code(value, 0) != Some(true) {
+        return;
+    }
+    let scopes = std::mem::take(&mut st.borrow_mut().spawn_scopes);
+    for sc in scopes {
+        let (vars, parent, f) = {
+            let mut b = sc.borrow_mut();
+            (std::mem::replace(&mut b.vars, Vars::new()), b.parent_scope.take(), b.function_node.take())
+        };
+        drop((vars, parent, f));
+    }
+}
+
 /// Scope.SetVar
 fn scope_set_var(scope: &ScopeRef, name: &str, value: V, is_static: bool) {
     let key = name_key(name);
     // Nothing else holds a scope while a variable is set.
     let mut s: &mut Scope = unsafe { &mut *scope.as_ptr() };
+    let mut outer = false;
     loop {
+        if outer {
+            OUTER_STORE.with(|o| o.set(true));
+        }
+        outer = true;
         if let Some(i) = s.vars.find(key) {
             let it = &mut s.vars.items[i];
             vdrop(std::mem::replace(&mut it.1, value));
@@ -2137,8 +2315,22 @@ fn scope_deep_copy(s: &ScopeRef, copies: &mut Copies) -> ScopeRef {
     let vars = {
         let b = s.borrow();
         let mut items = Vec::with_capacity(b.vars.items.len());
+        let mut partial = false;
         for (k, v, st) in b.vars.items.iter() {
-            items.push((k.clone(), deep_copy(v, copies), *st));
+            let wanted = match &copies.reach {
+                None => true,
+                Some(r) => r.contains(&name_key(k)),
+            };
+            if wanted {
+                items.push((k.clone(), deep_copy_el(v, copies), *st));
+            } else {
+                // never read (see spawn_reach): copied when a name it holds becomes reachable
+                items.push((k.clone(), V::Unassigned, *st));
+                partial = true;
+            }
+        }
+        if partial {
+            copies.partial.push((s.clone(), ns.clone()));
         }
         Vars { map: b.vars.map.clone(), bloom: b.vars.bloom, items }
     };
@@ -2170,6 +2362,26 @@ fn evaluate_constant(s: &str) -> Option<V> {
 /// (kept out of line: the interpreter loop stays small)
 #[inline(never)]
 fn bag_evaluate(ns: u8, value: &str) -> R<V> {
+    // The member names in scripts are interned (see intern): the same text, the same address,
+    // so a found member is remembered by its address.
+    thread_local! {
+        static FOUND: RefCell<FxMap<(u8, usize, usize), &'static str>> = RefCell::new(FxMap::default());
+    }
+    let key = (ns, value.as_ptr() as usize, value.len());
+    if let Some(n) = FOUND.with(|f| f.borrow().get(&key).copied()) {
+        return Ok(V::Const(ns, n));
+    }
+    let r = bag_evaluate_uncached(ns, value);
+    if let Ok(V::Const(_, n)) = &r {
+        // only an interned name keeps its address for good
+        if NAMES.with(|t| t.borrow().get(value).map_or(false, |i| i.as_ptr() == value.as_ptr())) {
+            FOUND.with(|f| f.borrow_mut().insert(key, n));
+        }
+    }
+    r
+}
+
+fn bag_evaluate_uncached(ns: u8, value: &str) -> R<V> {
     let lower = value.to_lowercase();
     match ns_members(ns).into_iter().find(|n| *n == lower) {
         Some(n) => Ok(V::Const(ns, n)),
@@ -2551,6 +2763,8 @@ struct Node {
     lookup: Cell<u64>,
     /// for a module's root or a FunctionNode: its compiled code (code_of)
     code: std::cell::OnceCell<Rc<Code>>,
+    /// for a FunctionNode: every name its code mentions (tree_names)
+    names: std::cell::OnceCell<Rc<[usize]>>,
 }
 
 struct FileInfo {
@@ -2591,6 +2805,7 @@ impl PN {
             file: file.clone(),
             lookup: Cell::new(0),
             code: std::cell::OnceCell::new(),
+            names: std::cell::OnceCell::new(),
         })
     }
 }
@@ -3679,6 +3894,144 @@ struct PState {
     spin_read: Option<(f64, f64)>,
     /// Ops from one read to the next, once two reads have been seen.
     spin_period: Option<f64>,
+    /// Steady loop passes (see Op::PassMark): the while loop being recorded and its frame depth,
+    /// whether a pass of it is under way, the reads of that pass and of the last whole pass (bad
+    /// unless it was steady), and the innermost scope's values when the pass under way began.
+    pass_node: *const Node,
+    pass_depth: usize,
+    pass_rec: bool,
+    pass_snap: Vec<V>,
+    pass_snap_ok: bool,
+    pass_stack: (usize, usize),
+    cell_cur: CellPass,
+    cell_prev: CellPass,
+    /// for a spawned drone: the scopes spawn_drone copied for it (see Sim::release_spawn_scopes)
+    spawn_scopes: Vec<ScopeRef>,
+    /// the op count a cell sleeper (Sim::cell_sleepers) was left at, NaN when it is not one
+    cell_anchor: f64,
+}
+
+/// One read of a loop pass: (read kind and argument, see pure_read_code; the op count it was
+/// made at; its value, see encode_read).
+#[derive(Clone, Copy)]
+struct PassRead {
+    kind: u8,
+    arg: u8,
+    op: f64,
+    val: [u64; 3],
+}
+/// The reads one loop pass made (up to 6), and where the program stood (frame code, pc) at the
+/// first. `bad` once the pass did anything but pure reads and work on its own local variables.
+#[derive(Clone, Copy)]
+struct CellPass {
+    n: u8,
+    bad: bool,
+    pos: (usize, usize),
+    reads: [PassRead; 6],
+}
+const PASS_READ_NONE: PassRead = PassRead { kind: 0, arg: 0, op: 0.0, val: [0; 3] };
+const CELL_PASS_EMPTY: CellPass = CellPass { n: 0, bad: false, pos: (0, 0), reads: [PASS_READ_NONE; 6] };
+const CELL_PASS_BAD: CellPass = CellPass { n: 0, bad: true, pos: (0, 0), reads: [PASS_READ_NONE; 6] };
+impl CellPass {
+    fn push(&mut self, kind: u8, arg: u8, op: f64, val: [u64; 3], pos: (usize, usize)) {
+        if self.n == 0 {
+            self.pos = pos;
+        }
+        if (self.n as usize) < 6 {
+            self.reads[self.n as usize] = PassRead { kind, arg, op, val };
+            self.n += 1;
+        } else {
+            self.bad = true;
+        }
+    }
+}
+
+/// The side effects that only read the farm (and the drone's own place), as (kind, argument):
+/// what they give depends on nothing but what is on the cells, the world size and where the drone
+/// is. Every one costs OPERATION_OPS. (num_items and get_time are left out: they change on their
+/// own.)
+fn pure_read_code(se: &SE) -> Option<(u8, u8)> {
+    let d = |d: &Option<u8>| d.unwrap_or(255);
+    Some(match se {
+        SE::CanHarvest => (0, 0),
+        SE::GetEntityType(dir) => (1, d(dir)),
+        SE::GetGroundType(dir) => (2, d(dir)),
+        SE::GetPosX => (3, 0),
+        SE::GetPosY => (4, 0),
+        SE::GetWorldSize => (5, 0),
+        SE::Measure(dir) => (6, d(dir)),
+        SE::CanMove(dir) => (7, *dir),
+        SE::GetWater => (8, 0),
+        _ => return None,
+    })
+}
+
+/// a read's value as three words (None for a value no read gives)
+fn encode_read(v: &V) -> Option<[u64; 3]> {
+    Some(match v {
+        V::None => [0, 0, 0],
+        V::Bool(b) => [1, *b as u64, 0],
+        V::Num(x) => [2, x.to_bits(), 0],
+        V::Const(ns, name) => [3, ((*ns as u64) << 32) | name.len() as u64, name.as_ptr() as u64],
+        V::Tuple(t) if t.len() == 2 => match (&t[0], &t[1]) {
+            (V::Num(a), V::Num(b)) => [4, a.to_bits(), b.to_bits()],
+            _ => return None,
+        },
+        _ => return None,
+    })
+}
+
+fn decode_read(e: &[u64; 3]) -> V {
+    match e[0] {
+        0 => V::None,
+        1 => V::Bool(e[1] != 0),
+        2 => V::Num(f64::from_bits(e[1])),
+        3 => {
+            let name: &'static str = unsafe {
+                std::str::from_utf8_unchecked(std::slice::from_raw_parts(e[2] as *const u8, (e[1] & 0xffff_ffff) as usize))
+            };
+            V::Const((e[1] >> 32) as u8, name)
+        }
+        _ => tuple2(f64::from_bits(e[1]), f64::from_bits(e[2])),
+    }
+}
+
+/// where a paused program stands: its frame's code and pc
+fn vm_pos(b: &PState) -> (usize, usize) {
+    match &b.program {
+        Some(vm) => match vm.frames.last() {
+            Some(f) => (Rc::as_ptr(&f.code) as usize, f.pc),
+            None => (0, 0),
+        },
+        None => (0, 0),
+    }
+}
+
+/// a variable's value at two loop pass starts: the same object for anything that can change in
+/// place, an equal value for the rest
+fn same_state(a: &V, b: &V) -> bool {
+    match (a, b) {
+        (V::None, V::None) | (V::Unassigned, V::Unassigned) => true,
+        (V::Num(x), V::Num(y)) => x.to_bits() == y.to_bits(),
+        (V::Bool(x), V::Bool(y)) => x == y,
+        (V::Str(x), V::Str(y)) => x == y,
+        (V::Const(n, x), V::Const(m, y)) => n == m && std::ptr::eq(*x, *y),
+        (V::Dir(x), V::Dir(y)) | (V::Bag(x), V::Bag(y)) => x == y,
+        (V::Range(a, b, c), V::Range(d, e, f)) => a.to_bits() == d.to_bits() && b.to_bits() == e.to_bits() && c.to_bits() == f.to_bits(),
+        (V::Tuple(x), V::Tuple(y)) => Rc::ptr_eq(x, y) || (x.len() == y.len() && x.iter().zip(y.iter()).all(|(p, q)| same_state(p, q))),
+        (V::List(x), V::List(y)) => Rc::ptr_eq(x, y),
+        (V::Dict(x), V::Dict(y)) | (V::Set(x), V::Set(y)) => Rc::ptr_eq(x, y),
+        (V::Func(x), V::Func(y)) => Rc::ptr_eq(x, y),
+        (V::Module(x), V::Module(y)) => Rc::ptr_eq(x, y),
+        (V::Handle(x), V::Handle(y)) => Rc::ptr_eq(x, y),
+        (V::Seq(x), V::Seq(y)) => Rc::ptr_eq(x, y),
+        _ => false,
+    }
+}
+
+thread_local! {
+    /// set by a store to a variable of a scope further out than the innermost (see PassMark)
+    static OUTER_STORE: Cell<bool> = const { Cell::new(false) };
 }
 type StRef = Rc<RefCell<PState>>;
 
@@ -3863,6 +4216,16 @@ impl PState {
             spin_loop: false,
             spin_read: None,
             spin_period: None,
+            pass_node: std::ptr::null(),
+            pass_depth: 0,
+            pass_rec: false,
+            pass_snap: Vec::new(),
+            pass_snap_ok: false,
+            pass_stack: (0, 0),
+            cell_cur: CELL_PASS_EMPTY,
+            cell_prev: CELL_PASS_EMPTY,
+            spawn_scopes: Vec::new(),
+            cell_anchor: f64::NAN,
         }
     }
     fn current_scope(&self) -> ScopeRef {
@@ -3895,9 +4258,20 @@ impl PState {
     fn set_se(&mut self, se: SE) {
         let k = match &se {
             SE::None => SE_NONE,
-            SE::GetTime => SE_GET_TIME,
-            SE::NumItems(_) => SE_NUM_ITEMS,
-            _ => SE_OTHER,
+            SE::GetTime => {
+                self.cell_cur.bad |= self.pass_rec;
+                SE_GET_TIME
+            }
+            SE::NumItems(_) => {
+                self.cell_cur.bad |= self.pass_rec;
+                SE_NUM_ITEMS
+            }
+            // a pure read in a recorded loop pass: skip_busy_waits looks at it with the item counts
+            se if self.pass_rec && pure_read_code(se).is_some() => SE_NUM_ITEMS,
+            _ => {
+                self.cell_cur.bad |= self.pass_rec;
+                SE_OTHER
+            }
         };
         let f = (*self.flg() & !F_SE) | (k << 2);
         write_flags(self.flagp, self.fbitp, self.drone_id as usize, f);
@@ -3966,6 +4340,8 @@ fn push_frame(st: &StRef) -> R<()> {
     if s.frames >= 1101 {
         return Err("error_max_stack_size_reached".into());
     }
+    // (a user function's call is not part of a steady pass)
+    s.cell_cur.bad |= s.pass_rec;
     s.frames += 1;
     Ok(())
 }
@@ -4022,7 +4398,12 @@ fn perform_execution_step(st: &StRef, target_op_count: f64) {
             None => return,
         }
     };
+    OUTER_STORE.with(|o| o.set(false));
     vm_run(st, &mut vm);
+    if OUTER_STORE.with(|o| o.get()) {
+        let s = stm(st);
+        s.cell_cur.bad |= s.pass_rec;
+    }
     stm(st).program = Some(vm);
 }
 
@@ -5008,6 +5389,10 @@ enum Op {
     ForInit(*const Node),
     /// next item, or pop the iterator and jump
     ForNext(u32),
+    /// a for loop's back edge: Eb(node, depth), then Jump to its ForNext
+    EbJump(*const Node, u32, u32),
+    /// a while loop's pass begins (see its handler); not in the game, costs no ops
+    PassMark(*const Node),
     IterPop,
     /// assignment targets: each pops the value (and what it evaluated)
     StoreName(*const Node, u32),
@@ -5233,7 +5618,13 @@ impl Compiler {
                     self.patch(c, tail);
                 }
                 self.eb(np, depth);
-                self.emit(Op::Jump(next));
+                let (en, ed) = self.pending_eb.take().unwrap();
+                if ed < 1000 {
+                    self.ops.push(Op::EbJump(en, ed, next as u32));
+                } else {
+                    self.ops.push(Op::Eb(en, ed));
+                    self.ops.push(Op::Jump(next as u32));
+                }
                 let brk = self.here();
                 for b in brks {
                     self.patch(b, brk);
@@ -5364,8 +5755,12 @@ impl Compiler {
             let (en, ed) = self.pending_eb.take().unwrap();
             self.ops.push(Op::YpE(en, ed));
             // later passes
-            if lit_k.is_none() && (wait_name.is_some() || items_spin) {
-                self.emit(Op::WaitPre(np, items_spin));
+            if wait_name.is_some() || items_spin {
+                if lit_k.is_none() {
+                    self.emit(Op::WaitPre(np, items_spin));
+                }
+            } else {
+                self.emit(Op::PassMark(np));
             }
             match lit_k {
                 Some(k) => {
@@ -6053,6 +6448,11 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     }
                 }
                 Op::StoreIdxF(an, k, opk) => {
+                    {
+                        // (not part of a steady pass, see PassMark)
+                        let s = stm(st);
+                        s.cell_cur.bad |= s.pass_rec;
+                    }
                     let (ya, xa) = code.fused[k as usize];
                     let ia = code.fused[k as usize + 1].0;
                     let rhs = operand(st, &code, ya, depth_off)?.into_v();
@@ -6125,6 +6525,40 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     let v = std::mem::replace(&mut stm(st).module_state.return_value, V::None);
                     pc += 1;
                     push_or_store!(v);
+                }
+                Op::CallA(n, argc) if argc != u32::MAX && argc <= 3 && {
+                    let base = vm.stack.len() - argc as usize;
+                    matches!(&vm.stack[base - 2], V::Func(f) if f.syntax_tree.is_none() && f.method_object.is_some() && f.bidx != B_TAP)
+                } => {
+                    // a builtin method (list.append, ...) with its arguments on the stack: called on
+                    // the object and them, as the general path below does, without building a list
+                    let base = vm.stack.len() - argc as usize;
+                    let func = match std::mem::replace(&mut vm.stack[base - 2], V::None) {
+                        V::Func(f) => f,
+                        _ => unreachable!(),
+                    };
+                    let is_static = matches!(vm.stack[base - 1], V::Bool(true));
+                    let mut params: [V; 4] = [func.method_object.clone().unwrap(), V::None, V::None, V::None];
+                    for i in 0..argc as usize {
+                        params[1 + i] = std::mem::replace(&mut vm.stack[base + i], V::None);
+                    }
+                    vm.stack.truncate(base - 2);
+                    stm(st).current_executing_node = n;
+                    stm(st).module_state.return_value = V::None;
+                    let r = call_builtin(func.bidx, &params[..1 + argc as usize], st);
+                    drop(params);
+                    let mut num = r?;
+                    if func.is_free && !is_static {
+                        num = num.max(OPERATION_OPS);
+                    }
+                    pc += 2;
+                    if charge(st, num) {
+                        stop!(pc);
+                    }
+                    // TakeRv
+                    let v = std::mem::replace(&mut stm(st).module_state.return_value, V::None);
+                    vm.stack.push(v);
+                    pc += 1;
                 }
                 Op::CallA(n, argc) => {
                     // the arguments: a list taken off the stack, or one value holding them
@@ -6549,8 +6983,45 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         stop!(pc);
                     }
                 }
-                Op::ForNext(end) => match vm.iters.last_mut().unwrap().next()? {
-                    Some(c) => vm.stack.push(c),
+                Op::EbJump(n, d, t) => {
+                    eb!(n, d);
+                    pc = t as usize;
+                }
+                Op::ForNext(end) => match {
+                    // (not part of a steady pass, see PassMark)
+                    let s = stm(st);
+                    s.cell_cur.bad |= s.pass_rec;
+                    vm.iters.last_mut().unwrap().next()?
+                } {
+                    Some(c) => {
+                        // `for name in ...`: the StoreName after it, done here (see StoreName)
+                        if let Op::StoreName(n, k) = ops[pc] {
+                            if code.strs[k as usize].as_ref() == "=" {
+                                pc += 1;
+                                let value = match &node_ref(n).kind {
+                                    NK::Value(v) => v,
+                                    _ => unreachable!(),
+                                };
+                                let lnode = node_ref(n);
+                                let s = stm(st);
+                                let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+                                let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
+                                if !slot.is_null() {
+                                    let e = unsafe { &mut *slot };
+                                    vdrop(std::mem::replace(&mut e.1, c));
+                                    e.2 = false;
+                                } else {
+                                    scope_set_var(scope, value, c, false);
+                                    remember_slot(scope, value, &lnode.lookup);
+                                }
+                                if charge(st, 0.0) {
+                                    stop!(pc);
+                                }
+                                continue;
+                            }
+                        }
+                        vm.stack.push(c)
+                    }
                     None => {
                         vm.iters.pop();
                         pc = end as usize;
@@ -6563,6 +7034,27 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         _ => unreachable!(),
                     };
                     let op = &code.strs[k as usize];
+                    if op.as_ref() == "=" {
+                        // get_value_to_assign for "=" is the value itself at no time; scope_set_var
+                        // sets the first scope up the chain holding the name, the slot the
+                        // target's lookup cache points at if still valid (as in store_assign)
+                        let lnode = node_ref(n);
+                        let s = stm(st);
+                        let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+                        let slot = scope_slot_store_cached(scope, name_key(value), lnode.lookup.get());
+                        if !slot.is_null() {
+                            let e = unsafe { &mut *slot };
+                            vdrop(std::mem::replace(&mut e.1, rhs));
+                            e.2 = false;
+                        } else {
+                            scope_set_var(scope, value, rhs, false);
+                            remember_slot(scope, value, &lnode.lookup);
+                        }
+                        if charge(st, 0.0) {
+                            stop!(pc);
+                        }
+                        continue;
+                    }
                     let scope = cur_scope!(st);
                     let before = if op.as_ref() == "=" { None } else { Some(scope_evaluate(&scope, value)?.0) };
                     let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
@@ -6825,7 +7317,56 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                         stm(st).spin_loop = true;
                     }
                 }
+                Op::PassMark(n) => {
+                    // A while loop's pass begins (second pass on). The one that just ended was
+                    // steady if it did nothing but pure reads (pure_read_code), pure builtins and
+                    // work on the innermost scope's variables, and began with the same values in
+                    // them as this one does: from here on every pass does exactly what it did for
+                    // as long as its reads read the same (see skip_busy_waits). Not in the game;
+                    // costs no ops.
+                    let depth = vm.frames.len();
+                    let s = stm(st);
+                    let scope = match s.module_state.call_stack.last() {
+                        Some(sc) => sc.clone(),
+                        None => {
+                            // (at module level the innermost scope is every global)
+                            s.pass_rec = false;
+                            s.pass_node = std::ptr::null();
+                            return Ok((Flow::Next, *pc));
+                        }
+                    };
+                    let stacks = (vm.stack.len(), vm.iters.len());
+                    let sc = scope.borrow();
+                    let items = &sc.vars.items;
+                    if s.pass_rec && s.pass_node == n && s.pass_depth == depth {
+                        let pure = !s.cell_cur.bad && s.cell_cur.n > 0;
+                        let steady = pure
+                            && s.pass_snap_ok
+                            && s.pass_stack == stacks
+                            && s.pass_snap.len() == items.len()
+                            && s.pass_snap.iter().zip(items.iter()).all(|(a, b)| same_state(a, &b.1));
+                        s.cell_prev = if steady { s.cell_cur } else { CELL_PASS_BAD };
+                        s.pass_snap_ok = pure;
+                    } else {
+                        s.pass_node = n;
+                        s.pass_depth = depth;
+                        s.cell_prev = CELL_PASS_BAD;
+                        s.pass_snap_ok = true;
+                    }
+                    if s.pass_snap_ok {
+                        s.pass_snap.clear();
+                        s.pass_snap.extend(items.iter().map(|e| e.1.clone()));
+                        s.pass_stack = stacks;
+                    }
+                    s.cell_cur = CELL_PASS_EMPTY;
+                    s.pass_rec = true;
+                }
                 Op::ForInit(n) => {
+                    {
+                        // (not part of a steady pass, see PassMark)
+                        let s = stm(st);
+                        s.cell_cur.bad |= s.pass_rec;
+                    }
                     let iterable = vm.stack.pop().unwrap();
                     if !is_enumerable(&iterable) {
                         stm(st).current_executing_node = n;
@@ -6837,9 +7378,19 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                     }
                 }
                 Op::IterPop => {
+                    {
+                        // (not part of a steady pass, see PassMark)
+                        let s = stm(st);
+                        s.cell_cur.bad |= s.pass_rec;
+                    }
                     vm.iters.pop();
                 }
                 Op::StoreAttr(n, k) => {
+                    {
+                        // (not part of a steady pass, see PassMark)
+                        let s = stm(st);
+                        s.cell_cur.bad |= s.pass_rec;
+                    }
                     let target = vm.stack.pop().unwrap();
                     let rhs = vm.stack.pop().unwrap();
                     let lhs = node_ref(n);
@@ -6871,6 +7422,11 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                     }
                 }
                 Op::StoreIndex(k) => {
+                    {
+                        // (not part of a steady pass, see PassMark)
+                        let s = stm(st);
+                        s.cell_cur.bad |= s.pass_rec;
+                    }
                     let indices = match vm.stack.pop().unwrap() {
                         V::Seq(s) => s,
                         _ => Rc::new(Vec::new()),
@@ -6888,6 +7444,11 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                     }
                 }
                 Op::StoreIndex1(k) => {
+                    {
+                        // (not part of a steady pass, see PassMark)
+                        let s = stm(st);
+                        s.cell_cur.bad |= s.pass_rec;
+                    }
                     let idx = vm.stack.pop().unwrap();
                     let indexable = vm.stack.pop().unwrap();
                     let rhs = vm.stack.pop().unwrap();
@@ -6924,6 +7485,11 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                     return Err(Ctrl::Err(FAIL_MSGS[m as usize].into()));
                 }
                 Op::Def(n, d) => {
+                    {
+                        // (not part of a steady pass, see PassMark)
+                        let s = stm(st);
+                        s.cell_cur.bad |= s.pass_rec;
+                    }
                     eb!(n, d);
                     let node = node_ref(n);
                     let (func_name, is_static) = match &node.kind {
@@ -6998,6 +7564,11 @@ fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u
                     }
                 }
                 Op::ImportStart(n, d) => {
+                    {
+                        // (not part of a steady pass, see PassMark)
+                        let s = stm(st);
+                        s.cell_cur.bad |= s.pass_rec;
+                    }
                     eb!(n, d);
                     if charge(st, 0.0) {
                         stop!(*pc);
@@ -7205,6 +7776,11 @@ fn scope_slot_store_cached(scope: &ScopeRef, key: usize, c: u64) -> *mut (Rc<str
     }
     let bit = bloom_bit(key);
     let hops = (c & 0xff) - 1;
+    if hops > 0 {
+        // (a store further out; the caller falls back to scope_set_var, which says so, when
+        // this gives nothing)
+        OUTER_STORE.with(|o| o.set(true));
+    }
     let idx = (c >> 8) as usize;
     let mut s: &mut Scope = unsafe { &mut *scope.as_ptr() };
     for _ in 0..hops {
@@ -7701,6 +8277,20 @@ fn opt_dir(parameters: &[V], function: &str) -> R<Option<u8>> {
 /// (kept out of line: the interpreter loop stays small)
 #[inline(never)]
 fn call_builtin(bidx: u8, parameters: &[V], st: &StRef) -> R<f64> {
+    {
+        // only these leave a loop pass steady (see PassMark): the rest change something or read
+        // something that changes on its own
+        let s = stm(st);
+        if s.pass_rec
+            && !matches!(
+                bidx,
+                B_LEN | B_ABS | B_MIN | B_MAX | B_STR | B_RANGE | B_LIST | B_SET | B_DICT | B_CAN_HARVEST | B_GET_ENTITY_TYPE
+                    | B_GET_GROUND_TYPE | B_GET_POS_X | B_GET_POS_Y | B_GET_WORLD_SIZE | B_MEASURE | B_CAN_MOVE | B_GET_WATER
+            )
+        {
+            s.cell_cur.bad = true;
+        }
+    }
     let name: &'static str = FUNCTION_LIST[bidx as usize].0;
     let p = parameters;
     let side = |se: SE| -> R<f64> {
@@ -8289,7 +8879,9 @@ struct DinosaurHat {
     tail: VecDeque<E>,
     target: Option<E>,
     free_cells: Vec<(i32, i32)>,
-    snake_surface: HashSet<(i32, i32)>,
+    /// FindFreeCells' hash set: its flood fill ignores what is on a cell, so the set is every cell
+    /// of the farm, and two of them differ only if the farm's size does. Kept as that size.
+    snake_surface: Option<(i32, i32)>,
     ops: i32,
     equip_time: i64,
 }
@@ -8306,7 +8898,7 @@ fn create_hat(name: &'static str, is_default: bool) -> Hat {
             tail: VecDeque::new(),
             target: None,
             free_cells: Vec::new(),
-            snake_surface: HashSet::new(),
+            snake_surface: None,
             ops: 400,
             equip_time: 0,
         }))
@@ -8584,13 +9176,17 @@ struct Sim {
     sh: Rc<Shared>,
     /// skip_busy_waits' list of drones it moves on (index, ops per pass, own target or NaN),
     /// kept between calls
-    waiting_scratch: Vec<(usize, f64, f64)>,
+    waiting_scratch: Vec<(usize, f64, f64, f64)>,
     /// drones in `while num_items(i) <op> x: pass` that skip_busy_waits sent to the end of this
     /// Execute call because the count they read has not changed: (index, item id, ops per pass).
     /// The apply loop wakes one as soon as an applied side effect changes its item. Each has
     /// F_SLEEP set. Nothing else moves a sleeper (it is past every op count the call reaches), so
     /// with up to 64 drones the list lasts the whole call and later passes pass over them.
     sleepers: Vec<(usize, usize, f64)>,
+    /// drones in a steady loop pass (see Op::PassMark) that skip_busy_waits sent past the reads
+    /// this Execute call still makes: (index, its state, first read it skipped, op count it was
+    /// left at). The apply loop puts one back at its first skipped read that reads something new.
+    cell_sleepers: Vec<(usize, StRef, f64, f64)>,
     // Simulation
     timers: PriorityQueue<Rc<Timer>>,
     current_time: i64,
@@ -8626,9 +9222,18 @@ struct Sim {
     size_limit: i32,
     world_size_override: (i32, i32),
     had_incorrect_sunflower_harvest: bool,
+    /// FindFreeCells' visiting order from each start cell (cell indices x * wy + y, start left
+    /// out), which depends only on the farm's size: built on first use, dropped when the size
+    /// changes
+    flood_orders: Vec<Option<Rc<[u32]>>>,
+    flood_size: (i32, i32),
+    /// counts every change of what entity a cell holds
+    grid_version: u64,
+    /// the cells holding a treasure, in (x, y) order, as of grid_version (see entity_measure)
+    treasure_cells: RefCell<(u64, Vec<(i32, i32)>)>,
     // PumpkinController
-    pumpkins: HashMap<(i32, i32), E>,
-    groups: HashMap<usize, RectInt>,
+    pumpkins: FxMap<(i32, i32), E>,
+    groups: FxMap<usize, RectInt>,
     // harness bookkeeping
     collected: Vec<(i64, Items)>,
     error: Option<String>,
@@ -8682,6 +9287,7 @@ impl Sim {
             used_power: 0.0,
             waiting_scratch: Vec::new(),
             sleepers: Vec::new(),
+            cell_sleepers: Vec::new(),
             num_speed_upgrades: 0,
             next_uid: 1,
             max_drones_override,
@@ -8692,8 +9298,12 @@ impl Sim {
             size_limit: 0,
             world_size_override,
             had_incorrect_sunflower_harvest: false,
-            pumpkins: HashMap::new(),
-            groups: HashMap::new(),
+            flood_orders: Vec::new(),
+            flood_size: (0, 0),
+            grid_version: 0,
+            treasure_cells: RefCell::new((u64::MAX, Vec::new())),
+            pumpkins: FxMap::default(),
+            groups: FxMap::default(),
             collected: Vec::new(),
             error: None,
             finished: false,
@@ -9225,6 +9835,7 @@ impl Sim {
         self.update_world_size();
         let old = std::mem::take(&mut self.cells);
         self.cells = vec![GridCell { entity: None, water_volume: 0.0, cactus_number: -1, ground: "grassland" }; (self.wx * self.wy) as usize];
+        self.grid_version += 1;
         for j in 0..self.wy {
             for k in 0..self.wx {
                 if !old.is_empty() && k < owx && j < owy {
@@ -9334,6 +9945,7 @@ impl Sim {
         }));
         let i = self.idx(x, y);
         self.cells[i].entity = Some(e.clone());
+        self.grid_version += 1;
         self.on_restart(&e);
         e
     }
@@ -9356,6 +9968,7 @@ impl Sim {
             let i = self.idx(x, y);
             if matches!(&self.cells[i].entity, Some(c) if same(c, e)) {
                 self.cells[i].entity = None;
+                self.grid_version += 1;
             }
         }
         self.on_free(e);
@@ -9375,6 +9988,7 @@ impl Sim {
         let n = self.cells[i].cactus_number;
         self.cells[i].cactus_number = self.cells[i2].cactus_number;
         self.cells[i2].cactus_number = n;
+        self.grid_version += 1;
         match &entity {
             Some(e) => {
                 self.cells[i2].entity = Some(e.clone());
@@ -9821,8 +10435,24 @@ impl Sim {
             EC::Pumpkin => Some(V::Num(b.mysterious_number)),
             EC::Treasure => Some(tuple2(b.x as f64, b.y as f64)),
             EC::Hedge => {
-                for i in b.low_left_corner.0..b.low_left_corner.0 + b.maze_size {
-                    for j in b.low_left_corner.1..b.low_left_corner.1 + b.maze_size {
+                // The scan over the maze's square, x then y, stops at the first treasure: the
+                // same as the first of the farm's treasure cells, in that order, inside the square.
+                {
+                    let mut tc = self.treasure_cells.borrow_mut();
+                    if tc.0 != self.grid_version {
+                        tc.1.clear();
+                        for (i, c) in self.cells.iter().enumerate() {
+                            if matches!(&c.entity, Some(t) if t.borrow().class == EC::Treasure) {
+                                tc.1.push((i as i32 % self.wx, i as i32 / self.wx));
+                            }
+                        }
+                        tc.1.sort_unstable();
+                        tc.0 = self.grid_version;
+                    }
+                }
+                let (lx, ly, n) = (b.low_left_corner.0, b.low_left_corner.1, b.maze_size);
+                for &(i, j) in self.treasure_cells.borrow().1.iter() {
+                    if i >= lx && i < lx + n && j >= ly && j < ly + n {
                         if let Some(t) = self.entity_or_null(i, j) {
                             if !same(&t, e) && t.borrow().class == EC::Treasure {
                                 return Some(tuple2(i as f64, j as f64));
@@ -10415,7 +11045,8 @@ impl Sim {
         };
         if free_here {
             let cost = self.apple_cost();
-            dino.snake_surface = self.find_free_cells((x, y), &mut dino.free_cells);
+            dino.snake_surface = Some((self.wx, self.wy));
+            self.find_free_cells((x, y), &mut dino.free_cells);
             let mut target_pos = (0, 0);
             if self.items_contains(&cost) && self.try_choose_target(&dino.free_cells, &mut target_pos, Some((x, y))) {
                 self.items_remove(&cost);
@@ -10438,25 +11069,58 @@ impl Sim {
         Ok(())
     }
 
-    fn find_free_cells(&self, drone_pos: (i32, i32), free_cells: &mut Vec<(i32, i32)>) -> HashSet<(i32, i32)> {
-        free_cells.clear();
-        let mut hash_set = HashSet::new();
-        hash_set.insert(drone_pos);
+    /// DinosaurHat.FindFreeCells' visiting order from drone_pos: a depth-first flood fill from a
+    /// stack of the four neighbours that goes through every in-bounds cell whatever is on it
+    fn flood_order(&mut self, drone_pos: (i32, i32)) -> Rc<[u32]> {
+        if self.flood_size != (self.wx, self.wy) {
+            self.flood_size = (self.wx, self.wy);
+            self.flood_orders.clear();
+            self.flood_orders.resize((self.wx * self.wy).max(0) as usize, None);
+        }
+        let start = (drone_pos.0 * self.wy + drone_pos.1) as usize;
+        if let Some(o) = &self.flood_orders[start] {
+            return o.clone();
+        }
+        let mut seen = vec![false; self.flood_orders.len()];
+        seen[start] = true;
+        let mut order: Vec<u32> = Vec::with_capacity(seen.len());
         let mut list: Vec<(i32, i32)> = DIRS.iter().map(|d| (drone_pos.0 + d.0, drone_pos.1 + d.1)).collect();
         while let Some(v) = list.pop() {
             if !self.in_bounds(v.0, v.1) {
                 continue;
             }
-            if hash_set.insert(v) {
+            let i = (v.0 * self.wy + v.1) as usize;
+            if !seen[i] {
+                seen[i] = true;
                 list.extend(DIRS.iter().map(|d| (v.0 + d.0, v.1 + d.1)));
-                let occupied =
-                    matches!(self.entity_at(v.0, v.1), Some(e) if matches!(e.borrow().class, EC::Dinosaur | EC::Apple));
-                if !occupied {
-                    free_cells.push(v);
-                }
+                order.push(i as u32);
             }
         }
-        hash_set
+        let o: Rc<[u32]> = order.into();
+        self.flood_orders[start] = Some(o.clone());
+        o
+    }
+
+    fn flood_cell_free(&self, i: u32) -> bool {
+        let (x, y) = (i as i32 / self.wy, i as i32 % self.wy);
+        !matches!(self.entity_at(x, y), Some(e) if matches!(e.borrow().class, EC::Dinosaur | EC::Apple))
+    }
+
+    /// DinosaurHat.FindFreeCells' free cell list (its hash set is kept as the farm size)
+    fn find_free_cells(&mut self, drone_pos: (i32, i32), free_cells: &mut Vec<(i32, i32)>) {
+        free_cells.clear();
+        let order = self.flood_order(drone_pos);
+        for &i in order.iter() {
+            if self.flood_cell_free(i) {
+                free_cells.push((i as i32 / self.wy, i as i32 % self.wy));
+            }
+        }
+    }
+
+    /// whether FindFreeCells from drone_pos would find any free cell
+    fn any_free_cell(&mut self, drone_pos: (i32, i32)) -> bool {
+        let order = self.flood_order(drone_pos);
+        order.iter().any(|&i| self.flood_cell_free(i))
     }
 
     fn try_choose_target(&mut self, free_cells: &[(i32, i32)], target_pos: &mut (i32, i32), current: Option<(i32, i32)>) -> bool {
@@ -10480,8 +11144,25 @@ impl Sim {
         let mut dino = self.drones[di].as_mut().unwrap().hat.dino.take().unwrap();
         let uid = self.drones[di].as_ref().unwrap().uid;
         let mut flag = false;
-        let hash_set = self.find_free_cells(old_pos, &mut dino.free_cells);
-        if dino.target.is_some() && dino.snake_surface != hash_set {
+        // The free cell list is read further down only to pick an apple's next cell (when the
+        // drone is on the apple, or when the apple's next cell is the one the drone leaves) and to
+        // see whether it is empty; it is the list as it was here, before this move changes cells.
+        let surface_changed = dino.snake_surface != Some((self.wx, self.wy));
+        let any_free = self.any_free_cell(old_pos);
+        let list_needed = !surface_changed
+            && match &dino.target {
+                Some(t) => {
+                    let b = t.borrow();
+                    (b.x, b.y) == old_pos || b.apple_next_pos == old_pos
+                }
+                None => false,
+            };
+        if list_needed {
+            self.find_free_cells(old_pos, &mut dino.free_cells);
+        } else {
+            dino.free_cells.clear();
+        }
+        if dino.target.is_some() && surface_changed {
             self.dino_remove_apple(&mut dino);
         }
         let num = self.wx * self.wy - 2;
@@ -10538,7 +11219,7 @@ impl Sim {
                 (None, None) => true,
                 _ => false,
             };
-            if !dino.free_cells.is_empty() && dino.tail.len() > 1 && !new_is_target {
+            if any_free && dino.tail.len() > 1 && !new_is_target {
                 dino.tail.back().unwrap().borrow_mut().can_move_to = true;
             }
         }
@@ -10831,8 +11512,100 @@ impl Sim {
         }
     }
 
+    /// Wakes the sleepers (see Sim::cell_sleepers) one of whose reads a side effect just changed, at
+    /// global op count g, while the apply loop is at drone `at`. Each goes back to its first
+    /// skipped read that sees the change (one at g sees it if it comes later in the loop, i.e. a
+    /// higher index). If that is not the first read of its pass, the reads before it in that
+    /// pass came before the change and read what the last whole pass read: they are given those
+    /// values and the program runs on to the read that sees the change. One put back at g after
+    /// `at` is due in this same loop: its bit joins `due`.
+    fn wake_cell_sleepers(&mut self, g: f64, at: usize, due: &mut u64) {
+        let mut k = 0;
+        while k < self.cell_sleepers.len() {
+            let (si, c0, anchor) = (self.cell_sleepers[k].0, self.cell_sleepers[k].2, self.cell_sleepers[k].3);
+            let st = self.cell_sleepers[k].1.clone();
+            let here = matches!(self.execution.as_ref().unwrap().states.get(si), Some(Some(s)) if Rc::ptr_eq(s, &st));
+            if !here {
+                // its drone is gone, or another holds the slot
+                st.borrow_mut().cell_anchor = f64::NAN;
+                self.cell_sleepers.swap_remove(k);
+                continue;
+            }
+            let prev = {
+                let b = st.borrow();
+                let still = *b.op() == anchor
+                    && b.pass_rec
+                    && b.cell_cur.n == 0
+                    && !b.cell_prev.bad
+                    && pure_read_code(&b.current_side_effect).is_some();
+                if !still {
+                    drop(b);
+                    self.cell_sleepers.swap_remove(k);
+                    continue;
+                }
+                b.cell_prev
+            };
+            let n = prev.n as usize;
+            if self.pass_reads_same(si, &prev) {
+                k += 1;
+                continue;
+            }
+            self.cell_sleepers.swap_remove(k);
+            st.borrow_mut().cell_anchor = f64::NAN;
+            // reads at c0 + j * p + o[i] for j >= 0; the pending one is at anchor
+            let base = prev.reads[0].op;
+            let p = anchor - base;
+            let lead = prev.reads[n - 1].op - base;
+            let sees = |q: f64| q > g || (q == g && si > at);
+            let mut j = ((g - c0 - lead) / p).floor().max(0.0);
+            let (aj, i) = loop {
+                let aj = c0 + j * p;
+                if let Some(i) = (0..n).find(|&i| sees(aj + (prev.reads[i].op - base))) {
+                    break (aj, i);
+                }
+                j += 1.0;
+            };
+            if aj >= anchor {
+                // the pending read is the first to see it
+                continue;
+            }
+            let mut b = st.borrow_mut();
+            let shift = aj - anchor;
+            *b.op() = aj;
+            for r in b.cell_prev.reads[..n].iter_mut() {
+                r.op += shift;
+            }
+            if i > 0 {
+                // the reads before it in its pass, with the values they read
+                for r in 0..i {
+                    let rd = prev.reads[r];
+                    let (c, pos) = (*b.op(), vm_pos(&b));
+                    b.module_state.return_value = decode_read(&rd.val);
+                    b.cell_cur.push(rd.kind, rd.arg, c, rd.val, pos);
+                    *b.op() += OPERATION_OPS;
+                    b.set_se(SE::None);
+                    drop(b);
+                    perform_execution_step(&st, f64::INFINITY);
+                    b = st.borrow_mut();
+                }
+                let want = aj + (prev.reads[i].op - base);
+                let kind_ok = pure_read_code(&b.current_side_effect) == Some((prev.reads[i].kind, prev.reads[i].arg));
+                if *b.op() != want || !kind_ok {
+                    panic!("steady pass replay ended at op {} (wanted {}) on {:?}", *b.op(), want, std::mem::discriminant(&b.current_side_effect));
+                }
+            }
+            if *b.op() == g && si > at && si < 64 {
+                *due |= 1u64 << si;
+            }
+        }
+    }
+
     /// empties Sim::sleepers (the start of an Execute call, or more than 64 drones)
     fn clear_sleepers(&mut self) {
+        for (_, st, _, _) in self.cell_sleepers.iter() {
+            st.borrow_mut().cell_anchor = f64::NAN;
+        }
+        self.cell_sleepers.clear();
         if let Some(ex) = self.execution.as_mut() {
             for &(si, _, _) in self.sleepers.iter() {
                 if let Some(f) = ex.flags.get_mut(si) {
@@ -10924,10 +11697,49 @@ impl Sim {
                     // sleeps to its first pass past this Execute call, where it would stand when the
                     // call ends. A count does not depend on the clock, and a timer that changes it
                     // between calls comes before that pass.
-                    waiting.push((si, p, num + 1.0));
+                    waiting.push((si, p, num + 1.0, 0.0));
                     if f & F_SLEEP == 0 {
                         self.sleepers.push((si, id, p));
                         *ex.states[si].as_ref().unwrap().borrow().flg() |= F_SLEEP;
+                    }
+                    continue;
+                }
+            }
+            // A drone in a steady loop pass (see Op::PassMark) at its first read, where the last
+            // whole pass's read too, whose reads would all read now what they read then: every
+            // pass does the same until another drone acts, at its op count or later (`limit`), so
+            // it moves on by whole passes while every read of the passes it skips stays before
+            // that (`lead`: from a pass's first read to its last).
+            let read = pure_read_code(&b.current_side_effect);
+            if read.is_some() && *b.op() == b.cell_anchor {
+                // asleep since an earlier pass of this call (see Sim::cell_sleepers): the apply
+                // loop has woken it if a read of it changed, so it still reads what it read
+                continue;
+            }
+            if let (Some((kind, arg)), true) = (read, b.pass_rec && b.cell_cur.n == 0 && !b.cell_cur.bad && !b.cell_prev.bad && b.cell_prev.n > 0) {
+                let prev = b.cell_prev;
+                let c = *b.op();
+                let first = prev.reads[0];
+                let p = c - first.op;
+                let at_first = vm_pos(&b) == prev.pos && b.program.as_ref().map_or(false, |vm| vm.frames.len() == b.pass_depth);
+                if at_first && first.kind == kind && first.arg == arg && p > 0.0 && self.pass_reads_same(si, &prev) {
+                    let lead = prev.reads[prev.n as usize - 1].op - first.op;
+                    drop(b);
+                    if persist {
+                        // Sleeps to its first pass whose reads are not all in this call (op counts
+                        // up to num): the apply loop wakes it if a read of it changes before then.
+                        // Timers, which run between calls, come before every read it skips.
+                        let target = num + 1.0 - lead;
+                        if c < target {
+                            let rc = ex.states[si].as_ref().unwrap().clone();
+                            self.cell_sleepers.retain(|e| e.0 != si);
+                            let anchor = c + p * ((target - c) / p).ceil();
+                            rc.borrow_mut().cell_anchor = anchor;
+                            self.cell_sleepers.push((si, rc, c, anchor));
+                        }
+                        waiting.push((si, p, -1.0, lead));
+                    } else {
+                        waiting.push((si, p, f64::NAN, lead));
                     }
                     continue;
                 }
@@ -10951,7 +11763,7 @@ impl Sim {
             if (wc.0, wc.1, wc.2) == key && c <= wc.3 && ((wc.3 - c) * 0.5).fract() == 0.0 {
                 limit = limit.min(wc.3);
                 drop(b);
-                waiting.push((si, 2.0, wc.3));
+                waiting.push((si, 2.0, wc.3, 0.0));
                 continue;
             }
             let estimate = (deadline * 1e9 - self.current_time as f64) / self.op_duration as f64 + base - c;
@@ -10969,13 +11781,27 @@ impl Sim {
             limit = limit.min(c + 2.0 * j);
             drop(b);
             ex.states[si].as_ref().unwrap().borrow_mut().wait_cache = (key.0, key.1, key.2, c + 2.0 * j);
-            waiting.push((si, 2.0, c + 2.0 * j));
+            waiting.push((si, 2.0, c + 2.0 * j, 0.0));
         }
-        for (si, p, own) in waiting.iter() {
-            let target = if own.is_nan() { limit } else if *own > num { *own } else { own.min(num - 1.0) };
+        for (si, p, own, lead) in waiting.iter() {
+            let target = if own.is_nan() {
+                limit - lead
+            } else if *own == -1.0 {
+                num + 1.0 - lead
+            } else if *own > num {
+                *own
+            } else {
+                own.min(num - 1.0)
+            };
             let mut b = ex.states[*si].as_ref().unwrap().borrow_mut();
             if (*b.op()) < target {
-                (*b.op()) += p * ((target - (*b.op())) / p).ceil();
+                let skip = p * ((target - (*b.op())) / p).ceil();
+                (*b.op()) += skip;
+                // a steady pass's last whole pass moves with it
+                let n = b.cell_prev.n as usize;
+                for r in b.cell_prev.reads[..n].iter_mut() {
+                    r.op += skip;
+                }
                 // the skipped passes read the same count, the last of them one pass ago
                 let c = (*b.op());
                 if let Some((at, _)) = b.spin_read.as_mut() {
@@ -11074,6 +11900,7 @@ impl Sim {
                     };
                     if due {
                         let s = ex.states[num6].clone().unwrap();
+                        let changes_cells = !self.cell_sleepers.is_empty() && self.se_may_change_cells(num6, &s);
                         if let Err(e) = self.apply_side_effect(num6) {
                             {
                                 let mut b = s.borrow_mut();
@@ -11093,6 +11920,12 @@ impl Sim {
                             if masked {
                                 due_mask |= extra;
                             }
+                        }
+                        if changes_cells && !self.cell_sleepers.is_empty() && self.execution.is_some() {
+                            let g = self.execution.as_ref().unwrap().global_op_count;
+                            let mut extra = 0u64;
+                            self.wake_cell_sleepers(g, num6, &mut extra);
+                            due_mask |= extra;
                         }
                     }
                     num6 += 1;
@@ -11117,9 +11950,96 @@ impl Sim {
         self.execution.as_ref().unwrap().states[drone_id].clone().unwrap()
     }
 
+    /// whether drone `di`'s pending side effect could change what is on a cell: anything but a
+    /// read, or a move with the dinosaur hat (whose tail moves along)
+    fn se_may_change_cells(&self, di: usize, st: &StRef) -> bool {
+        match &st.borrow().current_side_effect {
+            SE::CanHarvest
+            | SE::GetEntityType(_)
+            | SE::GetGroundType(_)
+            | SE::GetPosX
+            | SE::GetPosY
+            | SE::GetPosZ
+            | SE::GetWorldSize
+            | SE::NumItems(_)
+            | SE::GetTime
+            | SE::Measure(_)
+            | SE::GetWater
+            | SE::CanMove(_)
+            | SE::NumUnlocked(_)
+            | SE::NumDrones
+            | SE::MaxDrones
+            | SE::HasFinished(_) => false,
+            SE::Move(_) => matches!(self.drones.get(di), Some(Some(d)) if d.hat.dino.is_some()),
+            _ => true,
+        }
+    }
+
+    /// What a pure read (pure_read_code) by drone `drone_id` gives now: the value its side
+    /// effect returns, as apply_side_effect computes it.
+    fn read_now(&self, drone_id: usize, kind: u8, arg: u8) -> V {
+        let dir = if arg == 255 { None } else { Some(arg) };
+        match kind {
+            0 => V::Bool(match self.entity_under_drone(drone_id) {
+                Some(e) => self.harvestable(&e),
+                None => false,
+            }),
+            1 => {
+                let (x, y) = self.target_pos(drone_id, dir);
+                match &self.cells[self.idx(x, y)].entity {
+                    Some(e) => V::Const(NS_ENTITIES, e.borrow().so.name),
+                    None => V::None,
+                }
+            }
+            2 => {
+                let (x, y) = self.target_pos(drone_id, dir);
+                V::Const(NS_GROUNDS, self.cells[self.idx(x, y)].ground)
+            }
+            3 => V::Num(self.dpos(drone_id).0 as f64),
+            4 => V::Num(self.dpos(drone_id).1 as f64),
+            5 => V::Num(self.wy as f64),
+            6 => {
+                let (x, y) = self.target_pos(drone_id, dir);
+                let v = match self.entity_at(x, y) {
+                    Some(e) => self.entity_measure(&e),
+                    None => None,
+                };
+                v.unwrap_or(V::None)
+            }
+            7 => V::Bool(self.drone_can_move(drone_id, arg)),
+            _ => {
+                let (x, y) = self.dpos(drone_id);
+                V::Num(self.cells[self.idx(x, y)].water_volume)
+            }
+        }
+    }
+
+    /// whether every read of a loop pass would read now what it read then
+    fn pass_reads_same(&self, drone_id: usize, pass: &CellPass) -> bool {
+        pass.reads[..pass.n as usize].iter().all(|r| encode_read(&self.read_now(drone_id, r.kind, r.arg)) == Some(r.val))
+    }
+
     /// Execution.ApplySideEffect
     fn apply_side_effect(&mut self, drone_id: usize) -> R<f64> {
         let st = self.state(drone_id);
+        // the reads (each as the match below would do it), noted for a recorded loop pass
+        let read = pure_read_code(&st.borrow().current_side_effect);
+        if let Some((kind, arg)) = read {
+            let v = self.read_now(drone_id, kind, arg);
+            let mut b = st.borrow_mut();
+            if b.pass_rec {
+                match encode_read(&v) {
+                    Some(e) => {
+                        let (c, pos) = (*b.op(), vm_pos(&b));
+                        b.cell_cur.push(kind, arg, c, e, pos);
+                    }
+                    None => b.cell_cur.bad = true,
+                }
+            }
+            b.module_state.return_value = v;
+            *b.op() += OPERATION_OPS;
+            return Ok(OPERATION_OPS);
+        }
         let se = st.borrow().current_side_effect.clone();
         let mut ops = 0.0;
         let mut flag = true;
@@ -11427,6 +12347,16 @@ impl Sim {
                     ops = OPERATION_OPS;
                 } else {
                     let mut copies = Copies::new();
+                    // (see spawn_reach)
+                    copies.reach = Some(HashSet::default());
+                    if let V::Func(f) = &obj[0] {
+                        if let Some(t) = &f.syntax_tree {
+                            copies.scanned.insert(Rc::as_ptr(t) as usize);
+                            for &key in tree_names(t).iter() {
+                                copies.reach.as_mut().unwrap().insert(key);
+                            }
+                        }
+                    }
                     let py_function = match deep_copy(&obj[0], &mut copies) {
                         V::Func(f) => f,
                         _ => return Err("error_spawn_drone_builtin".into()),
@@ -11434,6 +12364,7 @@ impl Sim {
                     let num11 = self.add_drone(drone_id)?;
                     let function_node = py_function.syntax_tree.clone().unwrap();
                     let list2: Vec<V> = obj[1..].iter().map(|a| deep_copy(a, &mut copies)).collect();
+                    spawn_reach(&mut copies);
                     let g = self.execution.as_ref().unwrap().global_op_count;
                     let fnode = function_node.clone();
                     let new_state =
@@ -11453,6 +12384,7 @@ impl Sim {
                         b.module_state.call_stack.push(scope);
                         b.drone_handle = Some(handle.clone());
                         b.current_executing_node = st.borrow().current_executing_node;
+                        b.spawn_scopes = copies.scopes.values().cloned().collect();
                     }
                     ret = Some(V::Handle(handle));
                     ops = ACTION_OPS;
@@ -11499,6 +12431,7 @@ impl Sim {
                 if let Some(h) = &st.borrow().drone_handle {
                     *h.return_value.borrow_mut() = Some(value.clone());
                 }
+                release_spawn_scopes(&st, &value);
                 let all_done = {
                     let ex = self.execution.as_mut().unwrap();
                     if matches!(&ex.main_state, Some(m) if Rc::ptr_eq(m, &st)) {
@@ -11866,7 +12799,17 @@ struct RunResult {
 }
 
 /// Set by run_stream once it needs no more results: runs still under way stop at their next frame.
-static ABANDON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// run_stream: the first job no longer needed (usize::MAX: all may be); a run of a job at or past
+/// it stops at its next frame
+static STOP_FROM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(usize::MAX);
+/// run_stream packs a job and the game time its run has reached into one word for the coordinator
+/// (see run_stream): the job in the top PROGRESS_JOB_BITS bits, the time in whole nanoseconds below
+const PROGRESS_TIME_BITS: u32 = 43;
+const PROGRESS_IDLE: u64 = u64::MAX;
+thread_local! {
+    /// the run_stream job this thread runs and its progress word (none outside run_stream)
+    static RUN_JOB: Cell<(usize, *const std::sync::atomic::AtomicU64)> = const { Cell::new((usize::MAX, std::ptr::null())) };
+}
 
 fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     // dropped last, once everything else of the run is gone
@@ -11932,8 +12875,14 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
                 ));
                 break;
             }
-            if ABANDON.load(std::sync::atomic::Ordering::Relaxed) {
-                return Err("abandoned".into());
+            let (job, slot) = RUN_JOB.with(|j| j.get());
+            if job != usize::MAX {
+                if job >= STOP_FROM.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err("abandoned".into());
+                }
+                // where this run has got to: its time can only grow from here
+                let t = (sim.current_time.max(0) as u64).min((1u64 << PROGRESS_TIME_BITS) - 1);
+                unsafe { (*slot).store(((job as u64) << PROGRESS_TIME_BITS) | t, std::sync::atomic::Ordering::Relaxed) };
             }
             let goal_time = (sim.current_time + frame).min(limit);
             while !sim.run_next_step(goal_time) {
@@ -12141,7 +13090,13 @@ fn run_parallel(cfg: &Config, seeds: &[i32], workers: usize) -> Vec<R<RunResult>
 /// With `budget` (accept stops once the runs' game times add up to it), a worker waits rather than
 /// start a run that the results in hand and the runs under way (at the mean time so far) already
 /// look like covering with a run to spare: those would mostly be dropped, and they would take
-/// cores from the runs still needed. It starts one if the runs fall short after all.
+/// cores from the runs still needed. It starts one if the runs fall short after all. Until the
+/// first result, when how long a run takes is not known yet, only FIRST_RUNS start: a short run
+/// is back within milliseconds and the rest follow, while a long one (a reset needs two to four)
+/// does not share the CPU with many runs that would only be dropped. The game time each run under
+/// way has reached is a floor for its time: once the runs before a job are sure to cover the
+/// budget, that job and every later one stop (STOP_FROM), as accept would drop them.
+const FIRST_RUNS: usize = 4;
 fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize>, budget: Option<f64>, mut accept: impl FnMut(i32, R<RunResult>) -> bool) {
     use std::sync::atomic::{AtomicUsize, Ordering};
     struct Progress {
@@ -12154,11 +13109,15 @@ fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize
     let progress = std::sync::Mutex::new(Progress { known: 0.0, received: 0, stop: false });
     let changed = std::sync::Condvar::new();
     let (tx, rx) = std::sync::mpsc::channel::<(usize, R<RunResult>)>();
-    ABANDON.store(false, Ordering::Relaxed);
+    STOP_FROM.store(usize::MAX, Ordering::Relaxed);
+    let nworkers = workers.max(1).min(limit.unwrap_or(usize::MAX).max(1));
+    // each worker's job and how far its run has got (see RUN_JOB)
+    let slots: Vec<std::sync::atomic::AtomicU64> = (0..nworkers).map(|_| std::sync::atomic::AtomicU64::new(PROGRESS_IDLE)).collect();
     std::thread::scope(|scope| {
-        for _ in 0..workers.max(1).min(limit.unwrap_or(usize::MAX).max(1)) {
+        for w in 0..nworkers {
             let tx = tx.clone();
             let (next, progress, changed) = (&next, &progress, &changed);
+            let slot = &slots[w];
             let spawned = std::thread::Builder::new().stack_size(256 << 20).spawn_scoped(scope, move || loop {
                 {
                     let mut p = progress.lock().unwrap();
@@ -12166,13 +13125,15 @@ fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize
                         if p.stop {
                             return;
                         }
-                        let covered = match budget {
+                        let stopped = next.load(Ordering::Relaxed) >= STOP_FROM.load(Ordering::Relaxed);
+                        let covered = stopped || match budget {
                             Some(b) if p.received > 0 => {
                                 let mean = p.known / p.received as f64;
                                 let under_way = next.load(Ordering::Relaxed) - p.received;
                                 p.known + (under_way as f64 - 1.0) * mean >= b
                             }
-                            _ => false,
+                            Some(_) => next.load(Ordering::Relaxed) >= FIRST_RUNS,
+                            None => false,
                         };
                         if !covered {
                             break;
@@ -12184,7 +13145,16 @@ fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize
                 if limit.map_or(false, |l| job >= l) {
                     break;
                 }
+                let tracked = budget.is_some() && (job as u64) < (PROGRESS_IDLE >> PROGRESS_TIME_BITS);
+                if tracked {
+                    slot.store((job as u64) << PROGRESS_TIME_BITS, Ordering::Relaxed);
+                    RUN_JOB.with(|j| j.set((job, slot as *const _)));
+                }
                 let r = run_once(cfg, first_seed.wrapping_add(job as i32));
+                if tracked {
+                    RUN_JOB.with(|j| j.set((usize::MAX, std::ptr::null())));
+                    slot.store(PROGRESS_IDLE, Ordering::Relaxed);
+                }
                 if tx.send((job, r)).is_err() {
                     break;
                 }
@@ -12198,7 +13168,50 @@ fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize
         let mut pending: std::collections::BTreeMap<usize, R<RunResult>> = std::collections::BTreeMap::new();
         let mut want = 0usize;
         let mut accepting = true;
-        for (job, r) in rx.iter() {
+        // game time of the runs accepted so far, summed in the order accept sums them
+        let mut accepted = 0.0f64;
+        loop {
+            let (job, r) = match rx.recv_timeout(std::time::Duration::from_millis(2)) {
+                Ok(m) => m,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    if let (Some(b), true) = (budget, accepting) {
+                        // Floors for the jobs from `want` on, in order: a finished run's time, a
+                        // running one's time so far. Once they cover the budget at job j, accept
+                        // will stop at j or before (each time only grows, and so does a sum of them).
+                        let mut floors: std::collections::HashMap<usize, f64> = std::collections::HashMap::new();
+                        for sl in slots.iter() {
+                            let v = sl.load(Ordering::Relaxed);
+                            if v != PROGRESS_IDLE {
+                                let t = v & ((1u64 << PROGRESS_TIME_BITS) - 1);
+                                floors.insert((v >> PROGRESS_TIME_BITS) as usize, dur_seconds(t as i64));
+                            }
+                        }
+                        let mut sum = accepted;
+                        let mut j = want;
+                        loop {
+                            let f = match pending.get(&j) {
+                                Some(Ok(r)) => r.elapsed,
+                                Some(Err(_)) => break,
+                                None => match floors.get(&j) {
+                                    Some(&t) => t,
+                                    None => break,
+                                },
+                            };
+                            sum += f;
+                            if sum >= b {
+                                if j + 1 < STOP_FROM.load(Ordering::Relaxed) {
+                                    STOP_FROM.store(j + 1, Ordering::Relaxed);
+                                    changed.notify_all();
+                                }
+                                break;
+                            }
+                            j += 1;
+                        }
+                    }
+                    continue;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            };
             if !accepting {
                 continue;
             }
@@ -12209,12 +13222,14 @@ fn run_stream(cfg: &Config, first_seed: i32, workers: usize, limit: Option<usize
             }
             pending.insert(job, r);
             while let Some(r) = pending.remove(&want) {
+                let t = r.as_ref().map(|r| r.elapsed).unwrap_or(0.0);
                 if !accept(first_seed.wrapping_add(want as i32), r) {
                     accepting = false;
                     progress.lock().unwrap().stop = true;
-                    ABANDON.store(true, Ordering::Relaxed);
+                    STOP_FROM.store(0, Ordering::Relaxed);
                     break;
                 }
+                accepted += t;
                 want += 1;
             }
             changed.notify_all();

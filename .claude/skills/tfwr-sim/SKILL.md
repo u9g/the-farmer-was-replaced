@@ -94,8 +94,12 @@ It follows the game's code (`BuiltinFunctions.LeaderboardRun`, `MainSim.StartLea
 - The code size limit is checked: at most 100,000 syntax nodes over the file and everything it
   imports (`error_leaderboard_code_too_large`).
 - A leaderboard run may take up to 120 s of real time, not 10.
-- Runs go to all cores and stop as soon as the finished runs cover two hours. A cactus attempt
-  of about 470 runs (15.4 s each) takes about 5 s on 16 threads, about 0.075 s of CPU per run.
+- Runs go to all cores and stop as soon as the finished runs cover two hours. Until the first one
+  is back only four start (a reset needs two to four of its long runs, and runs that would be
+  dropped only take cores from the ones needed), and a run stops as soon as the game time the runs
+  before it have reached already covers two hours. A cactus attempt of about 470 runs (15.4 s
+  each) takes about 5 s on 16 threads, about 0.075 s of CPU per run; a whole fastest-reset attempt
+  (three runs of about 42 minutes) takes about half a second.
 
 The report shows the first run in full, then the score, the number of runs, their spread and how
 long the script ran on after the goal was met:
@@ -123,13 +127,19 @@ not ported.
   the same code as the game, for comparing with what the player sees.
 - Negative item lines are inputs being used up. A one-minute run will not show a script running
   dry later: compare the per-minute use with what the save holds.
-- Two kinds of wait cost the simulator almost nothing, because it skips the idle passes with the
-  same result as running them: `while get_time() < x: pass` (x a plain variable), and
+- Three kinds of wait cost the simulator almost nothing, because it skips the idle passes with the
+  same result as running them: `while get_time() < x: pass` (x a plain variable),
   `while num_items(Items.X) > y: pass` (any one comparison, y a number or plain variable), which
-  skips passes until another drone's next action or the next power tick. Any other spin
-  (`while get_time() < t + 1:`, a body that is not just `pass`, `num_items(...) - k`) is
-  interpreted tick by tick, about 2.5 s per simulated minute of 32 spinning drones. Write waits
-  in the skippable forms.
+  skips passes until another drone's next action or the next power tick, and any `while` loop
+  inside a function whose passes only read the farm (`can_harvest`, `get_entity_type`,
+  `get_ground_type`, `measure`, `can_move`, `get_pos_x/y`, `get_world_size`, `get_water`) and work
+  on the function's own variables, such as `while not can_harvest(): pass` or a `while True:` that
+  polls `measure()` until the treasure is in its territory. Once two passes in a row start with the
+  same variables and read the same, the drone skips passes until another drone changes something
+  one of its reads would see. A pass that does anything else (`get_time`, `num_items`, `random`,
+  printing, changing a list or dict, setting a global, calling a function of the script's own, a
+  `for` loop) is interpreted tick by tick, about 2.5 s per simulated minute of 32 spinning drones.
+  Write waits in the skippable forms.
 - A script that never harvests runs the full ten minutes. Draining a big power stock (say
   `--give power=1e7`) by spinning drones takes game hours, so the run then reports 0 items:
   check that the script really farms under the `--give` you used.
@@ -226,11 +236,13 @@ that takes turns with the scheduler, slower but the same results). `yp()` stands
 where the game's iterators yield: it counts the resume and hands back to the scheduler only when
 `PerformExecutionStep` would stop (past the target op count, a side effect, or 1000 resumes), so op
 counts and stopping points match the game exactly. Keep it that way when changing a node: an
-extra or missing `yp()` changes timing. Two things are not in the game: `skip_busy_waits` (the shortcut for `while get_time() < x: pass` and
-`while num_items(i) > y: pass`: every read, op count and time stays exact, but the ops a skipped
-wait spends are booked for power earlier than the game would, so the power left at the end can
-differ by a fraction of a unit) and the
-reporting in `main`. After touching the interpreter or `execute`, build the old and new versions
+extra or missing `yp()` changes timing. Some things are not in the game: `skip_busy_waits` (the
+shortcut for `while get_time() < x: pass`, `while num_items(i) > y: pass` and steady loop passes,
+see `Op::PassMark`: every read, op count and time stays exact, but the ops a skipped wait spends
+are booked for power earlier than the game would, so the power left at the end can differ by a
+fraction of a unit), shortcuts no script can see (`spawn_reach` copies only the variables a spawned
+drone's code can name, `release_spawn_scopes` frees an ended drone's copies, tuples of plain values
+are shared rather than copied) and the reporting in `main`. After touching the interpreter or `execute`, build the old and new versions
 into separate target directories and `cmp` their full output for the same scripts and seeds,
 including a script that uses power and one with `--fps 20`: the simulator is deterministic, so any
 difference is a change in behaviour. If the
