@@ -11410,6 +11410,23 @@ fn run_leaderboards(cfgs: &[Config], first_seed: i32, fixed_runs: Option<i32>, w
     all_ok
 }
 
+/// Many runs on every core compete with whatever else is running, often the game itself; above
+/// normal priority (for as long as this process lasts) wins most of that time back.
+fn raise_priority() {
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetCurrentProcess() -> *mut std::ffi::c_void;
+            fn SetPriorityClass(process: *mut std::ffi::c_void, class: u32) -> i32;
+        }
+        const ABOVE_NORMAL_PRIORITY_CLASS: u32 = 0x8000;
+        unsafe {
+            SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
+        }
+    }
+}
+
 const USAGE: &str = "usage: tfwr_sim <script.py>... [--seed N] [--seeds N] [--jobs N] [--item NAME]
                 [--save save.json] [--size N] [--drones N] [--set unlock=level] [--give item=n]
                 [--fps N] [--quiet] [--brief] [--leaderboard NAME]
@@ -11611,6 +11628,9 @@ fn main() {
     });
 
     let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    if jobs.unwrap_or(cores) > 1 {
+        raise_priority();
+    }
     if cfgs.iter().any(|c| c.leaderboard.is_some()) {
         if cfgs.iter().any(|c| c.leaderboard.is_none()) {
             fail("leaderboard runs and ordinary runs cannot be mixed in one command");

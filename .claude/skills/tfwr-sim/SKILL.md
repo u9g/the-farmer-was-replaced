@@ -54,7 +54,7 @@ The first run after the file changes takes about 25 s to build (one fully optimi
 |---|---|
 | `--seeds N` | run N seeds and print mean, min and max of the steady-state rate (default 1) |
 | `--seed N` | first seed; fix it so two commands see the same random numbers |
-| `--jobs N` | runs to do at once (default: one per CPU core) |
+| `--jobs N` | runs to do at once (default: one per CPU core); with more than one the simulator raises itself to above-normal priority so a running game does not take its cores |
 | `--item NAME` | item to report (guessed from the start of the file name: `cactus_v2.py` reports cactus, `maze1.py` gold, `dinosaurs.py` bone, `wheat.py` hay, `tree2drones.py` wood; a script whose name says nothing reports the first script's item) |
 | `--save PATH` | save file for unlock levels and inventory (default: `save.json` beside the script) |
 | `--set unlock=level` | override an upgrade, e.g. `--set cactus=5` |
