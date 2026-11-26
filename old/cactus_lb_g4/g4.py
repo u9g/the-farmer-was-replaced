@@ -7,7 +7,8 @@
 from g4_core import *
 
 GROW = TPS * float(E("GW", "1.0")) + float(E("GPAD", "40"))
-INL_FM = float(E("INL_FM", "3"))     # extra moves to run an fm/jf inline (off the tail)
+INL_FM = float(E("INL_FM", "3"))
+MINC = int(E("MINC", "8"))     # extra moves to run an fm/jf inline (off the tail)
 
 
 def cut_type(dl, dr):
@@ -330,6 +331,8 @@ def dp_A(lay, plan, cm, arrival, T, LMAX):
                     continue
                 if q - p > LMAX:
                     break
+                if q - p < MINC:
+                    continue
                 for d in (0, 1):
                     if p > 0:
                         t = cut_type(dp_, d)
@@ -420,7 +423,7 @@ def plan_B(lay, plan, cm, chs, arr, TA_lim, cands=None):
                     ur = rot(u)
                     bv = None
                     for u0, (v, _) in f.items():
-                        if ur - u0 < 3:
+                        if ur - u0 < MINC:
                             continue
                         c = max(v, cr.best_m(u0, ur, 0, False)[0])
                         if bv is None or c < bv[0]:
@@ -431,7 +434,7 @@ def plan_B(lay, plan, cm, chs, arr, TA_lim, cands=None):
                 hist.append(f)
             bestv = None
             for u, (v, _) in f.items():
-                if n - u < 3:
+                if n - u < MINC:
                     continue
                 c = max(v, cr.best_m(u, n, 0, False)[0])
                 if bestv is None or c < bestv[0]:
