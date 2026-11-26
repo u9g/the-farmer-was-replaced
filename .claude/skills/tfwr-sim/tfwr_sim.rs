@@ -4343,6 +4343,11 @@ enum Op {
     PushNone,
     /// after the callee expression: it must be a function; push the static flag
     CallFunc(*const Node),
+    /// Load of a plain name as the callee (Value node, depth) + CallFunc(call node)
+    LoadCallee(*const Node, *const Node, u32),
+    /// StoreName for an assignment straight to a name: sets the assignment node first (the
+    /// SetNode it replaces); the operator comes from the assignment node
+    StoreAssign(*const Node, *const Node),
     /// pops the arguments (this many, or one argument list for u32::MAX), the static flag and the
     /// function; a builtin is called here (then TakeRv, 3 on), a user function charges its op and
     /// goes on to CallB
@@ -4449,7 +4454,11 @@ impl Compiler {
         }
     }
     fn eb(&mut self, n: *const Node, d: u32) {
-        self.flush_eb();
+        if let Some((pn, pd)) = self.pending_eb.take() {
+            if pd >= 1000 {
+                self.ops.push(Op::Eb(pn, pd));
+            }
+        }
         self.pending_eb = Some((n, d));
     }
     /// An Eb right before an instruction that starts with its own Eb (a child node's) is dropped:
@@ -4457,7 +4466,7 @@ impl Compiler {
     /// whenever the parent's would, short of the 1100 limit the scripts come nowhere near.
     fn emit(&mut self, op: Op) -> usize {
         if let Some((n, d)) = self.pending_eb.take() {
-            let starts_with_eb = matches!(op, Op::Load(..) | Op::Lit(..) | Op::Eb(..) | Op::Def(..) | Op::Pass(..) | Op::BrkCont(..) | Op::ImportStart(..));
+            let starts_with_eb = matches!(op, Op::Load(..) | Op::Lit(..) | Op::Eb(..) | Op::Def(..) | Op::Pass(..) | Op::BrkCont(..) | Op::ImportStart(..) | Op::LoadCallee(..));
             if !(starts_with_eb && d < 1000) {
                 self.ops.push(Op::Eb(n, d));
             }
@@ -4524,9 +4533,13 @@ impl Compiler {
             NK::Assignment(op) => {
                 self.eb(np, depth);
                 self.expr(&node.slots[1], depth + 1);
-                self.emit(Op::SetNode(np));
-                let k = self.s(op);
-                self.assign(&node.slots[0], depth, k);
+                if let NK::Value(_) = &node.slots[0].kind {
+                    self.emit(Op::StoreAssign(np, Rc::as_ptr(&node.slots[0])));
+                } else {
+                    self.emit(Op::SetNode(np));
+                    let k = self.s(op);
+                    self.assign(&node.slots[0], depth, k);
+                }
             }
             NK::Def(..) => {
                 self.emit(Op::Def(np, depth));
@@ -4638,7 +4651,7 @@ impl Compiler {
                 }
             }
             to_end = brks;
-        } else {
+        } else if node.slots.len() > 2 {
             to_end.push(self.emit(Op::Jump(0)));
         }
         let else_at = self.here();
@@ -4718,8 +4731,12 @@ impl Compiler {
             NK::Bracket => self.expr(&node.slots[0], depth + 1),
             NK::Call => {
                 self.eb(np, depth);
-                self.expr(&node.slots[0], depth + 1);
-                self.emit(Op::CallFunc(np));
+                if let NK::Value(_) = &node.slots[0].kind {
+                    self.emit(Op::LoadCallee(Rc::as_ptr(&node.slots[0]), np, depth + 1));
+                } else {
+                    self.expr(&node.slots[0], depth + 1);
+                    self.emit(Op::CallFunc(np));
+                }
                 let args = &node.slots[1];
                 if let NK::Seq = &args.kind {
                     for slot in args.slots.iter() {
@@ -4979,6 +4996,43 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     vm.stack.pop();
                 }
                 Op::PushNone => vm.stack.push(V::None),
+                Op::LoadCallee(vn, cn, d) => {
+                    eb!(vn, d);
+                    let node = node_ref(vn);
+                    let name = match &node.kind {
+                        NK::Value(name) => name,
+                        _ => unreachable!(),
+                    };
+                    let s = stm(st);
+                    let scope = s.module_state.call_stack.last().unwrap_or(&s.module_state.global_scope);
+                    let (v, is_static) = scope_lookup(scope, name, Some(&node.lookup))?;
+                    s.module_state.is_expression_static = is_static;
+                    if !matches!(v, V::Func(_)) {
+                        s.current_executing_node = cn;
+                        return Err(Ctrl::Err("error_not_a_function".into()));
+                    }
+                    vm.stack.push(v);
+                    vm.stack.push(V::Bool(is_static));
+                }
+                Op::StoreAssign(an, ln) => {
+                    stm(st).current_executing_node = an;
+                    let rhs = vm.stack.pop().unwrap();
+                    let value = match &node_ref(ln).kind {
+                        NK::Value(v) => v,
+                        _ => unreachable!(),
+                    };
+                    let op = match &node_ref(an).kind {
+                        NK::Assignment(op) => op,
+                        _ => unreachable!(),
+                    };
+                    let scope = cur_scope!(st);
+                    let before = if op.as_ref() == "=" { None } else { Some(scope_evaluate(&scope, value)?.0) };
+                    let (v, exec_time) = get_value_to_assign(before.as_ref(), &rhs, op)?;
+                    scope_set_var(&scope, value, v, false);
+                    if charge(st, OPERATION_OPS * exec_time) {
+                        stop!(pc);
+                    }
+                }
                 Op::CallFunc(n) => {
                     if !matches!(vm.stack.last(), Some(V::Func(_))) {
                         stm(st).current_executing_node = n;
@@ -5031,6 +5085,10 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                         if charge(st, num) {
                             stop!(pc);
                         }
+                        // TakeRv
+                        let v = std::mem::replace(&mut stm(st).module_state.return_value, V::None);
+                        vm.stack.push(v);
+                        pc += 1;
                     }
                 }
                 Op::CallB => {
