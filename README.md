@@ -20,7 +20,7 @@ because it reads your unlock levels and inventory from the `save.json` there:
 cargo +nightly -Zscript path/to/tfwr_sim.rs cactus.py --seed 1 --seeds 32 --quiet
 ```
 
-The first run builds it in about 12 seconds, and later runs use cargo's cache. Every run simulates
+The first run builds it in about 25 seconds (it is built fully optimised, as one unit), and later runs use cargo's cache. Every run simulates
 one game minute. A script too slow to harvest three times in that minute keeps going until it
 has, up to ten minutes.
 

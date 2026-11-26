@@ -48,7 +48,7 @@ Add `--brief` to get one line per script, best first, instead of the per-run rep
      3,122,538 cactus/min    10.07s cycle       524,288 per harvest (min      524,288)  cactus_sort_only.py  [ERROR in 1 of 32 runs: ...]
 ```
 
-The first run after the file changes takes about 12 s to build; later runs use cargo's cache.
+The first run after the file changes takes about 25 s to build (one fully optimised unit); later runs use cargo's cache.
 
 | Option | Meaning |
 |---|---|

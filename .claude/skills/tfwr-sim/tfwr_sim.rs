@@ -5,6 +5,12 @@ edition = "2021"
 
 [profile.dev]
 opt-level = 3
+debug-assertions = false
+overflow-checks = false
+codegen-units = 1
+lto = "fat"
+incremental = false
+panic = "abort"
 ---
 // tfwr_sim.rs - The Farmer Was Replaced, reimplemented as a headless one-file Rust harness.
 //
@@ -39,6 +45,91 @@ use std::pin::Pin;
 use std::rc::Rc;
 
 type R<T> = Result<T, String>;
+
+/// Small-block allocator: the interpreter makes millions of short-lived allocations per run (one
+/// boxed coroutine per node it evaluates), and the Windows heap spends about half of all run time
+/// on them. Blocks up to 8 KiB come from per-thread free lists of size classes, carved from 256 KiB
+/// chunks that are never handed back; anything bigger goes to the system allocator.
+/// A block freed on another thread joins that thread's list, which is fine: memory is memory.
+mod pool {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::cell::UnsafeCell;
+    // 16-byte classes up to 512 bytes, then 256-byte classes up to 8 KiB (a node's coroutine is
+    // several hundred bytes to a few KiB).
+    const CLASSES: usize = 62;
+    const MAX: usize = 8192;
+    const CHUNK: usize = 256 * 1024;
+    struct Lists {
+        free: [*mut u8; CLASSES],
+    }
+    thread_local! {
+        static LISTS: UnsafeCell<Lists> = const { UnsafeCell::new(Lists { free: [std::ptr::null_mut(); CLASSES] }) };
+    }
+    pub struct Pool;
+    #[inline(always)]
+    fn class(l: &Layout) -> Option<usize> {
+        let n = l.size();
+        if n == 0 || n > MAX || l.align() > 16 {
+            None
+        } else if n <= 512 {
+            Some((n - 1) >> 4)
+        } else {
+            Some(30 + ((n - 1) >> 8))
+        }
+    }
+    #[cold]
+    unsafe fn refill(lists: &mut Lists, c: usize) {
+        let size = if c < 32 { (c + 1) * 16 } else { (c - 29) << 8 };
+        let chunk = System.alloc(Layout::from_size_align_unchecked(CHUNK, 16));
+        if chunk.is_null() {
+            return;
+        }
+        let n = CHUNK / size;
+        for i in (0..n).rev() {
+            let p = chunk.add(i * size);
+            *(p as *mut *mut u8) = lists.free[c];
+            lists.free[c] = p;
+        }
+    }
+    unsafe impl GlobalAlloc for Pool {
+        #[inline(always)]
+        unsafe fn alloc(&self, l: Layout) -> *mut u8 {
+            match class(&l) {
+                Some(c) => LISTS
+                    .try_with(|cell| {
+                        let lists = &mut *cell.get();
+                        if lists.free[c].is_null() {
+                            refill(lists, c);
+                            if lists.free[c].is_null() {
+                                return std::ptr::null_mut();
+                            }
+                        }
+                        let p = lists.free[c];
+                        lists.free[c] = *(p as *mut *mut u8);
+                        p
+                    })
+                    .unwrap_or_else(|_| System.alloc(Layout::from_size_align_unchecked(MAX, 16))),
+                None => System.alloc(l),
+            }
+        }
+        #[inline(always)]
+        unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
+            match class(&l) {
+                Some(c) => {
+                    // During thread teardown the list is gone; the block is simply leaked.
+                    let _ = LISTS.try_with(|cell| {
+                        let lists = &mut *cell.get();
+                        *(p as *mut *mut u8) = lists.free[c];
+                        lists.free[c] = p;
+                    });
+                }
+                None => System.dealloc(p, l),
+            }
+        }
+    }
+    #[global_allocator]
+    static GLOBAL: Pool = Pool;
+}
 
 const ACTION_OPS: f64 = 200.0;
 const OPERATION_OPS: f64 = 1.0;
