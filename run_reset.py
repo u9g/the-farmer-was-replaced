@@ -1594,12 +1594,15 @@ def maze_round(s, goal):
 
 # ---- dinosaur snake (dinosaurs.py, whole field) ------------------------------------------------
 
-FREE_LIMIT = 16
+FREE_LIMIT = 24
+PLAN = True
 MARGIN = 1
 ROOM = 2
 SN = 0
 SS = 0
 SHORTCUT_LIMIT = 0
+K2 = 80
+HALVES = False
 IDX = []
 PX = []
 PY = []
@@ -1608,10 +1611,158 @@ WAY = []
 NEXT = []
 NB = []
 WALK = []
+TO = []
 occ = []
 hist = []
 vis = []
 fills = [0]
+fills2 = [0]
+NB2 = []
+COR = []
+MT = []
+MT2 = []
+ORD = []
+vis2 = []
+bad = []
+SPLITS = 0
+FALLS = 0
+
+
+NBLK = 0
+RDIR = []
+RPOS = []
+NMODES = 3
+JMAX = 3
+SKIP = True
+
+
+def dir_to(a, b):
+	if b[0] > a[0]:
+		return East
+	if b[0] < a[0]:
+		return West
+	if b[1] > a[1]:
+		return North
+	return South
+
+
+def mk_path(j, m, N):
+	# cells (x, y) of segment route j (0: one block, mode m; j > 0: j skipped blocks + the
+	# apple block, detour into the skipped area at column 2 + 2m), y relative to the segment
+	W = N - 1
+	p = []
+	if j == 0:
+		if m == 0:
+			for y in range(4):
+				if y % 2 == 0:
+					xs = range(1, W + 1)
+				else:
+					xs = range(W, 0, -1)
+				for x in xs:
+					p.append((x, y))
+		elif m == 1:
+			for x in range(1, W + 1):
+				p.append((x, 0))
+			i = 0
+			for x in range(W, 0, -1):
+				if i % 2 == 0:
+					ys = range(1, 4)
+				else:
+					ys = range(3, 0, -1)
+				for y in ys:
+					p.append((x, y))
+				i += 1
+		else:
+			i = 0
+			for x in range(1, W + 1):
+				if i % 2 == 0:
+					ys = range(0, 3)
+				else:
+					ys = range(2, -1, -1)
+				for y in ys:
+					p.append((x, y))
+				i += 1
+			for x in range(W, 0, -1):
+				p.append((x, 3))
+		return p
+	a = 2 + 2 * m
+	r0 = 4 * j
+	for y in range(r0 + 1):
+		p.append((1, y))
+	for x in range(1, W + 1):
+		if x % 2 == 1:
+			ys = range(r0, r0 + 3)
+		else:
+			ys = range(r0 + 2, r0 - 1, -1)
+		for y in ys:
+			if x != 1 or y != r0:
+				p.append((x, y))
+		if x == a:
+			for ri in range(r0):
+				y = r0 - 1 - ri
+				if ri % 2 == 0:
+					xs = range(a, 1, -1)
+				else:
+					xs = range(2, a + 1)
+				for xx in xs:
+					p.append((xx, y))
+			for ri in range(r0):
+				if ri % 2 == 0:
+					xs = range(a + 1, W + 1)
+				else:
+					xs = range(W, a, -1)
+				for xx in xs:
+					p.append((xx, ri))
+	for x in range(W, 0, -1):
+		p.append((x, r0 + 3))
+	return p
+
+
+def mk_job(i, d, tasks, N):
+	out = []
+	for q in range(i, len(tasks), d):
+		j = tasks[q][0]
+		m = tasks[q][1]
+		p = mk_path(j, m, N)
+		h = 4 * (j + 1)
+		pos = []
+		for c in range(N * h):
+			pos.append(0)
+		ds = []
+		for c in range(len(p)):
+			pos[p[c][0] * h + p[c][1]] = c
+			if c + 1 < len(p):
+				ds.append(dir_to(p[c], p[c + 1]))
+		out.append([j, m, ds, pos])
+	return out
+
+
+def block_setup(N):
+	# rows 4s..4s+3, columns 1..N-1 form block s; column 0 is the way back down.
+	# A segment is one block walked in one of NMODES ways, or j skipped blocks plus the block
+	# after them; every route enters at (1, 4s) and leaves at the segment's top left corner.
+	global NBLK
+	global RDIR
+	global RPOS
+	NBLK = N // 4
+	tasks = []
+	RDIR = []
+	RPOS = []
+	for j in range(JMAX + 1):
+		RDIR.append([])
+		RPOS.append([])
+		if j == 0:
+			n = NMODES
+		else:
+			n = (N - 2) // 2
+		for m in range(n):
+			tasks.append([j, m])
+			RDIR[j].append(0)
+			RPOS[j].append(0)
+	for r in all_drones(mk_job, tasks, N):
+		for e in r:
+			RDIR[e[0]][e[1]] = e[2]
+			RPOS[e[0]][e[1]] = e[3]
 
 
 def dn_rows(j, d, a0, b0):
@@ -1659,6 +1810,7 @@ def dino_setup():
 	global NEXT
 	global NB
 	global WALK
+	global TO
 	global occ
 	global hist
 	global vis
@@ -1673,24 +1825,44 @@ def dino_setup():
 		for y in range(N):
 			col.append(0)
 		IDX.append(col)
-	PX = [0]
-	PY = [0]
-	i = 0
-	for y in range(N):
-		if y % 2 == 0:
-			xs = range(1, N)
-		else:
-			xs = range(N - 1, 0, -1)
-		for x in xs:
-			i += 1
-			IDX[x][y] = i
-			PX.append(x)
-			PY.append(y)
-	for y in range(N - 1, 0, -1):
-		i += 1
-		IDX[0][y] = i
+	PX = []
+	PY = []
+	if HALVES:
+		h = N // 2
+		for y in range(N):
+			if y % 2 == 0:
+				xs = range(h - 1, -1, -1)
+			else:
+				xs = range(h)
+			for x in xs:
+				PX.append(x)
+				PY.append(y)
+		for c in range(N):
+			if c % 2 == 0:
+				xs = range(h, N)
+			else:
+				xs = range(N - 1, h - 1, -1)
+			for x in xs:
+				PX.append(x)
+				PY.append(N - 1 - c)
+	else:
 		PX.append(0)
-		PY.append(y)
+		PY.append(0)
+		for y in range(N):
+			if y % 2 == 0:
+				xs = range(1, N)
+			else:
+				xs = range(N - 1, 0, -1)
+			for x in xs:
+				PX.append(x)
+				PY.append(y)
+		for y in range(N - 1, 0, -1):
+			PX.append(0)
+			PY.append(y)
+	for i in range(S):
+		IDX[PX[i]][PY[i]] = i
+	if not HALVES:
+		block_setup(N)
 	# the neighbour tables are built by every drone at once, a slice each
 	AHEAD = []
 	WAY = []
@@ -1702,6 +1874,12 @@ def dino_setup():
 			WAY.append(row)
 		for row in r[2]:
 			NB.append(row)
+	TO = []
+	for i in range(S):
+		row = []
+		for d in AHEAD[i]:
+			row.append((i + d) % S)
+		TO.append(row)
 	NEXT = []
 	for i in range(S):
 		ds = AHEAD[i]
@@ -1718,6 +1896,95 @@ def dino_setup():
 		occ.append(0)
 		hist.append(0)
 		vis.append(0)
+	occ.append(1000000000)
+	global NB2
+	global COR
+	global MT
+	global MT2
+	global ORD
+	global vis2
+	global bad
+	vis2 = []
+	bad = []
+	for i in range(S + 1):
+		vis2.append(0)
+		bad.append(-5)
+	NB2 = []
+	COR = []
+	CX = [1, 1, -1, -1]
+	CY = [1, -1, -1, 1]
+	for i in range(S):
+		r = []
+		q = []
+		for k in range(4):
+			x = PX[i] + DX[k]
+			y = PY[i] + DY[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				r.append(IDX[x][y])
+			else:
+				r.append(S)
+			x = PX[i] + CX[k]
+			y = PY[i] + CY[k]
+			if x >= 0 and x < N and y >= 0 and y < N:
+				q.append(IDX[x][y])
+			else:
+				q.append(S)
+		NB2.append(r)
+		COR.append(q)
+	MT = []
+	MT2 = []
+	PW = [1, 2, 4, 8]
+	for m in range(16):
+		fr = []
+		bl = []
+		for k in range(4):
+			if (m // PW[k]) % 2 == 0:
+				fr.append(k)
+			else:
+				bl.append(k)
+		v = -1
+		v2 = 0
+		if len(fr) == 1:
+			v = 4
+		elif len(fr) == 2:
+			if (fr[1] - fr[0]) == 1:
+				v = fr[0]
+			elif fr[0] == 0 and fr[1] == 3:
+				v = 3
+		elif len(fr) == 3:
+			j = bl[0]
+			v = 10 + (j + 1) % 4
+			v2 = (j + 2) % 4
+		MT.append(v)
+		MT2.append(v2)
+	# ORD[s]: s = sx * 6 + sy * 2 + (|dx| < |dy|); sx/sy: 0 positive, 1 negative, 2 zero
+	ORD = []
+	for sx in range(3):
+		for sy in range(3):
+			for mj in range(2):
+				hs = [1, 3, -1][sx]
+				vs = [0, 2, -1][sy]
+				o = []
+				if mj == 0:
+					if hs >= 0:
+						o.append(hs)
+					if vs >= 0:
+						o.append(vs)
+				else:
+					if vs >= 0:
+						o.append(vs)
+					if hs >= 0:
+						o.append(hs)
+				if len(o) == 0:
+					o = [0, 1, 2, 3]
+				op = (o[0] + 2) % 4
+				for e in [0, 1, 2, 3]:
+					if not (e in o) and e != op:
+						o.append(e)
+				for e in [0, 1, 2, 3]:
+					if not (e in o):
+						o.append(e)
+				ORD.append(o)
 
 
 def roomy(start, low, need):
@@ -1752,6 +2019,149 @@ def safe(c, ch, low, need):
 		if g != ch and g >= 0 and occ[g] >= low:
 			return roomy(c, low, need)
 	return True
+
+
+def chk(c, low, need, bt):
+	o = NB2[c]
+	m = 0
+	if occ[o[0]] >= low:
+		m = 1
+	if occ[o[1]] >= low:
+		m += 2
+	if occ[o[2]] >= low:
+		m += 4
+	if occ[o[3]] >= low:
+		m += 8
+	v = MT[m]
+	if v == 4:
+		return True
+	if v >= 0:
+		q = COR[c]
+		if v < 4:
+			if occ[q[v]] < low:
+				return True
+		elif occ[q[v - 10]] < low and occ[q[MT2[m]]] < low:
+			return True
+	return sides(c, o, low, need, bt)
+
+
+def sides(c, o, low, need, bt):
+	# c splits the free cells around it: grow each side breadth first, a level at a time, until
+	# at most one side is still open; a side is good when it reaches need cells, a body cell that
+	# is gone by then, or another side. Sides that close small are marked bad for the next move.
+	global SPLITS
+	SPLITS += 1
+	fills2[0] += 4
+	f = fills2[0]
+	vis2[c] = f
+	fr = []
+	st = []
+	lb = []
+	sc = []
+	for e in o:
+		if occ[e] < low:
+			vis2[e] = f + len(fr) + 1
+			fr.append([e])
+			st.append(0)
+			lb.append(vis2[e])
+			sc.append(e)
+	ns = len(fr)
+	if ns == 0:
+		for e in o:
+			if occ[e] < low + 1:
+				return True
+		return False
+	cnt = []
+	for i in range(ns):
+		cnt.append(1)
+	opn = ns
+	dd = 0
+	while opn > 1:
+		dd += 1
+		gone = low + dd - 1
+		for i in range(ns):
+			if st[i] == 0:
+				me = lb[i]
+				ahead = []
+				for x in fr[i]:
+					for e in NB2[x]:
+						oc = occ[e]
+						if oc < low:
+							w = vis2[e]
+							if w < f:
+								vis2[e] = me
+								ahead.append(e)
+							elif w != me and w != f:
+								st[i] = 1
+						elif oc < gone and e != c:
+							st[i] = 1
+				cnt[i] += len(ahead)
+				if st[i] == 0:
+					if cnt[i] >= need:
+						st[i] = 1
+					elif len(ahead) == 0:
+						st[i] = 2
+				if st[i] != 0:
+					opn -= 1
+				fr[i] = ahead
+	good = False
+	for i in range(ns):
+		if st[i] == 2:
+			bad[sc[i]] = bt
+		else:
+			good = True
+	return good
+
+
+def plan(ch, ax, ay, t, low, need):
+	# a Manhattan path (x then y, or y then x) to the apple, every cell free when it is reached
+	# and passing the split test; the path's cells are written into occ. Returns [cells, dirs].
+	dx = ax - PX[ch]
+	dy = ay - PY[ch]
+	hd = 1
+	if dx < 0:
+		hd = 3
+		dx = -dx
+	vd = 0
+	if dy < 0:
+		vd = 2
+		dy = -dy
+	n = dx + dy
+	for var in range(2):
+		if var == 1 and (dx == 0 or dy == 0):
+			return None
+		cells = []
+		olds = []
+		ds = []
+		c = ch
+		ok = True
+		for i in range(1, n + 1):
+			if var == 0:
+				if i <= dx:
+					d = hd
+				else:
+					d = vd
+			elif i <= dy:
+				d = vd
+			else:
+				d = hd
+			c = NB2[c][d]
+			li = low + i - 1
+			if occ[c] >= li or bad[c] == t + i - 1:
+				ok = False
+				break
+			cells.append(c)
+			ds.append(DIRS[d])
+			olds.append(occ[c])
+			occ[c] = t + i
+			if not chk(c, li, need, t + i):
+				ok = False
+				break
+		if ok:
+			return [cells, ds]
+		for j in range(len(cells)):
+			occ[cells[j]] = olds[j]
+	return None
 
 
 def free_step(ch, ax, ay, low, need):
@@ -1801,12 +2211,96 @@ def play():
 	ax = 0
 	ay = 0
 	k = 0
-	lining = FREE_LIMIT <= 0
+	lining = True
 	m = 0
 	cum = 0
 	last = False
 	done = False
-	while True:
+	global SPLITS
+	global FALLS
+	SPLITS = 0
+	FALLS = 0
+	tried = -1
+	while k < FREE_LIMIT:
+		if ch == ca:
+			if last:
+				done = True
+				break
+			k += 1
+			ax = nxt[0]
+			ay = nxt[1]
+			ca = IDX[ax][ay]
+		low = t + 1 - k
+		need = k + ROOM
+		if PLAN and tried != k:
+			tried = k
+			pl = plan(ch, ax, ay, t, low, need)
+			if pl != None:
+				cells = pl[0]
+				ds = pl[1]
+				for j in range(len(cells)):
+					if not move(ds[j]):
+						done = True
+						break
+					t += 1
+					hist[t % S] = cells[j]
+				if done:
+					break
+				ch = ca
+				if get_entity_type() != Entities.Apple:
+					done = True
+					break
+				nxt = measure()
+				if nxt == None:
+					last = True
+				continue
+		dx = ax - PX[ch]
+		dy = ay - PY[ch]
+		if dx > 0:
+			s = 0
+		elif dx < 0:
+			s = 6
+		else:
+			s = 12
+		if dy < 0:
+			s += 2
+		elif dy == 0:
+			s += 4
+		if abs(dx) < abs(dy):
+			s += 1
+		nbs = NB2[ch]
+		e = -1
+		fb = -1
+		bt = t + 1
+		for d in ORD[s]:
+			c = nbs[d]
+			if occ[c] < low and bad[c] != t:
+				if fb < 0:
+					fb = d
+				if chk(c, low, need, bt):
+					e = d
+					break
+		if e < 0:
+			FALLS += 1
+			e = fb
+			if e < 0:
+				done = True
+				break
+		ch = nbs[e]
+		if not move(DIRS[e]):
+			done = True
+			break
+		t += 1
+		hist[t % S] = ch
+		occ[ch] = t
+		if ch == ca:
+			if get_entity_type() != Entities.Apple:
+				done = True
+				break
+			nxt = measure()
+			if nxt == None:
+				last = True
+	while not done:
 		if ch == ca:
 			if last:
 				done = True
@@ -1865,33 +2359,30 @@ def play():
 				break
 		elif k >= FREE_LIMIT:
 			lining = True
-	while not done and k < SHORTCUT_LIMIT:
+	while not done and k < K2:
 		if ch == ca:
 			if last:
 				done = True
 				break
 			k += 1
 			ca = IDX[nxt[0]][nxt[1]]
-		t += 1
-		dt = (hist[(t - k) % S] - ch - 1) % S + 1 - MARGIN
-		lim = (ca - ch) % S
-		if dt < lim:
-			lim = dt
-		ds = AHEAD[ch]
-		d = 1
-		way = NEXT[ch]
-		for j in range(len(ds)):
-			if ds[j] <= lim:
-				d = ds[j]
-				way = WAY[ch][j]
-				break
-		if not move(way):
+		L = (hist[(t + 1 - k) % S] - ch - 1) % S + 1 - MARGIN
+		ao = (ca - ch) % S
+		if ao <= L:
+			L = ao
+		elif L <= 0:
 			done = True
 			break
-		ch += d
-		if ch >= S:
-			ch -= S
-		hist[t % S] = ch
+		while L > 0:
+			ds = AHEAD[ch]
+			j = 0
+			while ds[j] > L:
+				j += 1
+			move(WAY[ch][j])
+			L -= ds[j]
+			ch = TO[ch][j]
+			t += 1
+			hist[t % S] = ch
 		if ch == ca:
 			if get_entity_type() != Entities.Apple:
 				done = True
@@ -1899,28 +2390,150 @@ def play():
 			nxt = measure()
 			if nxt == None:
 				last = True
-	while not done:
-		if ch == ca:
-			if last:
-				move(NEXT[ch])
+	if HALVES:
+		while not done:
+			if ch == ca:
+				if last:
+					move(NEXT[ch])
+					break
+				k += 1
+				ca = IDX[nxt[0]][nxt[1]]
+			far = ca
+			if far < ch:
+				far += S
+			for p in range(ch, far):
+				move(WALK[p])
+			ch = ca
+			if get_entity_type() != Entities.Apple:
 				break
-			k += 1
-			ca = IDX[nxt[0]][nxt[1]]
-		far = ca
-		if far < ch:
-			far += S
-		for p in range(ch, far):
-			if not move(WALK[p]):
-				done = True
+			nxt = measure()
+			if nxt == None:
+				last = True
+	elif not done:
+		N = SN
+		W = N - 1
+		nb = NBLK
+		blast = []
+		sst = []
+		sj = []
+		sm = []
+		for b in range(nb):
+			blast.append(-S - 2)
+			sst.append(b)
+			sj.append(0)
+			sm.append(0)
+		for q in range(t - k, t):
+			c = hist[q % S]
+			if PX[c] > 0:
+				blast[PY[c] // 4] = q
+		x = PX[ch]
+		y = PY[ch]
+		if x == 0:
+			seg = nb
+			i = N - 1 - y
+		else:
+			seg = y // 4
+			i = RPOS[0][0][x * 4 + y % 4]
+		at = ch == ca
+		while True:
+			if at:
+				if last:
+					if seg == nb:
+						if i < N - 1:
+							move(South)
+						else:
+							move(East)
+					else:
+						D = RDIR[sj[seg]][sm[seg]]
+						if i < len(D):
+							move(D[i])
+						elif seg + sj[seg] == nb - 1:
+							move(West)
+						else:
+							move(North)
+					break
+				k += 1
+				ax = nxt[0]
+				ay = nxt[1]
+			else:
+				ax = PX[ca]
+				ay = PY[ca]
+			if ax == 0:
+				sa = nb
+				ia = N - 1 - ay
+			else:
+				sa = sst[ay // 4]
+				ia = RPOS[sj[sa]][sm[sa]][ax * 4 * (sj[sa] + 1) + ay - 4 * sa]
+			while seg != sa or i > ia:
+				if seg == nb:
+					for q in range(i, N - 1):
+						move(South)
+					move(East)
+					t += N - i
+					seg = 0
+				else:
+					j = sj[seg]
+					D = RDIR[j][sm[seg]]
+					n = len(D)
+					for q in range(i, n):
+						move(D[q])
+					e = seg + j
+					if e == nb - 1:
+						move(West)
+					else:
+						move(North)
+					t += n - i + 1
+					for b in range(seg, e + 1):
+						blast[b] = t - 1
+					seg = e + 1
+				i = 0
+				if seg < nb and ax > 0:
+					ab = ay // 4
+					jn = ab - seg
+					if jn >= 0:
+						e2 = sst[ab] + sj[sst[ab]]
+						low = t + 1 - k
+						free = True
+						for b in range(seg, e2 + 1):
+							if blast[b] >= low:
+								free = False
+						if free:
+							ry = ay - 4 * ab
+							for b in range(seg, e2 + 1):
+								sst[b] = b
+								sj[b] = 0
+								sm[b] = 0
+							if SKIP and jn > 0 and ry <= 2 and ax < W:
+								sj[seg] = jn
+								sm[seg] = (ax - 1) // 2
+								for b in range(seg, ab + 1):
+									sst[b] = seg
+							elif jn == 0:
+								la = ax * 4 + ry
+								bm = 0
+								bi = RPOS[0][0][la]
+								for m in range(1, NMODES):
+									if RPOS[0][m][la] < bi:
+										bi = RPOS[0][m][la]
+										bm = m
+								sm[seg] = bm
+							sa = sst[ab]
+							ia = RPOS[sj[sa]][sm[sa]][ax * 4 * (sj[sa] + 1) + ay - 4 * sa]
+			if seg == nb:
+				for q in range(i, ia):
+					move(South)
+			else:
+				D = RDIR[sj[seg]][sm[seg]]
+				for q in range(i, ia):
+					move(D[q])
+			t += ia - i
+			i = ia
+			at = True
+			if get_entity_type() != Entities.Apple:
 				break
-		if done:
-			break
-		ch = ca
-		if get_entity_type() != Entities.Apple:
-			break
-		nxt = measure()
-		if nxt == None:
-			last = True
+			nxt = measure()
+			if nxt == None:
+				last = True
 	change_hat(Hats.Straw_Hat)
 	return k
 
