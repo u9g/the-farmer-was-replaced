@@ -5585,7 +5585,9 @@ macro_rules! cur_scope {
 fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
     'frames: loop {
         let fi = vm.frames.len() - 1;
-        let code = vm.frames[fi].code.clone();
+        // Every Code is also held by its node's cache (code_of) for as long as the tree lives, which
+        // outlasts the run: borrowed, not counted.
+        let code: &Code = unsafe { &*Rc::as_ptr(&vm.frames[fi].code) };
         let depth_off = vm.frames[fi].depth_off;
         let mut pc = vm.frames[fi].pc;
         let ops = &code.ops;
@@ -6162,7 +6164,7 @@ fn vm_loop(st: &StRef, vm: &mut Vm) -> Res {
                     }
                 }
                 op => {
-                    let (flow, next) = vm_cold(op, st, vm, fi, &code, depth_off, pc)?;
+                    let (flow, next) = vm_cold(op, st, vm, fi, code, depth_off, pc)?;
                     pc = next;
                     match flow {
                         Flow::Next => {}
@@ -6192,7 +6194,7 @@ enum Flow {
 
 /// The instructions run rarely, kept out of vm_loop so that its hot path stays small.
 #[inline(never)]
-fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Rc<Code>, depth_off: u32, pc: usize) -> Result<(Flow, usize), Ctrl> {
+fn vm_cold(op: Op, st: &StRef, vm: &mut Vm, fi: usize, code: &Code, depth_off: u32, pc: usize) -> Result<(Flow, usize), Ctrl> {
     let mut pc = pc;
     let pc = &mut pc;
     let ops = &code.ops;
