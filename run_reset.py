@@ -613,14 +613,10 @@ def wsub_job(i, d, goal, b):
 						while not can_harvest():
 							pass
 						harvest()
-						if get_water() < 0.25 and num_items(Items.Water) >= 1:
-							use_item(Items.Water)
 						plant(Entities.Tree)
 					else:
 						if e != None:
 							harvest()
-						if get_water() < 0.25 and num_items(Items.Water) >= 1:
-							use_item(Items.Water)
 						plant(Entities.Tree)
 				elif get_ground_type() == Grounds.Soil:
 					# back to grassland, so grass stands here and regrows by itself
@@ -756,7 +752,7 @@ def step_dir(x0, y0, x1, y1):
 # Water: a cell below PK_WLO gets one water whenever there is any. Water stays in the soil (it
 # loses about 1% a second), so it is spread thin over many cells rather than poured on a few.
 
-PK_WLO = 0.25
+PK_WLO = 0.4
 PK_FA = 2
 
 
@@ -769,8 +765,8 @@ def pk_wet2():
 	# a replanted cell is likely to be among the last to grow: water it more
 	w = get_water()
 	s = num_items(Items.Water)
-	if w < 0.5 and s >= 1:
-		use_item(Items.Water, min(s, 3 - w // 0.25))
+	if w < 0.75 and s >= 1:
+		use_item(Items.Water, min(s, (1 - w) // 0.25))
 
 
 def pk_job(i, d, a):
@@ -835,7 +831,6 @@ def pk_job(i, d, a):
 						harvest()
 					if num_items(Items.Carrot) < seed:
 						return 0
-					soil()
 					plant(Entities.Pumpkin)
 					pk_wet2()
 					if not alone:
@@ -1048,12 +1043,6 @@ MZ_GY = 1
 MZ_WAIT = 12
 MZ_RESCUE = 1.0
 MZ_PARKING = True
-MZ_PARK_MIN = 2
-MZ_NEXT = True
-MZ_EXP_USE = 2
-MZ_COST = 0
-MZ_GOAL = 0
-MZ_NEXT2 = True
 
 
 def mz_starts(n, d):
@@ -1222,8 +1211,6 @@ def mz_explore(si):
 			if (c + DX[k] + DY[k] * n) in dp:
 				continue
 			move(DIRS[k])
-			if len(si) <= MZ_EXP_USE and get_entity_type() == Entities.Treasure and num_items(Items.Gold) < MZ_GOAL:
-				use_item(Items.Weird_Substance, MZ_COST)
 			stack.append(k)
 			nd = dp[c] + 1
 			c = c + DX[k] + DY[k] * n
@@ -1455,8 +1442,7 @@ def mz_serve(goal, per, cost, g0, park):
 				if get_entity_type() == Entities.Treasure:
 					harvest()
 				return 0
-			ok = use_item(Items.Weird_Substance, cost)
-			if not ok:
+			if not use_item(Items.Weird_Substance, cost):
 				g = num_items(Items.Gold)
 				if g >= lim and get_entity_type() == Entities.Treasure:
 					harvest()
@@ -1465,40 +1451,27 @@ def mz_serve(goal, per, cost, g0, park):
 						return 2
 			until = get_time() + rep
 			if park:
-				nxt = -1
-				if ok and MZ_NEXT:
-					# where the treasure goes next: if it is mine, go straight there
-					t = measure()
-					while t != None and t[0] + t[1] * n == c:
-						t = measure()
-					if t != None:
-						nxt = t[0] + t[1] * n
-				if nxt in own:
-					pass
-				elif c in paths:
+				if c in paths:
 					p = paths[c]
-					# on the way back, look for walls that came down, then re-plan
-					x = c
-					got = mz_try(x)
-					for i in range(len(p) - 1, -1, -1):
-						if MZ_NEXT2:
-							t = measure()
-							if t != None:
-								y = t[0] + t[1] * n
-								if y != nxt and y in own:
-									break
-						k = p[i]
-						move(DIRS[BACK[k]])
-						x = x - DX[k] - DY[k] * n
-						if mz_try(x):
-							got = True
-					if got:
-						paths = mz_paths(home)
-						MZ_PATH = paths
-					cur = x
+					if MZ_SHORT:
+						# on the way back, look for walls that came down, then re-plan
+						x = c
+						got = mz_try(x)
+						for i in range(len(p) - 1, -1, -1):
+							k = p[i]
+							move(DIRS[BACK[k]])
+							x = x - DX[k] - DY[k] * n
+							if mz_try(x):
+								got = True
+						if got:
+							paths = mz_paths(home)
+							MZ_PATH = paths
+					else:
+						for i in range(len(p) - 1, -1, -1):
+							move(DIRS[BACK[p[i]]])
 				else:
 					mz_walk(cur, home)
-					cur = home
+				cur = home
 			while get_time() < until:
 				pass
 
@@ -1516,14 +1489,10 @@ def mz_life(me, goal, stop, st, start_at, park):
 		g -= 1
 	MZ_GY = g
 	MZ_GX = len(st) // g
-	global MZ_COST
-	global MZ_GOAL
 	MZ_N = n
 	MZ_ME = me
 	m = lvl_mult(Unlocks.Mazes)
 	cost = n * m
-	MZ_COST = cost
-	MZ_GOAL = goal
 	per = n * n * m
 	si = {}
 	for i in range(len(st)):
@@ -1589,7 +1558,7 @@ def maze_round(s, goal):
 	n = get_world_size()
 	d = min(max_drones(), n * n)
 	st = mz_starts(n, d)
-	park = MZ_PARKING and d >= MZ_PARK_MIN
+	park = MZ_PARKING and d >= 4
 	clear()
 	act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
 	# farthest first, so the walks overlap the spawns
@@ -2722,38 +2691,38 @@ PLAN = [
 	(Unlocks.Expand, 2),
 	(Unlocks.Carrots, 1),
 	(Unlocks.Speed, 3),
+	(Unlocks.Grass, 2),
 	(Unlocks.Expand, 3),
 	(Unlocks.Trees, 1),
-	(Unlocks.Trees, 2),
-	(Unlocks.Carrots, 2),
-	(Unlocks.Watering, 2),
-	(Unlocks.Expand, 4),
-	(Unlocks.Carrots, 3),
-	(Unlocks.Grass, 2),
-	(Unlocks.Grass, 3),
 	(Unlocks.Watering, 1),
+	(Unlocks.Trees, 2),
+	(Unlocks.Watering, 2),
+	(Unlocks.Carrots, 2),
+	(Unlocks.Carrots, 3),
+	(Unlocks.Grass, 3),
+	(Unlocks.Expand, 4),
 	(Unlocks.Sunflowers, 1),
-	(Unlocks.Pumpkins, 1),
 	(Unlocks.Speed, 4),
 	(Unlocks.Fertilizer, 1),
+	(Unlocks.Trees, 3),
 	(Unlocks.Mazes, 1),
 	(Unlocks.Megafarm, 1),
 	(Unlocks.Watering, 3),
-	(Unlocks.Polyculture, 1),
-	(Unlocks.Trees, 3),
 	(Unlocks.Grass, 4),
-	(Unlocks.Speed, 5),
-	(Unlocks.Expand, 5),
 	(Unlocks.Watering, 4),
-	(Unlocks.Carrots, 4),
+	(Unlocks.Speed, 5),
+	(Unlocks.Pumpkins, 1),
+	(Unlocks.Expand, 5),
 	(Unlocks.Pumpkins, 2),
+	(Unlocks.Polyculture, 1),
+	(Unlocks.Carrots, 4),
 	(Unlocks.Watering, 5),
 	(Unlocks.Pumpkins, 3),
 	(Unlocks.Pumpkins, 4),
 	(Unlocks.Megafarm, 2),
 	(Unlocks.Cactus, 1),
-	(Unlocks.Cactus, 2),
 	(Unlocks.Expand, 6),
+	(Unlocks.Cactus, 2),
 	(Unlocks.Mazes, 2),
 	(Unlocks.Mazes, 3),
 	(Unlocks.Megafarm, 3),
