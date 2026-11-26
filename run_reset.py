@@ -359,19 +359,53 @@ def mixed_job(i, d, need, flags):
 		return 0
 	# one drone, no polyculture: pass after pass until the current unlock is affordable;
 	# a torus walk (n - 1 steps north per column, then east) visits n * n cells in n * n moves
+	small = w * n <= 3
 	while True:
+		lt = lvl_mult(Unlocks.Trees)
+		lc = lvl_mult(Unlocks.Carrots)
+		YC[Entities.Tree] = 5 * lt
+		YC[Entities.Bush] = lt
+		YC[Entities.Carrot] = lc
+		sun_on = SUN_STRIP and w >= 6 and num_unlocked(Unlocks.Sunflowers) > 0
+		trees = num_unlocked(Unlocks.Trees) > 0
+		plant_on = num_unlocked(Unlocks.Plant) > 0
+		carrots_on = num_unlocked(Unlocks.Carrots) > 0
 		for x in range(w):
 			if get_pos_x() != x:
 				go(x, get_pos_y())
-			ce = choose(True)
-			co = choose(False)
-			if ce == co and not POLY and num_unlocked(Unlocks.Plant) > 0:
-				# a mix of crop types lets some plants find their companion (x5 even before polyculture)
-				if ce == Entities.Grass:
-					co = Entities.Bush
-				else:
-					co = Entities.Grass
-			sx = SUN_STRIP and x < SUN_COLS and w >= 6 and num_unlocked(Unlocks.Sunflowers) > 0
+			sx = sun_on and x < SUN_COLS
+			if not sx:
+				# the crops for the even and the odd cells of this column (choose(True), choose(False))
+				sh = short(Items.Hay)
+				ce = Entities.Grass
+				co = Entities.Grass
+				be = sh
+				bo = sh
+				if plant_on:
+					s = max(short(Items.Wood), short(Items.Weird_Substance))
+					if s > sh:
+						if not trees:
+							be = s
+							bo = s
+							ce = Entities.Bush
+							co = Entities.Bush
+						else:
+							be = s
+							ce = Entities.Tree
+				if carrots_on:
+					s = short(Items.Carrot)
+					if s > be or s > bo:
+						if carrot_ok():
+							if s > be:
+								ce = Entities.Carrot
+							if s > bo:
+								co = Entities.Carrot
+				if ce == co and plant_on:
+					# a mix of crop types lets some plants find their companion (x5 even before polyculture)
+					if ce == Entities.Grass:
+						co = Entities.Bush
+					else:
+						co = Entities.Grass
 			for k in range(n):
 				if sx:
 					sun_cell()
@@ -380,10 +414,10 @@ def mixed_job(i, d, need, flags):
 						c = ce
 					else:
 						c = co
-					if w * n <= 3:
+					if small:
 						tend_wait(c)
 					else:
-						tend_plain(c)
+						tend_fast(c)
 				if k < n - 1 or w == 1:
 					move(North)
 		cur = NEED[0]
@@ -395,6 +429,44 @@ def mixed_job(i, d, need, flags):
 			return 0
 		for k in PEND:
 			PEND[k] = 0
+
+
+YC = {Entities.Grass: 0}
+IT = {Entities.Carrot: Items.Carrot, Entities.Grass: Items.Hay, Entities.Bush: Items.Wood, Entities.Tree: Items.Wood}
+
+
+def carrot_ok():
+	c = get_cost(Entities.Carrot)
+	for it in c:
+		if num_items(it) < c[it]:
+			return False
+	return True
+
+
+def tend_fast(c):
+	# tend_plain with the yields cached for the pass
+	e = get_entity_type()
+	if e == Entities.Grass:
+		if c == Entities.Grass:
+			if can_harvest():
+				harvest()
+			if get_ground_type() == Grounds.Soil:
+				till()
+			return
+		harvest()
+	elif e != None:
+		if not can_harvest():
+			return
+		harvest()
+	if c == Entities.Grass:
+		if get_ground_type() == Grounds.Soil:
+			till()
+		return
+	if c == Entities.Carrot:
+		if get_ground_type() != Grounds.Soil:
+			till()
+	if plant(c):
+		PEND[IT[c]] += YC[c]
 
 
 def tend_wait(c):
