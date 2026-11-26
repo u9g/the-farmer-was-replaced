@@ -10,9 +10,9 @@
 # Gates join the strips between walls: on wall diagonal d, every tile whose x - y is a multiple of
 # 12 (shifted by 6 plus the parity of d on every other wall), and the end tile of a diagonal too
 # short to hold one. 741 tiles hold a cactus; a harvest of that is about 17.6M, so two harvests
-# make the 33,554,432 goal (about 13.9s simulated). ROLE below was generated offline from these
+# make the 33,554,432 goal (about 13.7s simulated). ROLE below was generated offline from these
 # rules. Gates and the tiles next to them are sorted greedily (swap in the most inverted
-# neighbour), in two sweeps of each column after planting.
+# neighbour), in two sweeps of each column after planting (three when the first harvest came up short).
 #
 # One drone per column. Even columns start at the bottom and odd ones at the top, and every drone
 # turns round each time, so neighbouring columns always walk in opposite directions. A pair across
@@ -28,7 +28,10 @@ GOAL = 33554432
 N = get_world_size()
 
 SWEEPS = 2
-SORT_SLOTS = 96
+# Slots per sweep, and the harvest size above which a field gets an extra sweep.
+SWEEP_SLOTS = 48
+TIGHT = 733
+FULL = 741
 REPS = 3
 PLANT_SLOTS = 70
 TILL_SLOTS = 26
@@ -183,6 +186,7 @@ def worker(x, t0):
 	while True:
 		up = y == 0
 		wait_until(t0)
+		got = num_items(Items.Cactus)
 		# Plant the column end to end. Every low/high pair is checked once, by whichever drone
 		# plants its second tile: the column's own drone for vertical pairs, and for pairs across
 		# columns the drone walking up from row 16 on and the one walking down below it.
@@ -213,12 +217,19 @@ def worker(x, t0):
 			if 0 <= y + dy and y + dy < N:
 				move(step)
 				y += dy
-		th = t0 + SLOT * (PLANT_SLOTS + extra + SORT_SLOTS)
+		# A field gets one more sweep when it can finish the goal but only if it comes out almost
+		# perfect (the first harvest came up short). Every drone reads the count at the same instant (t0), so all
+		# agree.
+		sweeps = SWEEPS
+		need = GOAL - got
+		if need > 32 * TIGHT * TIGHT and need <= 32 * FULL * FULL:
+			sweeps = SWEEPS + 1
+		th = t0 + SLOT * (PLANT_SLOTS + extra + sweeps * SWEEP_SLOTS)
 		wait_until(t0 + SLOT * (PLANT_SLOTS + extra))
 		extra = 0
 		# Sweep end to end while another whole sweep fits before the harvest: low tiles check
 		# their north and east pairs, gates and their neighbours swap in the most inverted one.
-		for _ in range(SWEEPS):
+		for _ in range(sweeps):
 			step = North
 			dy = 1
 			if y > N // 2:
