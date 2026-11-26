@@ -50,6 +50,9 @@ cargo +nightly -Zscript path/to/tfwr_sim.rs cactus.py cactus_new.py --seed 1 --s
 | `--quiet` | hide the script's `print` / `quick_print` output |
 | `--brief` | one line per script, sorted by rate |
 | `--leaderboard NAME` | run it as a leaderboard attempt, as below |
+| `--profile` | report where the time goes, by drone, unlock, function and line |
+| `--whatif` | leaderboard runs: what a 20% improvement in each of ticks, compute, growth and each item would save |
+| `--tweak name=factor` | change a rule for a what-if: `speed`, `compute`, `grow`, `cost.<item>`, `yield.<item>` |
 
 ### Leaderboard runs
 
@@ -68,6 +71,19 @@ Leaderboards.cactus with cactus_lb_entry.py
 ```
 
 The game scored the same script 57.7 s. Mining DLC boards are not supported.
+
+### Where the time goes
+
+`--profile` splits a run's time into actions by kind, interpreter work, polling and `wait_for`, for
+the main drone (whose time is the run's) and for all drones against the drone limit. It lists each
+unlock with how long it took, the cost item that held it up and how long it sat affordable before
+the script bought it, then the functions and source lines that took the most time. `--whatif`
+reruns the same seeds with one thing 20% better each time (every tick, interpreter work, plant
+growth, each item's share of unlock costs) and ranks what each would save:
+
+```
+cargo +nightly -Zscript path/to/tfwr_sim.rs run_reset_lb.py --seed 1 --seeds 8 --profile --whatif
+```
 
 ## Reading the output
 

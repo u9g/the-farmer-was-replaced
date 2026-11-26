@@ -63,6 +63,10 @@ The first run after the file changes takes about 25 s to build (one fully optimi
 | `--quiet` | hide `print` / `quick_print` output (shown under each run's report when there are several runs) |
 | `--brief` | one line per script, sorted by rate: rate, cycle time, mean and smallest harvest, warnings and errors. Implies `--quiet` |
 | `--leaderboard NAME` | run as a leaderboard attempt (see below) |
+| `--profile` | where the time goes: by drone, unlock, function and line (see Finding where to speed up a run) |
+| `--whatif` | leaderboard runs: what a 20% improvement in each of ticks, compute, growth and each item would save |
+| `--whatif-step F` | the improvement `--whatif` tries (default 0.2) |
+| `--tweak name=factor` | change a game rule for a what-if: `speed`, `compute`, `grow`, `cost.<item>`, `yield.<item>` |
 
 World size and drone limit come from the save's `expand` and `megafarm` levels unless overridden.
 
@@ -171,12 +175,62 @@ a search is fast when each step tests many variants, and slow when it tests one.
    line Python model of the grid screens thousands of options before any script is written. Check
    the winner in the simulator; the model has no tick costs.
 
+## Finding where to speed up a run (--profile, --whatif)
+
+For a long run such as the fastest reset, start here rather than with guesses:
+
+```
+cargo +nightly -Zscript <skill folder>/tfwr_sim.rs run_reset_lb.py --seed 1 --seeds 8 --profile --whatif
+```
+
+`--profile` runs the script `--seeds` times (default 4, same seeds every time) and prints, averaged
+over the runs:
+
+- **The main drone's time**, which is the run's time, split into action kinds (move, harvest,
+  plant, ...), compute (interpreter ticks), polling and wait_for, and the main drone's wait_for
+  time by the function the awaited drone ran. wait_for means the main drone finished its own share
+  first: uneven shares or one slow worker.
+- **All drones' capacity** (drone limit x time) in the same categories, plus "no drone": capacity
+  the script never spawned a drone into.
+- **The unlock timeline**: for each unlock, how long it took since the previous one, the cost item
+  that was last to be on hand (the bottleneck), the *slack* (how long the whole cost was already
+  on hand before the script bought it: the purchase waits for a round to end), the drones running on
+  average against the limit, the main drone's split, and the phase (the deepest function the main
+  drone spent at least half that stretch in) with the top worker functions.
+- **Functions** on the main drone's path by inclusive time (callees included) and self time, then
+  every drone's self time by function, then the top **lines** by main-drone time and by drone time,
+  with the source text.
+
+How time is booked: an action's own ticks go to its kind (a failed action, 1 tick, counts as a
+read). The ticks between one side effect and the next go to wait_for (after a wait_for that had to
+wait), polling (when the side effect is a read that repeats one made since the drone's last action,
+same line and same arguments: the passes of a waiting loop, skipped ones included) or compute.
+Compute and waiting are booked to the line of the side effect that ends them, so a long computation
+shows on the next `move` or read after it. A profiled run costs about 25% more real time.
+
+`--whatif` (leaderboard runs only) runs the same seeds once more per variant, each with one thing
+made `--whatif-step` (default 0.2) better, and lists the time each saves, paired by seed with its
+standard error: every tick faster, compute faster (all but actions), plants growing faster, and
+every unlock needing less of each item. The item lines show what making that item faster is
+worth, counting only what goes into unlocks (not cactus spent on bones, say). A saving near 0 can
+also mean the cut is smaller than one round (1.6M bones still takes four 520k snakes). Runs are
+chaotic, since a small change moves every random draw after it, so use 8 or more seeds and read
+anything inside about two standard errors as noise.
+
+`--tweak` applies one such change to any run, to try a what-if by hand: `speed=1.2` (every tick),
+`compute=0.8` (everything but actions; actions keep their time), `grow=0.8` (growth times),
+`cost.gold=0.5` (every unlock's cost in that item), `yield.hay=1.5` (every harvest of that item,
+whole items with the fraction carried). Comma-separate several or repeat the option. A yield tweak
+can stall a script that infers state from exact counts: run_reset's maze drones count gold per
+treasure to tell when a maze is empty, so `yield.gold` never ends there. None of these exist in the
+game; with no `--tweak` every number is exactly the game's.
+
 ## Optimising a script
 
 1. Copy the script to a new file in the save folder and run both in one command with `--seed 1 --seeds 32`.
 2. Change one thing at a time. Keep a change only if the mean moves by more than the min-max spread.
-3. To see where time goes, add `quick_print(get_time(), get_tick_count())` at phase boundaries and
-   run without `--quiet`.
+3. To see where time goes, run with `--profile` (above), or add `quick_print(get_time(),
+   get_tick_count())` at phase boundaries and run without `--quiet`.
 4. Confirm the winner in the real game (see below) before reporting it as fact.
 
 Costs, from the game's code:
