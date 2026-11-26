@@ -22,9 +22,11 @@ def has_dn(c, R):
 
 
 class Gen:
-    def __init__(self):
+    def __init__(self, walls=None):
         self.KL = int(E("KL", "3"))
-        if E("WALLS"):
+        if walls is not None:
+            self.walls = list(walls)
+        elif E("WALLS"):
             self.walls = [int(x) for x in E("WALLS").split(",")]
         elif E("WSPEC"):
             off, pos = E("WSPEC").split(":")
@@ -113,6 +115,26 @@ class Gen:
             for c in (a, b2):
                 if c in self.complex or any(m in self.complex for d, m in nb(c, R)):
                     self.adj_ok[q] = False
+        self.ring1 = {}
+        if E("RELAX") == "2":
+            # junction owner fixes every edge touching its 1-ring; cuts only forbidden inside
+            # the path interval of 1-ring + mids of the 2-ring
+            self.adj_ok = [True] + [mdist(o[q - 1], o[q]) == 1 for q in range(1, self.NL)] + [True]
+            for ci, comp in enumerate(self.comps):
+                r1 = set(comp)
+                r1 |= set(m for c in comp for d, m in nb(c, R))
+                for x in r1:
+                    self.ring1.setdefault(x, set()).add(ci)
+                reg = set(r1)
+                r2 = set(m for c in r1 for d, m in nb(c, R)) - r1
+                reg |= set(x for x in r2 if x in self.mid or x in self.complex)
+                idxs = sorted(self.pos_of[c] for c in reg)
+                lo, hi = idxs[0], idxs[-1]
+                if hi - lo < 60:
+                    for q in range(lo + 1, hi + 1):
+                        self.adj_ok[q] = False
+                else:
+                    print("WARN wide ring", ci, file=sys.stderr)
         if E("RELAX") == "1":
             # only forbid cuts inside the path interval of each component's 1-ring
             self.adj_ok = [True] + [mdist(o[q - 1], o[q]) == 1 for q in range(1, self.NL)] + [True]
@@ -148,6 +170,13 @@ class Gen:
             return True
         kc, tc, nc = wp[c]
         km, tm, nm = wp[m]
+        if self.ring1:
+            rc = self.ring1.get(c)
+            rm = self.ring1.get(m)
+            if rc and not rm:
+                return True
+            if rm and not rc:
+                return False
         ce = tc == nc - 1
         me = tm == nm - 1
         if ce and not me:
@@ -172,7 +201,7 @@ class Gen:
                     continue
                 seen.add(key)
                 cs = self.comps[self.comp_of[c]]
-            elif c in self.mid:
+            elif c in self.mid and E("INLFM", "1") == "1":
                 key = ("fm", c)
                 cs = [c]
             else:
@@ -209,7 +238,7 @@ class Gen:
             if till:
                 ops.append(("till",))
             ops.append(("plant",))
-            if t < n - K and self.is_pure2(c):
+            if t < n - K and self.is_pure2(c) and not (self.ring1 and c in self.ring1 and any(m not in own for d, m in nb(c, R))):
                 inline.add(c)
                 for d, m in nb(c, R):
                     if m in self.mid or m in self.complex:
@@ -396,6 +425,13 @@ class Gen:
                 stp[t] = s
                 f += s
         forced = [t for t in range(n) if self.kind[cells[t]] in ("cx", "fm", "sf")]
+        if self.ring1:
+            cset = set(cells)
+            pi_ = self.pos_of
+            for t in range(n):
+                c = self.o[cells[t]]
+                if c in self.ring1 and any(pi_[m] not in cset for d, m in nb(c, self.R)):
+                    forced.append(t)
         e0 = min(forced) if forced else n
         # back cost if deferring everything from index e (walk back from n-1 to e)
         # fixed part from forced cells
@@ -412,8 +448,13 @@ class Gen:
         exact = E("BEXACT") == "1"
         INL = E("INL") == "1"
         e0cc = n
-        if INL and E("INLCC", "1") == "0":
-            fc = [t for t in range(n) if self.kind[cells[t]] in ("cx", "sf")]
+        if INL and (E("INLCC", "1") == "0" or E("INLFM", "1") == "0"):
+            kk = []
+            if E("INLCC", "1") == "0":
+                kk += ["cx", "sf"]
+            if E("INLFM", "1") == "0":
+                kk += ["fm"]
+            fc = [t for t in range(n) if self.kind[cells[t]] in kk]
             e0cc = min(fc) if fc else n
         if INL:
             items = self.items_of(cells)
@@ -654,7 +695,15 @@ class Gen:
         if E("BSA") == "1":
             self.plan_bsa(apos, G, LMAX)
             TB = self.TB
-        if E("BMODE") == "2":
+        self.gB = None
+        if E("WALLSB"):
+            gB = Gen(walls=[int(x) for x in E("WALLSB").split(",")])
+            gB.percell()
+            gB.slackA = self.slackA
+            gB.plan_b2(apos, G, LMAX)
+            self.gB = gB
+            self.TB = TB = gB.TB
+        elif E("BMODE") == "2":
             self.plan_b2(apos, G, LMAX)
             TB = self.TB
         if E("BMODE") == "3":
@@ -1136,7 +1185,7 @@ class Gen:
                         if v is None:
                             continue
                         for d in (0, 1):
-                            if dp_ == 0 and d == 1:
+                            if dp_ == 0 and d == 1 and E("BFACE") != "1":
                                 continue
                             if q == b0 + NL and d == 0 and first_d[0] == 1:
                                 pass
@@ -1248,22 +1297,29 @@ class Gen:
                 for t, i in enumerate(cl):
                     wp[o[i]] = (k, t, len(cl))
             return wp
+        gB = self.gB if self.gB is not None else self
         WPA = wpos(self.cellsA)
-        WPB = wpos(self.bch)
+        WPB = {}
+        for kk, cl in enumerate(gB.bch):
+            for t, i in enumerate(cl):
+                WPB[gB.o[i]] = (kk, t, len(cl))
         for k in range(ND):
             self.walkpos = WPA
             opsA, curA, GTA = self.phase_ops(self.cellsA[k], True, pos_end[k], self.KA[k])
             if E("PRET") == "1":
-                pm = path_moves(curA, o[self.bch[k][0]])
+                pm = path_moves(curA, gB.o[gB.bch[k][0]])
                 npre = min(len(pm), int(self.slackA[k] // 201))
+                if k == int(E("HV", "0")) and npre < len(pm):
+                    npre = 0
                 for mm in pm[:npre]:
                     opsA.append(("move", int(mm)))
                     dx, dy = DV[int(mm)]
                     curA = ((curA[0] + dx) % N, (curA[1] + dy) % N)
-            self.walkpos = WPB
-            self.PA.append(("fa%d" % k, opsA, curA, GTA))
-            opsB, curB, GTB = self.phase_ops(self.bch[k], False, curA, self.KB[k])
             self.walkpos = None
+            self.PA.append(("fa%d" % k, opsA, curA, GTA))
+            gB.walkpos = WPB
+            opsB, curB, GTB = gB.phase_ops(gB.bch[k], False, curA, gB.KB[k])
+            gB.walkpos = None
             self.PB.append(("fb%d" % k, opsB, curB, GTB))
 
     def render(self, ph, L):
