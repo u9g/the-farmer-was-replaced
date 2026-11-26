@@ -1394,6 +1394,13 @@ MZ_EXP_USE = 2
 MZ_COST = 0
 MZ_GOAL = 0
 MZ_NEXT2 = True
+# a maze that pays for two Megafarm levels: the main drone buys the first one mid-maze (MZ_BUY gold),
+# then every drone hands half of its cells to a new drone instead of a new maze being made
+MZ_BUY = 0
+MZ_SPENT = 0
+MZ_MD = 0
+MZ_KID = None
+MERGE_MF = True
 
 
 def mz_starts(n, d):
@@ -1726,6 +1733,13 @@ def mz_serve(goal, per, cost, g0, park):
 	last = -1
 	seen = 0
 	while True:
+		if MZ_MD > 0:
+			if MZ_BUY > 0 and MZ_ME == 0 and num_items(Items.Gold) >= MZ_BUY:
+				unlock(Unlocks.Megafarm)
+				log("MZ bought " + str(num_unlocked(Unlocks.Megafarm)))
+			if max_drones() > MZ_MD:
+				MZ_CUR = cur
+				return 3
 		t = measure()
 		if t == None:
 			MZ_CUR = cur
@@ -1843,7 +1857,113 @@ def mz_serve(goal, per, cost, g0, park):
 				pass
 
 
+def mz_split(goal, per, cost, g0, park):
+	# give the half of my cells under one tree edge to a new drone (it starts where I stand)
+	global MZ_OWN
+	global MZ_PARK
+	global MZ_PATH
+	global MZ_KID
+	global MZ_BUY
+	global MZ_LOST
+	n = MZ_N
+	own = MZ_OWN
+	pd = MZ_PD
+	dp = MZ_DP
+	md = 0
+	for x in own:
+		if dp[x] > md:
+			md = dp[x]
+	byd = []
+	for i in range(md + 1):
+		byd.append([])
+	for x in own:
+		byd[dp[x]].append(x)
+	par = {}
+	cnt = {}
+	for x in own:
+		cnt[x] = 1
+		k = pd[x]
+		if k >= 0:
+			par[x] = x - DX[k] - DY[k] * n
+	for L in range(md, 0, -1):
+		for x in byd[L]:
+			cnt[par[x]] += cnt[x]
+	tot = len(own)
+	root = MZ_ROOT
+	best = -1
+	bv = 999999
+	for x in own:
+		if x != root:
+			v = abs(2 * cnt[x] - tot)
+			if v < bv:
+				bv = v
+				best = x
+	if best < 0:
+		return
+	sub = {best: True}
+	for L in range(dp[best] + 1, md + 1):
+		for x in byd[L]:
+			if par[x] in sub:
+				sub[x] = True
+	rest = {}
+	for x in own:
+		if not (x in sub):
+			rest[x] = True
+	ts = len(sub)
+	pa = best
+	for x in sub:
+		if 2 * cnt[x] > ts and dp[x] > dp[pa]:
+			pa = x
+	anc = {}
+	x = best
+	while x != root:
+		x = par[x]
+		anc[x] = True
+	tr = len(rest)
+	pb = root
+	for x in rest:
+		c = cnt[x]
+		if x in anc:
+			c -= ts
+		if 2 * c > tr and dp[x] > dp[pb]:
+			pb = x
+	MZ_BUY = 0
+	MZ_OWN = sub
+	MZ_PARK = pa
+	MZ_PATH = mz_paths(pa)
+	keep = MZ_LOST
+	MZ_LOST = 0
+	MZ_KID = None
+	h = spawn_drone(mz_kid, goal, per, cost, g0, park)
+	MZ_LOST = keep
+	if h == None:
+		MZ_OWN = own
+		MZ_PARK = pb
+		MZ_PATH = mz_paths(pb)
+		return
+	MZ_KID = h
+	MZ_OWN = rest
+	MZ_PARK = pb
+	MZ_PATH = mz_paths(pb)
+
+
+def mz_kid(goal, per, cost, g0, park):
+	global MZ_MD
+	MZ_MD = max_drones()
+	r = mz_serve(goal, per, cost, g0, park)
+	return 0
+
+
 def mz_life(me, goal, stop, st, start_at, park):
+	r = mz_life2(me, goal, stop, st, start_at, park)
+	if MZ_KID != None:
+		wait_for(MZ_KID)
+	return r
+
+
+def mz_life2(me, goal, stop, st, start_at, park):
+	global MZ_MD
+	global MZ_BUY
 	global MZ_N
 	global MZ_ME
 	global MZ_GX
@@ -1886,6 +2006,15 @@ def mz_life(me, goal, stop, st, start_at, park):
 			mz_seek(root, False)
 		mz_explore(si)
 		r = mz_serve(goal, per, cost, g0, park)
+		while r == 3:
+			# the next Megafarm level is bought: its gold is gone, and there are drones to spare
+			sp = MZ_SPENT
+			goal -= sp
+			g0 -= sp
+			MZ_MD = max_drones()
+			mz_split(goal, per, cost, g0, park)
+			MZ_MD = max_drones()
+			r = mz_serve(goal, per, cost, g0, park)
 		if r == 0:
 			return 0
 		act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
@@ -1930,6 +2059,10 @@ def maze_round(s, goal):
 	d = min(max_drones(), n * n)
 	st = mz_starts(n, d)
 	park = MZ_PARKING and d >= MZ_PARK_MIN
+	global MZ_MD
+	MZ_MD = 0
+	if MZ_BUY > 0:
+		MZ_MD = max_drones()
 	clear()
 	act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
 	# farthest first, so the walks overlap the spawns
@@ -3335,6 +3468,9 @@ def farm(item, amount):
 		else:
 			# the maze drones spend about one power a second each: make sure it lasts the round
 			pw = min(max_drones(), n * n) * (min(finds, 600) * 0.22 + 12)
+			if MZ_BUY > 0:
+				f1 = (MZ_BUY - num_items(Items.Gold)) // (n * n * m) + 1
+				pw = min(max_drones(), n * n) * (f1 * 0.22 + 12) + 2 * min(max_drones(), n * n) * ((finds - f1) * 0.22 + 12)
 			if num_unlocked(Unlocks.Sunflowers) > 0 and num_items(Items.Power) < pw:
 				power_round()
 			maze_round(n, amount)
@@ -3467,6 +3603,25 @@ OPENING_WOOD = [(Unlocks.Expand, 2), (Unlocks.Speed, 2), (Unlocks.Carrots, 1)]
 
 
 
+WEIRD_EARLY = True
+
+
+def weird_early(u, mf):
+	n = get_world_size()
+	y = n * n * n * n * lvl_mult(Unlocks.Cactus)
+	short_c = get_cost(u)[Items.Cactus] - num_items(Items.Cactus)
+	if short_c * 2 > y:
+		return False
+	m = lvl_mult(Unlocks.Mazes)
+	if u == Unlocks.Mazes:
+		m = m * 2
+	g = get_cost(mf)[Items.Gold]
+	if MERGE_MF:
+		g = g * 5
+	w = (g // (n * n * m) + 2) * n * m
+	return num_items(Items.Weird_Substance) < w and y // 2 >= w - num_items(Items.Weird_Substance)
+
+
 def run_plan(plan):
 	for i in range(len(plan)):
 		u = plan[i][0]
@@ -3485,6 +3640,18 @@ def run_plan(plan):
 					n = get_world_size()
 					g += ((get_cost(Unlocks.Megafarm)[Items.Gold] - num_items(Items.Gold)) // (n * n) + 2) * n
 				weird_round(g)
+			elif item == Items.Cactus and WEIRD_EARLY and i + 1 < len(plan) and plan[i + 1][0] == Unlocks.Megafarm and num_unlocked(Unlocks.Mazes) > 0 and weird_early(u, plan[i + 1][0]):
+				# the last cactus round before a maze: half its yield as the maze's weird substance
+				farm(Items.Weird_Substance, 1)
+			elif item == Items.Gold and MERGE_MF and u == Unlocks.Megafarm and i + 1 < len(plan) and plan[i + 1][0] == Unlocks.Megafarm and num_unlocked(Unlocks.Megafarm) >= 2:
+				global MZ_BUY
+				global MZ_SPENT
+				c = get_cost(u)[item]
+				MZ_BUY = c
+				MZ_SPENT = c
+				farm(item, c * 5)
+				MZ_BUY = 0
+				MZ_SPENT = 0
 			else:
 				farm(item, get_cost(u)[item])
 
