@@ -874,10 +874,22 @@ SUN_COLS = 2
 SUN_WET = 1.0
 SUN_WN = 4
 SUN_WRES = 0
+# the last power round (nothing else needs water after it): water by petal count, see sun_water
+SUN_GRADED = True
+SUN_WSAFE = 1.06
+# the snake's neighbour tables are built during a power round's wait for its flowers
+SUN_DINO = True
 SUN_MARGIN = 1.1
 SUN_SLACK = 2
 SUN_GROW = 0.3
 SUN_NEW = True
+# a sunflower's petals are drawn anew at every planting: in the last power round (carrots to
+# spare) one planted with fewer than SUN_MINP is cut at once (not grown: nothing lost but its
+# seed) and planted again, so the round has fewer petal levels and fewer passes of its drones.
+# Earlier rounds do not: the extra plantings cost them what the passes save.
+SUN_MINP = 10
+# carrots a round leaves alone when it plants again
+SUN_SEEDS = 100
 
 
 def sun_dist(x0, y0, x1, y1, w, n):
@@ -899,6 +911,9 @@ def sun_plant2(i, d, wet, b):
 	for v in range(16):
 		by.append([])
 	ready = 0
+	minp = 0
+	if num_unlocked(Unlocks.Mazes) >= 4:
+		minp = SUN_MINP
 	# rd[v]: when the last flower with v petals is grown; a level's cuts wait only for its own flowers
 	rd = []
 	for v in range(16):
@@ -925,14 +940,23 @@ def sun_plant2(i, d, wet, b):
 			clear_cell()
 			soil()
 			plant(Entities.Sunflower)
-		if wet > 0:
-			k = min(wet, (SUN_WET - get_water()) // 0.25)
+			m = measure()
+			while m != None and m < minp and num_items(Items.Carrot) > SUN_SEEDS:
+				harvest()
+				plant(Entities.Sunflower)
+				m = measure()
+		m = measure()
+		if m != None and wet[m] > 0:
+			if wet[0] > 0:
+				# by petal count: up to the level this flower's turn in the cutting order needs
+				k = (wet[m] * 0.25 - get_water() + 0.24) // 0.25
+			else:
+				k = min(wet[m], (SUN_WET - get_water()) // 0.25)
 			if k >= 1 and num_items(Items.Water) >= k:
 				use_item(Items.Water, k)
 		t = get_time() + 8.4 / (1 + 3.8 * get_water())
 		if t > ready:
 			ready = t
-		m = measure()
 		if m != None:
 			by[m].append((x, y))
 			if t > rd[m]:
@@ -1006,18 +1030,74 @@ def sun_cut2(i, d, a):
 		mz_life(mz[0][i], mz[1], mz[2], mz[3], mz[4], mz[5])
 
 
+def sun_water(nf, fl, lv):
+	# waters (0.25 each) a flower gets at planting, by petal count (entry 0 marks the list), for
+	# nf flowers (fl a drone) on lv petal levels and the water in stock. The flowers are cut from
+	# 15 petals down, a pass of the drones per level, and a dry one takes up to 8.4 s to grow: a
+	# level that is watered is cut while the dry ones still grow. So the 15s get the most and
+	# every level after them enough to be grown when its turn comes (a turn taken as short as it
+	# can be, so no level is ever late), and the richest such plan the stock covers is taken.
+	# With less than a water a flower the top levels get one each.
+	act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
+	if num_items(Items.Power) > 0:
+		act = act / 2
+	step = act * (fl * 2 / lv + 3)
+	have = (num_items(Items.Water) - SUN_WRES) * lv / nf
+	us = None
+	for u in [1, 2, 3, 4]:
+		g = 8.4 / (1 + 0.95 * u)
+		vs = [u]
+		cost = u
+		for j in range(1, lv):
+			need = (8.4 / (g + j * step) - 1.08) / 0.95
+			k = 1
+			while k < need and k < u:
+				k += 1
+			vs.append(k)
+			cost += k
+		if cost < lv * u:
+			# uneven: the stock must also cover more flowers than usual on the watered levels
+			cost = cost * SUN_WSAFE
+		if cost > have:
+			if u == 1:
+				us = vs
+				for j in range(lv):
+					if us[j] > have:
+						us[j] = 0
+					have -= us[j]
+			break
+		us = vs
+	wl = [1]
+	for v in range(1, 16):
+		wl.append(0)
+	for j in range(lv):
+		wl[15 - j] = us[j]
+	return wl
+
+
 def power_round2(n):
-	wet = min(SUN_WN, (num_items(Items.Water) - SUN_WRES) // n)
 	d = drones()
 	if width() > 1:
 		d = min(max_drones(), width() * get_world_size())
 	b = 0
+	nf = n
 	if SUN_TARGET > 0 and SUN_PART:
 		# plant only what the target needs: 8 power a cut, the drones' own use meanwhile, and the
 		# last 9 flowers (cut once fewer than 10 are left) give almost nothing
 		k = (SUN_TARGET - num_items(Items.Power) + d * SUN_PDR) // (8 * lvl_mult(Unlocks.Sunflowers)) + 12
 		b = k // d + 1
+		nf = min(n, b * d)
+	if num_unlocked(Unlocks.Mazes) >= 4 and SUN_GRADED:
+		wet = sun_water(nf, nf / d, 16 - max(SUN_MINP, 7))
+	else:
+		k = min(SUN_WN, (num_items(Items.Water) - SUN_WRES) // n)
+		wet = [0]
+		for v in range(1, 16):
+			wet.append(k)
 	res = spawn_node(0, d, d, (sun_plant2, wet, b))
+	if SUN_DINO and SUN_TARGET == 0 and num_unlocked(Unlocks.Dinosaurs) > 0 and SN != get_world_size():
+		# the snake's neighbour tables, built by every drone while the sunflowers grow
+		dino_setup()
 	d = len(res)
 	act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
 	if num_items(Items.Power) > 0:
@@ -1055,8 +1135,12 @@ def power_round2(n):
 			T[li] = rl[15 - li] + SUN_GROW
 		tv = T[li]
 		f = tv
+		some = False
 		for i in range(d):
 			c = plans[i][li]
+			if len(c[0]) == 0:
+				continue
+			some = True
 			ti = ts[i] + c[1] * act
 			if ti < tv:
 				ti = tv
@@ -1064,7 +1148,11 @@ def power_round2(n):
 			ts[i] = ti
 			if ti > f:
 				f = ti
-		T.append(f + SUN_SLACK * act)
+		if some:
+			T.append(f + SUN_SLACK * act)
+		else:
+			# a level nobody has a flower in takes no time
+			T.append(tv)
 	mz = None
 	if SUN_MZ != None and d == len(SUN_MZ[2]) and d == MZ_GXS * MZ_GXS:
 		# the cut drones go on to the maze: each takes the start of the block its last cut is in
@@ -2702,6 +2790,19 @@ def get_tables():
 				WALK.append(NEXT[i % SS])
 
 
+DINO_BG = [False]
+
+
+def dino_bg():
+	# the tables the snake needs only later (lining up on the cycle, the block routes), each built
+	# on a drone of its own while the first snake runs
+	global BGT
+	DINO_BG[0] = True
+	BGT = spawn_drone(cyc_tables, 0, 0)
+	if not HALVES:
+		block_setup(SN)
+
+
 def dino_setup():
 	global SN
 	global SS
@@ -2780,9 +2881,7 @@ def dino_setup():
 			NB2.append(e)
 		for e in r[2]:
 			COR.append(e)
-	BGT = spawn_drone(cyc_tables, 0, 0)
-	if not HALVES:
-		block_setup(N)
+	DINO_BG[0] = False
 	z = [0]
 	while len(z) * 2 <= S:
 		z = z + z
@@ -3653,6 +3752,8 @@ def dino_round():
 	clear()
 	if SN != get_world_size():
 		dino_setup()
+	if not DINO_BG[0]:
+		dino_bg()
 	DINO_KT = 1000000000
 	need = DINO_GOAL - num_items(Items.Bone)
 	if need > 0:
