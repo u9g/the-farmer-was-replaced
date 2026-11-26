@@ -9611,10 +9611,12 @@ impl Sim {
     fn use_power(&mut self) {
         let p = item_id("power");
         if self.items[p] > 0.0 {
-            if self.items[p] < self.used_power {
+            // (tweak.power is 1 outside a what-if: the same number)
+            let used = self.used_power * self.tweak.power;
+            if self.items[p] < used {
                 self.items[p] = 0.0;
             } else {
-                self.items[p] -= self.used_power;
+                self.items[p] -= used;
             }
             if self.speed_factor > self.max_speed_factor() {
                 let m = self.max_speed_factor();
@@ -12552,6 +12554,8 @@ struct Tweak {
     ascale: f64,
     /// plants take this many times as long to grow
     grow: f64,
+    /// power use (per tick of every drone) times this; 0: power never runs out
+    power: f64,
     /// whether yield_mul holds anything but 1
     yields: bool,
     /// every collected item multiplied by this, by item id
@@ -12565,7 +12569,7 @@ struct Tweak {
 }
 impl Tweak {
     fn none() -> Tweak {
-        Tweak { speed: 1.0, compute: 1.0, ascale: 1.0, grow: 1.0, yields: false, yield_mul: vec![1.0; ITEM_NAMES.len()], yield_carry: vec![0.0; ITEM_NAMES.len()], costs: false, cost_mul: vec![1.0; ITEM_NAMES.len()] }
+        Tweak { speed: 1.0, compute: 1.0, ascale: 1.0, grow: 1.0, power: 1.0, yields: false, yield_mul: vec![1.0; ITEM_NAMES.len()], yield_carry: vec![0.0; ITEM_NAMES.len()], costs: false, cost_mul: vec![1.0; ITEM_NAMES.len()] }
     }
     #[inline]
     fn action_scale(&self) -> f64 {
@@ -12580,13 +12584,14 @@ impl Tweak {
         for part in s.split(',') {
             let (k, v) = part.split_once('=').ok_or_else(|| format!("--tweak needs name=factor, got {}", part))?;
             let f: f64 = v.parse().map_err(|_| format!("--tweak {}: {} is not a number", k, v))?;
-            if !(f > 0.0) {
+            if !(f > 0.0 || (k == "power" && f == 0.0)) {
                 return Err(format!("--tweak {}: the factor must be above 0", k));
             }
             match k {
                 "speed" => self.speed *= f,
                 "compute" => self.set_compute(self.compute * f),
                 "grow" => self.grow *= f,
+                "power" => self.power *= f,
                 _ => match (k.split_once('.'), k.split_once('.').and_then(|(_, n)| ITEM_NAMES.iter().position(|x| *x == n))) {
                     (Some(("yield", _)), Some(id)) => {
                         self.yield_mul[id] *= f;
@@ -12596,7 +12601,7 @@ impl Tweak {
                         self.cost_mul[id] *= f;
                         self.costs = true;
                     }
-                    _ => return Err(format!("--tweak: unknown {} (one of speed, compute, grow, yield.<item>, cost.<item>)", k)),
+                    _ => return Err(format!("--tweak: unknown {} (one of speed, compute, grow, power, yield.<item>, cost.<item>)", k)),
                 },
             }
         }
@@ -12641,7 +12646,7 @@ struct DProf {
     prev_end: f64,
     /// the function the drone was spawned with (the main file for the main drone)
     root: u32,
-    /// set by a wait_for that has to wait: the awaited drone's root function
+    /// set by a wait_for that has to wait: the awaited drone's call stack
     waiting_on: Option<u32>,
     /// the reads made since the last action (their nodes and arguments)
     reads: Vec<(usize, u64)>,
@@ -12702,13 +12707,17 @@ struct Prof {
     drones: Vec<Option<DProf>>,
     /// game seconds by (segment, call stack, line, category, main drone)
     acc: FxMap<(u32, u32, u32, u8, bool), f64>,
-    /// the main drone's wait_for seconds, by the awaited drone's root function
+    /// the main drone's wait_for seconds, by the awaited drone's call stack
     wait_on: FxMap<u32, f64>,
     segs: Vec<SegInfo>,
     /// drone-seconds of capacity (drone limit x time), by segment
     seg_cap: Vec<f64>,
     cap_t: f64,
     cap_n: i32,
+    /// seconds with sunflowers unlocked but no power in stock (every drone at half speed), by
+    /// segment; and the time this was last brought up to date
+    nopower: Vec<f64>,
+    pw_t: f64,
     /// the inventory every 0.1 s (and at each unlock) since the last unlock
     inv: Vec<(f64, Items)>,
     pend: Option<PPend>,
@@ -12724,6 +12733,7 @@ struct ProfOut {
     wait_on: Vec<(u32, f64)>,
     segs: Vec<SegInfo>,
     seg_cap: Vec<f64>,
+    nopower: Vec<f64>,
 }
 
 impl Prof {
@@ -12744,6 +12754,8 @@ impl Prof {
             seg_cap: vec![0.0],
             cap_t: 0.0,
             cap_n: drones,
+            nopower: vec![0.0],
+            pw_t: 0.0,
             inv: Vec::new(),
             pend: None,
         }
@@ -12819,6 +12831,16 @@ impl Prof {
             *self.acc.entry((self.segs.len() as u32, stack, line, cat, main)).or_insert(0.0) += dt;
         }
     }
+    /// books the time since pw_t as without power if `none`
+    fn power_time(&mut self, t: f64, none: bool) {
+        if t > self.pw_t {
+            if none {
+                let i = self.nopower.len() - 1;
+                self.nopower[i] += t - self.pw_t;
+            }
+            self.pw_t = t;
+        }
+    }
     fn close_cap(&mut self, t: f64) {
         let i = self.seg_cap.len() - 1;
         self.seg_cap[i] += (t - self.cap_t).max(0.0) * self.cap_n as f64;
@@ -12859,6 +12881,7 @@ impl Sim {
         let t = dur_seconds(self.current_time);
         let tsec = dur_seconds(self.op_duration);
         let main = di == self.main_drone_id;
+        prof.power_time(t, self.num_unlocked("sunflowers") > 0 && self.items[item_id("power")] <= 0.0);
         let b = st.borrow();
         let (cat, is_read) = prof_cat(&b.current_side_effect);
         let mut stack = prof.stack_of(&b);
@@ -12937,7 +12960,8 @@ impl Sim {
         let cat = if p.cat < PC_READ && cost_ops <= OPERATION_OPS { PC_READ } else { p.cat };
         prof.add(p.stack, p.line, cat, p.main, cost_ops * p.tsec);
         let wait_root = match p.await_on {
-            Some(id) if awaiting >= 0 => Some(prof.drones.get(id as usize).and_then(|d| d.as_ref()).map_or(0, |d| d.root)),
+            // the awaited drone's call stack as of its last side effect (named in the report)
+            Some(id) if awaiting >= 0 => Some(prof.drones.get(id as usize).and_then(|d| d.as_ref()).map_or(0, |d| d.last.0)),
             _ => None,
         };
         if let Some(d) = prof.drones[di].as_mut() {
@@ -12951,6 +12975,7 @@ impl Sim {
             if lv > level {
                 let t = dur_seconds(self.current_time);
                 prof.close_cap(t);
+                prof.nopower.push(0.0);
                 let t_prev = prof.segs.last().map_or(0.0, |s| s.t);
                 let (bn, ready) = prof_bottleneck(&prof.inv, t_prev, &cost);
                 let multi = unlock_so(name).map_or(false, |s| s.max_level > 1);
@@ -12966,10 +12991,67 @@ impl Sim {
         self.prof = Some(prof);
     }
 
+    /// where every drone is, for the error of a run that does not end: the line it is on (with
+    /// its text), its call stack and whom it waits for; drones at the same place share a line
+    fn drone_report(&self) -> String {
+        let ex = match &self.execution {
+            Some(e) => e,
+            None => return String::new(),
+        };
+        let mut lines: Vec<(String, Vec<usize>)> = Vec::new();
+        for (i, s) in ex.states.iter().enumerate() {
+            let s = match s {
+                Some(s) => s,
+                None => continue,
+            };
+            let b = s.borrow();
+            let place = match unsafe { b.current_executing_node.as_ref() } {
+                Some(n) => {
+                    let ln = n.file.line_of(n.word_start);
+                    let text = std::fs::read_to_string(self.sh.dir.join(format!("{}.py", n.file.name)))
+                        .ok()
+                        .and_then(|t| t.lines().nth(ln.wrapping_sub(1)).map(|l| l.trim().chars().take(60).collect::<String>()))
+                        .unwrap_or_default();
+                    format!("{}.py line {} `{}`", n.file.name, ln, text)
+                }
+                None => "?".to_string(),
+            };
+            let mut fns: Vec<String> = Vec::new();
+            if let Some(vm) = &b.program {
+                for f in vm.frames.iter() {
+                    if let Some(n) = f.code.root.upgrade() {
+                        if let NK::Function { name, .. } = &n.kind {
+                            fns.push(name.to_string());
+                        }
+                    }
+                }
+            }
+            let wait = if b.h().awaited_drone_id >= 0 { format!(", in wait_for(drone {})", b.h().awaited_drone_id) } else { String::new() };
+            let line = format!("{} in {}{}", place, if fns.is_empty() { "<main>".to_string() } else { fns.join(" > ") }, wait);
+            match lines.iter_mut().find(|l| l.0 == line) {
+                Some(l) => l.1.push(i),
+                None => lines.push((line, vec![i])),
+            }
+        }
+        let mut out = String::from("; where the drones are:");
+        for (line, ids) in lines.iter() {
+            let who = if ids.len() == 1 {
+                let pos = self.drones.get(ids[0]).and_then(|d| d.as_ref()).map(|d| format!(" at ({},{})", d.x, d.y)).unwrap_or_default();
+                format!("drone {}{}", ids[0], pos)
+            } else {
+                format!("drones {}", ids.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(","))
+            };
+            out.push_str(&format!("\n      {}: {}", who, line))
+        }
+        out
+    }
+
     fn prof_finish(&mut self) -> Option<Box<ProfOut>> {
         let mut prof = self.prof.take()?;
         let t = dur_seconds(self.current_time);
         prof.close_cap(t);
+        let none = self.num_unlocked("sunflowers") > 0 && self.items[item_id("power")] <= 0.0;
+        prof.power_time(t, none);
         let drones = prof.cap_n;
         prof.segs.push(SegInfo { label: "(script ends)".into(), t, bottleneck: None, ready: t, drones });
         Some(Box::new(ProfOut {
@@ -12981,6 +13063,7 @@ impl Sim {
             wait_on: prof.wait_on.into_iter().collect(),
             segs: prof.segs,
             seg_cap: prof.seg_cap,
+            nopower: prof.nopower,
         }))
     }
 }
@@ -13017,6 +13100,7 @@ struct SegAgg {
     bottleneck: HashMap<String, usize>,
     cap: f64,
     drones: f64,
+    nopower: f64,
     main: [f64; NPC],
     all: [f64; NPC],
     main_incl: HashMap<String, f64>,
@@ -13040,8 +13124,21 @@ fn prof_report(script: &std::path::Path, outs: &[&ProfOut]) {
     for o in outs {
         total += o.total;
         cap_total += o.seg_cap.iter().sum::<f64>();
+        // a worker is named by its job: the first function on its stack that does not spawn
+        // drones itself (fan(job, ...) / spawn_node(...) style helpers are skipped)
+        let mut spawners: HashSet<u32> = HashSet::new();
+        for ((_, stack, _, cat, _), _) in &o.acc {
+            if *cat == 6 {
+                spawners.insert(*o.stacks[*stack as usize].last().unwrap());
+            }
+        }
+        let job_of = |stack: u32| -> String {
+            let st = &o.stacks[stack as usize];
+            let f = st.iter().find(|f| !spawners.contains(f)).unwrap_or(st.last().unwrap());
+            o.fn_names[*f as usize].clone()
+        };
         for (w, dt) in &o.wait_on {
-            *wait_on.entry(o.fn_names[*w as usize].clone()).or_insert(0.0) += dt;
+            *wait_on.entry(job_of(*w)).or_insert(0.0) += dt;
         }
         // segments: labels repeat when a script buys the same level twice in a row; number them
         let mut labels: Vec<String> = Vec::new();
@@ -13068,6 +13165,7 @@ fn prof_report(script: &std::path::Path, outs: &[&ProfOut]) {
                 }
             }
             a.cap += o.seg_cap[i];
+            a.nopower += o.nopower.get(i).cloned().unwrap_or(0.0);
             a.drones += s.drones as f64;
             t_prev = s.t;
         }
@@ -13089,7 +13187,7 @@ fn prof_report(script: &std::path::Path, outs: &[&ProfOut]) {
             if *main {
                 a.main[cat] += dt;
             } else {
-                *a.roots.entry(o.fn_names[st[0] as usize].clone()).or_insert(0.0) += dt;
+                *a.roots.entry(job_of(*stack)).or_insert(0.0) += dt;
             }
             for (k, f) in st.iter().enumerate() {
                 if st[..k].contains(f) {
@@ -13146,18 +13244,21 @@ fn prof_report(script: &std::path::Path, outs: &[&ProfOut]) {
     println!();
     println!("Unlocks. took = time since the previous unlock; last item = the cost item that was last to be on hand;");
     println!("slack = how long the whole cost was on hand before the script bought it; drones = drones running on average");
-    println!("(of the limit); main = the main drone's split; phase = the deepest function the main drone spent half the stretch in.");
+    println!("(of the limit); no power = time with sunflowers unlocked but no power in stock, every drone at half speed;");
+    println!("main = the main drone's split; phase = the deepest function the main drone spent half the stretch in.");
     println!(
-        "  {:>8} {:>7}  {:<18} {:<16} {:>6}  {:>11}  {:<36} {}",
-        "at", "took", "unlock", "last item", "slack", "drones", "main: act / compute / poll / wait", "phase  [workers]"
+        "  {:>8} {:>7}  {:<18} {:<16} {:>6}  {:>11} {:>8}  {:<36} {}",
+        "at", "took", "unlock", "last item", "slack", "drones", "no power", "main: act / compute / poll / wait", "phase  [workers]"
     );
     let mut slack_total = 0.0;
+    let mut nopower_total = 0.0;
     for l in &seg_order {
         let a = &segs[l];
         let r = a.runs;
         let took = a.took / r;
         let slack = a.slack / r;
         slack_total += a.slack / n;
+        nopower_total += a.nopower / n;
         let bn = a.bottleneck.iter().max_by_key(|x| x.1).map(|x| x.0.clone()).unwrap_or_else(|| "-".into());
         let main_t = sum(&a.main);
         let act: f64 = a.main[..PC_READ as usize].iter().sum::<f64>() + a.main[12];
@@ -13184,7 +13285,7 @@ fn prof_report(script: &std::path::Path, outs: &[&ProfOut]) {
         let workers = roots.iter().take(2).filter(|x| *x.1 >= worker_t * 0.1).map(|x| format!("{} {}", x.0, pct(*x.1, worker_t))).collect::<Vec<_>>().join(", ");
         let used = sum(&a.all) / r / took.max(1e-9);
         println!(
-            "  {:>8} {:>7}  {:<18} {:<16} {:>6}  {:>4.1} of {:<3}  {:<36} {}{}",
+            "  {:>8} {:>7}  {:<18} {:<16} {:>6}  {:>4.1} of {:<3} {:>8}  {:<36} {}{}",
             pdur(a.t / r),
             pdur(took),
             l,
@@ -13192,12 +13293,19 @@ fn prof_report(script: &std::path::Path, outs: &[&ProfOut]) {
             pdur(slack),
             used,
             (a.drones / r).round(),
+            if a.nopower > 0.0 { pdur(a.nopower / r) } else { "-".to_string() },
             split,
             phase,
             if workers.is_empty() { String::new() } else { format!("  [{}]", workers) }
         );
     }
-    println!("  total slack {} ({} of the run)", pdur(slack_total), pct(slack_total, total));
+    println!(
+        "  total slack {} ({} of the run); total time without power {} ({} of the run)",
+        pdur(slack_total),
+        pct(slack_total, total),
+        pdur(nopower_total),
+        pct(nopower_total, total)
+    );
 
     // ---- functions
     let mut fi: Vec<(String, [f64; NPC], [f64; NPC])> = fn_incl.into_iter().map(|(k, (mut m, mut a))| {
@@ -13614,7 +13722,7 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
         None => (0, 0),
     };
     let mut sim = Sim::new(sh.clone(), &cfg.unlocks, cfg.items.clone(), seed, override_size, cfg.max_drones);
-    if cfg.tweak.speed != 1.0 || cfg.tweak.compute != 1.0 || cfg.tweak.grow != 1.0 || cfg.tweak.yields || cfg.tweak.costs {
+    if cfg.tweak.speed != 1.0 || cfg.tweak.compute != 1.0 || cfg.tweak.grow != 1.0 || cfg.tweak.power != 1.0 || cfg.tweak.yields || cfg.tweak.costs {
         sim.tweak = cfg.tweak.clone();
         let sf = sim.speed_factor;
         sim.change_execution_speed(sf);
@@ -13651,10 +13759,11 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
         while sim.current_time < limit && sim.error.is_none() && !sim.finished {
             if wall_start.elapsed().as_secs_f64() > wall_limit {
                 sim.error = Some(format!(
-                    "something in this run is taking too long, make an optimization that keeps this run under {}s for whatever code you are running and push it (stopped after {:.1}s of real time at {:.1}s game time)",
+                    "something in this run is taking too long, make an optimization that keeps this run under {}s for whatever code you are running and push it (stopped after {:.1}s of real time at {:.1}s game time){}",
                     wall_limit,
                     wall_start.elapsed().as_secs_f64(),
-                    dur_seconds(sim.current_time)
+                    dur_seconds(sim.current_time),
+                    sim.drone_report()
                 ));
                 break;
             }
@@ -13681,7 +13790,11 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
         }
         if lb.is_some() {
             if !sim.finished && sim.error.is_none() {
-                sim.error = Some(format!("the script had not ended after {:.0}s of game time; a leaderboard run only ends when every drone has returned", LEADERBOARD_MAX_RUN_SECONDS));
+                sim.error = Some(format!(
+                    "the script had not ended after {:.0}s of game time; a leaderboard run only ends when every drone has returned{}",
+                    LEADERBOARD_MAX_RUN_SECONDS,
+                    sim.drone_report()
+                ));
             }
             break;
         }
@@ -14166,6 +14279,9 @@ fn run_profile(base: &Config, first_seed: i32, runs: usize, workers: usize, prof
         let mut t = base.tweak.clone();
         t.grow /= f;
         variants.push((format!("plants grow {}% faster", p), with(t, false)));
+        let mut t = base.tweak.clone();
+        t.power /= f;
+        variants.push((format!("power lasts {}% longer", p), with(t, false)));
         for item in ["hay", "wood", "carrot", "pumpkin", "cactus", "weird_substance", "gold", "bone"] {
             let mut t = base.tweak.clone();
             t.cost_mul[item_id(item)] /= f;

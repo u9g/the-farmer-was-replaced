@@ -195,8 +195,11 @@ over the runs:
 - **The unlock timeline**: for each unlock, how long it took since the previous one, the cost item
   that was last to be on hand (the bottleneck), the *slack* (how long the whole cost was already
   on hand before the script bought it: the purchase waits for a round to end), the drones running on
-  average against the limit, the main drone's split, and the phase (the deepest function the main
-  drone spent at least half that stretch in) with the top worker functions.
+  average against the limit, *no power* (time with sunflowers unlocked but the power stock empty,
+  so every drone ran at half speed), the main drone's split, and the phase (the deepest function
+  the main drone spent at least half that stretch in) with the top worker jobs. A worker is named
+  by its job, the first function on its stack that does not itself spawn drones, so `fan(job, ...)`
+  style spawning helpers are skipped.
 - **Functions** on the main drone's path by inclusive time (callees included) and self time, then
   every drone's self time by function, then the top **lines** by main-drone time and by drone time,
   with the source text.
@@ -210,8 +213,8 @@ shows on the next `move` or read after it. A profiled run costs about 25% more r
 
 `--whatif` (leaderboard runs only) runs the same seeds once more per variant, each with one thing
 made `--whatif-step` (default 0.2) better, and lists the time each saves, paired by seed with its
-standard error: every tick faster, compute faster (all but actions), plants growing faster, and
-every unlock needing less of each item. The item lines show what making that item faster is
+standard error: every tick faster, compute faster (all but actions), plants growing faster, power
+lasting longer, and every unlock needing less of each item. The item lines show what making that item faster is
 worth, counting only what goes into unlocks (not cactus spent on bones, say). A saving near 0 can
 also mean the cut is smaller than one round (1.6M bones still takes four 520k snakes). Runs are
 chaotic, since a small change moves every random draw after it, so use 8 or more seeds and read
@@ -219,11 +222,23 @@ anything inside about two standard errors as noise.
 
 `--tweak` applies one such change to any run, to try a what-if by hand: `speed=1.2` (every tick),
 `compute=0.8` (everything but actions; actions keep their time), `grow=0.8` (growth times),
-`cost.gold=0.5` (every unlock's cost in that item), `yield.hay=1.5` (every harvest of that item,
+`power=0.5` (power drains at half the rate; `power=0` never runs out), `cost.gold=0.5` (every
+unlock's cost in that item), `yield.hay=1.5` (every harvest of that item,
 whole items with the fraction carried). Comma-separate several or repeat the option. A yield tweak
 can stall a script that infers state from exact counts: run_reset's maze drones count gold per
 treasure to tell when a maze is empty, so `yield.gold` never ends there. None of these exist in the
 game; with no `--tweak` every number is exactly the game's.
+
+Power, as the simulator ports it: every tick any drone spends (working, polling, skipped busy
+waits and `wait_for` alike) costs 1/6000 power, and speed doubles while the stock is above 0. Only
+`do_a_flip`, `pet_the_piggy` and `print` (1 s each) and ended drones spend none. So a run whose
+power runs out partway through a long multi-drone round slows to half speed there: look at the
+*no power* column.
+
+A run that never ends (a leaderboard run past two game hours, or any run past its real-time
+limit) fails with the place of every drone: its line and the line's text, its call stack, its cell
+and whom it waits for, drones at the same place on one line. A drone stuck in a loop shows up there
+directly, without adding log lines.
 
 ## Optimising a script
 
