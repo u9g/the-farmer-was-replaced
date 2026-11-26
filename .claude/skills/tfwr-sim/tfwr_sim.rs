@@ -3326,26 +3326,29 @@ impl Shared {
 /// (Execution::hot) so that a pass over them reads a few cache lines instead of every drone's state.
 #[derive(Clone, Copy)]
 struct Hot {
-    op_count: f64,
     target_op_count: f64,
-    last_consumed_op_count: f64,
     awaited_drone_id: i32,
     /// resumes in the current PerformExecutionStep (the game stops at 1000)
     resumes: i32,
-    /// the kind of current_side_effect: SE_NONE, SE_GET_TIME, SE_NUM_ITEMS or SE_OTHER
-    se: u8,
-    /// a drone is in this slot
-    present: bool,
 }
 const SE_NONE: u8 = 0;
 const SE_GET_TIME: u8 = 1;
 const SE_NUM_ITEMS: u8 = 2;
 const SE_OTHER: u8 = 3;
-const HOT_EMPTY: Hot = Hot { op_count: 0.0, target_op_count: 0.0, last_consumed_op_count: 0.0, awaited_drone_id: -1, resumes: 0, se: SE_NONE, present: false };
+const HOT_EMPTY: Hot = Hot { target_op_count: 0.0, awaited_drone_id: -1, resumes: 0 };
+/// Execution::flags bits: a drone is in the slot, it waits for another drone (wait_for), and the
+/// kind of its pending side effect (SE_* << 2)
+const F_PRESENT: u8 = 1;
+const F_AWAIT: u8 = 2;
+const F_SE: u8 = 0b1100;
 
 struct PState {
     /// this drone's slot in Execution::hot (which never moves while the execution lasts)
     hot: *mut Hot,
+    /// and its op count, consumed op count and flags in Execution::ops / lasts / flags
+    opp: *mut f64,
+    lastp: *mut f64,
+    flagp: *mut u8,
     current_side_effect: SE,
     sh: Rc<Shared>,
     module_state: ModuleState,
@@ -3514,6 +3517,9 @@ impl PState {
                 is_expression_static: false,
             },
             hot: std::ptr::null_mut(),
+            opp: std::ptr::null_mut(),
+            lastp: std::ptr::null_mut(),
+            flagp: std::ptr::null_mut(),
             current_side_effect: SE::None,
             current_execute_exception: None,
             random_random: SysRandom::new(random.next()),
@@ -3541,26 +3547,47 @@ impl PState {
     fn h(&self) -> &mut Hot {
         unsafe { &mut *self.hot }
     }
-    fn has_side_effect(&self) -> bool {
-        self.h().se != SE_NONE
+    #[inline(always)]
+    fn op(&self) -> &mut f64 {
+        unsafe { &mut *self.opp }
     }
-    /// sets current_side_effect, keeping its kind in the hot record
+    #[inline(always)]
+    fn last(&self) -> &mut f64 {
+        unsafe { &mut *self.lastp }
+    }
+    #[inline(always)]
+    fn flg(&self) -> &mut u8 {
+        unsafe { &mut *self.flagp }
+    }
+    #[inline(always)]
+    fn has_side_effect(&self) -> bool {
+        *self.flg() & F_SE != 0
+    }
+    /// sets current_side_effect, keeping its kind in the flags
     fn set_se(&mut self, se: SE) {
-        self.h().se = match &se {
+        let k = match &se {
             SE::None => SE_NONE,
             SE::GetTime => SE_GET_TIME,
             SE::NumItems(_) => SE_NUM_ITEMS,
             _ => SE_OTHER,
         };
+        let f = self.flg();
+        *f = (*f & !F_SE) | (k << 2);
         self.current_side_effect = se;
     }
+    /// sets awaited_drone_id, keeping the flag
+    fn set_awaited(&mut self, id: i32) {
+        self.h().awaited_drone_id = id;
+        let f = self.flg();
+        *f = if id >= 0 { *f | F_AWAIT } else { *f & !F_AWAIT };
+    }
     fn add_and_consume_ops(&mut self, ops: f64) {
-        self.h().op_count += ops;
-        self.h().last_consumed_op_count += ops;
+        (*self.op()) += ops;
+        (*self.last()) += ops;
     }
     fn consume_ops(&mut self) -> f64 {
-        let result = self.h().op_count - self.h().last_consumed_op_count;
-        self.h().last_consumed_op_count = self.h().op_count;
+        let result = (*self.op()) - (*self.last());
+        (*self.last()) = (*self.op());
         result
     }
 }
@@ -3589,8 +3616,8 @@ fn set_static(st: &StRef, b: bool) {
 #[inline]
 fn check_inc(st: &StRef, ops: f64) -> bool {
     let s = stm(st);
-    s.h().op_count += ops;
-    s.h().op_count >= s.h().target_op_count || s.has_side_effect()
+    (*s.op()) += ops;
+    (*s.op()) >= s.h().target_op_count || s.has_side_effect()
 }
 
 /// Node.ErrorsAndBreakpoints (breakpoints, step mode and unlock checks are not needed headless)
@@ -3622,7 +3649,7 @@ fn yp(st: &StRef) {
     let stop = {
         let s = stm(st);
         s.h().resumes += 1;
-        !(s.h().op_count <= s.h().target_op_count) || s.has_side_effect() || s.h().resumes >= 1000
+        !((*s.op()) <= s.h().target_op_count) || s.has_side_effect() || s.h().resumes >= 1000
     };
     if stop {
         stacks::suspend();
@@ -3656,8 +3683,8 @@ fn perform_execution_step(st: &StRef, target_op_count: f64) {
             return;
         }
         if s.h().awaited_drone_id >= 0 {
-            s.h().op_count += 1.0;
-            s.h().last_consumed_op_count += 1.0;
+            (*s.op()) += 1.0;
+            (*s.last()) += 1.0;
             return;
         }
         s.h().resumes = 0;
@@ -5247,7 +5274,7 @@ fn charge(st: &StRef, ops: f64) -> bool {
 fn yield_stops(st: &StRef) -> bool {
     let s = stm(st);
     s.h().resumes += 1;
-    !(s.h().op_count <= s.h().target_op_count) || s.has_side_effect() || s.h().resumes >= 1000
+    !((*s.op()) <= s.h().target_op_count) || s.has_side_effect() || s.h().resumes >= 1000
 }
 
 fn node_ref<'a>(p: *const Node) -> &'a Node {
@@ -6784,7 +6811,7 @@ fn call_builtin(bidx: u8, parameters: &[V], st: &StRef) -> R<f64> {
             no_params(p, name)?;
             let v = {
                 let s = st.borrow();
-                s.h().op_count - s.start_op_count
+                (*s.op()) - s.start_op_count
             };
             ret(V::Num(v), 0.0)
         }
@@ -7283,6 +7310,66 @@ struct Drone {
     hat: Hat,
 }
 
+/// bit i set where flags[i] & mask == want (at most 64 slots)
+#[inline(always)]
+fn flag_mask(flags: &[u8], mask: u8, want: u8) -> u64 {
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        use std::arch::x86_64::*;
+        let (vm, vw) = (_mm_set1_epi8(mask as i8), _mm_set1_epi8(want as i8));
+        let mut out = 0u64;
+        let mut i = 0;
+        while i + 16 <= flags.len() {
+            let v = _mm_loadu_si128(flags.as_ptr().add(i) as *const __m128i);
+            let eq = _mm_cmpeq_epi8(_mm_and_si128(v, vm), vw);
+            out |= (_mm_movemask_epi8(eq) as u16 as u64) << i;
+            i += 16;
+        }
+        while i < flags.len() {
+            out |= ((flags[i] & mask == want) as u64) << i;
+            i += 1;
+        }
+        out
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let mut out = 0u64;
+        for (i, f) in flags.iter().enumerate() {
+            out |= ((f & mask == want) as u64) << i;
+        }
+        out
+    }
+}
+
+/// bit i set where !(ops[i] > x) (at most 64 slots)
+#[inline(always)]
+fn not_above(ops: &[f64], x: f64) -> u64 {
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        use std::arch::x86_64::*;
+        let vx = _mm_set1_pd(x);
+        let mut out = 0u64;
+        let mut i = 0;
+        while i + 2 <= ops.len() {
+            let c = _mm_cmpngt_pd(_mm_loadu_pd(ops.as_ptr().add(i)), vx);
+            out |= (_mm_movemask_pd(c) as u64) << i;
+            i += 2;
+        }
+        if i < ops.len() {
+            out |= (!(ops[i] > x) as u64) << i;
+        }
+        out
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let mut out = 0u64;
+        for (i, o) in ops.iter().enumerate() {
+            out |= (!(*o > x) as u64) << i;
+        }
+        out
+    }
+}
+
 /// slots in Execution::hot: drone ids stay below this
 const MAX_DRONE_SLOTS: usize = 1024;
 
@@ -7290,6 +7377,11 @@ struct Execution {
     states: Vec<Option<StRef>>,
     /// each drone's Hot record, by drone id; allocated once, so the drones' pointers into it hold
     hot: Vec<Hot>,
+    /// by drone id, as plain arrays for the scheduler's scans: op count, consumed op count, flags
+    /// (an empty slot keeps ops == lasts and flags 0)
+    ops: Vec<f64>,
+    lasts: Vec<f64>,
+    flags: Vec<u8>,
     main_state: Option<StRef>,
     global_op_count: f64,
     next_execution_time: i64,
@@ -9418,16 +9510,17 @@ impl Sim {
         st.borrow_mut().program = Some(Box::new(program));
         let ex = self.execution.as_mut().unwrap();
         assert!(drone_id < MAX_DRONE_SLOTS, "more than {} drones", MAX_DRONE_SLOTS);
-        ex.hot[drone_id] = Hot {
-            op_count,
-            target_op_count: 0.0,
-            last_consumed_op_count: op_count,
-            awaited_drone_id: -1,
-            resumes: 0,
-            se: SE_NONE,
-            present: true,
-        };
-        st.borrow_mut().hot = &mut ex.hot[drone_id] as *mut Hot;
+        ex.hot[drone_id] = Hot { target_op_count: 0.0, awaited_drone_id: -1, resumes: 0 };
+        ex.ops[drone_id] = op_count;
+        ex.lasts[drone_id] = op_count;
+        ex.flags[drone_id] = F_PRESENT;
+        {
+            let mut b = st.borrow_mut();
+            b.hot = &mut ex.hot[drone_id] as *mut Hot;
+            b.opp = &mut ex.ops[drone_id] as *mut f64;
+            b.lastp = &mut ex.lasts[drone_id] as *mut f64;
+            b.flagp = &mut ex.flags[drone_id] as *mut u8;
+        }
         if drone_id >= ex.states.len() {
             ex.states.push(Some(st.clone()));
         } else {
@@ -9441,6 +9534,9 @@ impl Sim {
         self.execution = Some(Execution {
             states: Vec::new(),
             hot: vec![HOT_EMPTY; MAX_DRONE_SLOTS],
+            ops: vec![0.0; MAX_DRONE_SLOTS],
+            lasts: vec![0.0; MAX_DRONE_SLOTS],
+            flags: vec![0; MAX_DRONE_SLOTS],
             main_state: None,
             global_op_count: 0.0,
             next_execution_time: self.current_time,
@@ -9454,22 +9550,24 @@ impl Sim {
 
     fn min_op_count(&self, default: f64) -> f64 {
         let ex = self.execution.as_ref().unwrap();
-        let hot = &ex.hot[..ex.states.len()];
+        let n = ex.states.len();
+        let (ops, flags) = (&ex.ops[..n], &ex.flags[..n]);
         let mut m = [f64::INFINITY; 4];
         let mut any = false;
-        let mut chunks = hot.chunks_exact(4);
-        for c in &mut chunks {
+        let mut i = 0;
+        while i + 4 <= n {
             for k in 0..4 {
-                let h = &c[k];
-                let run = h.present & (h.awaited_drone_id < 0);
+                let run = flags[i + k] & (F_PRESENT | F_AWAIT) == F_PRESENT;
                 any |= run;
-                m[k] = m[k].min(if run { h.op_count } else { f64::INFINITY });
+                m[k] = m[k].min(if run { ops[i + k] } else { f64::INFINITY });
             }
+            i += 4;
         }
-        for h in chunks.remainder() {
-            let run = h.present & (h.awaited_drone_id < 0);
+        while i < n {
+            let run = flags[i] & (F_PRESENT | F_AWAIT) == F_PRESENT;
             any |= run;
-            m[0] = m[0].min(if run { h.op_count } else { f64::INFINITY });
+            m[0] = m[0].min(if run { ops[i] } else { f64::INFINITY });
+            i += 1;
         }
         if any { m[0].min(m[1]).min(m[2].min(m[3])) } else { default }
     }
@@ -9495,13 +9593,14 @@ impl Sim {
         waiting.clear();
         let ex = self.execution.as_ref().unwrap();
         for si in 0..ex.states.len() {
-            let h = &ex.hot[si];
-            if !h.present || h.awaited_drone_id >= 0 {
+            let f = ex.flags[si];
+            if f & (F_PRESENT | F_AWAIT) != F_PRESENT {
                 continue;
             }
             // only a drone asking for the time or an item count can be in a skippable wait
-            if h.se != SE_GET_TIME && h.se != SE_NUM_ITEMS {
-                limit = limit.min(h.op_count);
+            let k = (f & F_SE) >> 2;
+            if k != SE_GET_TIME && k != SE_NUM_ITEMS {
+                limit = limit.min(ex.ops[si]);
                 continue;
             }
             let b = ex.states[si].as_ref().unwrap().borrow();
@@ -9521,13 +9620,13 @@ impl Sim {
             let deadline = match (&b.current_side_effect, b.wait_deadline) {
                 (SE::GetTime, Some(d)) => d,
                 _ => {
-                    limit = limit.min(b.h().op_count);
+                    limit = limit.min((*b.op()));
                     continue;
                 }
             };
             // the first pass of this drone that reads a time at or past its deadline
             let reads = |ops: f64| dur_seconds(self.current_time + dur_mul(self.op_duration, ops - base));
-            let c = b.h().op_count;
+            let c = (*b.op());
             // The clock reads origin + op_duration * ops exactly (whole nanoseconds times whole op
             // counts), so that first pass stays the same while the deadline, the origin and the op
             // duration do: the passes before it at this drone's parity all read too early.
@@ -9560,10 +9659,10 @@ impl Sim {
         for (si, p, own) in waiting.iter() {
             let target = if own.is_nan() { limit } else { own.min(num - 1.0) };
             let mut b = ex.states[*si].as_ref().unwrap().borrow_mut();
-            if b.h().op_count < target {
-                b.h().op_count += p * ((target - b.h().op_count) / p).ceil();
+            if (*b.op()) < target {
+                (*b.op()) += p * ((target - (*b.op())) / p).ceil();
                 // the skipped passes read the same count, the last of them one pass ago
-                let c = b.h().op_count;
+                let c = (*b.op());
                 if let Some((at, _)) = b.spin_read.as_mut() {
                     *at = c - p;
                 }
@@ -9587,11 +9686,8 @@ impl Sim {
                 let ex = self.execution.as_ref().unwrap();
                 let n = ex.states.len();
                 if n <= 64 {
-                    let mut mask = 0u64;
-                    for (i, h) in ex.hot[..n].iter().enumerate() {
-                        let r = h.present & (h.se == SE_NONE) & !(h.op_count > num) & (h.awaited_drone_id < 0);
-                        mask |= (r as u64) << i;
-                    }
+                    // present, not waiting for a drone, no side effect pending, op count <= num
+                    let mut mask = flag_mask(&ex.flags[..n], F_PRESENT | F_AWAIT | F_SE, F_PRESENT) & not_above(&ex.ops[..n], num);
                     while mask != 0 {
                         let i = mask.trailing_zeros() as usize;
                         mask &= mask - 1;
@@ -9599,8 +9695,7 @@ impl Sim {
                     }
                 } else {
                     for i in 0..n {
-                        let h = &ex.hot[i];
-                        if h.present && h.se == SE_NONE && !(h.op_count > num) && h.awaited_drone_id < 0 {
+                        if ex.flags[i] & (F_PRESENT | F_AWAIT | F_SE) == F_PRESENT && !(ex.ops[i] > num) {
                             perform_execution_step(ex.states[i].as_ref().unwrap(), num);
                         }
                     }
@@ -9619,11 +9714,24 @@ impl Sim {
                 {
                     let ex = self.execution.as_mut().unwrap();
                     let n = ex.states.len();
-                    for h in ex.hot[..n].iter_mut() {
-                        // PState::consume_ops (an empty slot keeps op == last, so adds exactly 0)
-                        num2 += h.op_count - h.last_consumed_op_count;
-                        h.last_consumed_op_count = h.op_count;
+                    // PState::consume_ops for every drone (an empty slot keeps op == last, so adds 0).
+                    // Op counts are whole numbers, so the sum is exact in any order: four lanes.
+                    let (ops, lasts) = (&ex.ops[..n], &mut ex.lasts[..n]);
+                    let mut acc = [0.0f64; 4];
+                    let mut i = 0;
+                    while i + 4 <= n {
+                        for k in 0..4 {
+                            acc[k] += ops[i + k] - lasts[i + k];
+                            lasts[i + k] = ops[i + k];
+                        }
+                        i += 4;
                     }
+                    while i < n {
+                        acc[0] += ops[i] - lasts[i];
+                        lasts[i] = ops[i];
+                        i += 1;
+                    }
+                    num2 += (acc[0] + acc[1]) + (acc[2] + acc[3]);
                 }
                 let mut due_mask = 0u64;
                 let masked = {
@@ -9631,10 +9739,10 @@ impl Sim {
                     let n = ex.states.len();
                     if n <= 64 {
                         let g = ex.global_op_count;
-                        for (i, h) in ex.hot[..n].iter().enumerate() {
-                            let d = h.present & (h.awaited_drone_id < 0) & (h.se != SE_NONE) & !(h.op_count > g);
-                            due_mask |= (d as u64) << i;
-                        }
+                        // present, not waiting for a drone, a side effect pending, op count <= g
+                        let flags = &ex.flags[..n];
+                        let ready = flag_mask(flags, F_PRESENT | F_AWAIT, F_PRESENT) & !flag_mask(flags, F_SE, 0);
+                        due_mask = ready & not_above(&ex.ops[..n], g);
                         true
                     } else {
                         false
@@ -9656,8 +9764,8 @@ impl Sim {
                         break;
                     }
                     let due = masked || {
-                        let h = &ex.hot[num6];
-                        h.present && h.awaited_drone_id < 0 && h.se != SE_NONE && !(h.op_count > ex.global_op_count)
+                        let f = ex.flags[num6];
+                        f & (F_PRESENT | F_AWAIT) == F_PRESENT && f & F_SE != 0 && !(ex.ops[num6] > ex.global_op_count)
                     };
                     if due {
                         let s = ex.states[num6].clone().unwrap();
@@ -9871,7 +9979,7 @@ impl Sim {
                 ops = OPERATION_OPS;
                 let mut b = st.borrow_mut();
                 if b.spin_loop {
-                    let c = b.h().op_count;
+                    let c = (*b.op());
                     if let Some((prev, _)) = b.spin_read {
                         b.spin_period = Some(c - prev);
                     }
@@ -9927,8 +10035,8 @@ impl Sim {
                 let mut b = st.borrow_mut();
                 b.drone_id = 0;
                 if b.h().awaited_drone_id >= 0 {
-                    b.h().awaited_drone_id = -1;
-                    b.h().op_count = g;
+                    b.set_awaited(-1);
+                    (*b.op()) = g;
                 }
                 drop(b);
                 ops = ACTION_OPS;
@@ -10052,7 +10160,7 @@ impl Sim {
                         ops = OPERATION_OPS;
                     }
                     None => {
-                        st.borrow_mut().h().awaited_drone_id = handle.id;
+                        st.borrow_mut().set_awaited(handle.id);
                         ops = OPERATION_OPS;
                     }
                 }
@@ -10069,8 +10177,8 @@ impl Sim {
                     if other.borrow().h().awaited_drone_id == drone_id as i32 {
                         let copy = deep_copy(&value, &mut Copies::new());
                         let mut b = other.borrow_mut();
-                        b.h().awaited_drone_id = -1;
-                        b.h().op_count = g;
+                        b.set_awaited(-1);
+                        (*b.op()) = g;
                         b.module_state.return_value = copy;
                     }
                 }
@@ -10083,9 +10191,8 @@ impl Sim {
                         ex.main_state = None;
                     }
                     ex.states[drone_id] = None;
-                    let h = &mut ex.hot[drone_id];
-                    h.present = false;
-                    h.last_consumed_op_count = h.op_count;
+                    ex.flags[drone_id] = 0;
+                    ex.lasts[drone_id] = ex.ops[drone_id];
                     ex.states.iter().all(|s| s.is_none())
                 };
                 if all_done {
@@ -10130,7 +10237,7 @@ impl Sim {
             b.module_state.return_value = v;
         }
         if flag {
-            b.h().op_count += ops;
+            (*b.op()) += ops;
         } else {
             b.add_and_consume_ops(ops);
         }
