@@ -341,6 +341,58 @@ def tend_mixed(cdef):
 					return
 
 
+def tend_fm(pos, cdef):
+	# tend_mixed for mixed_job's own columns, with the round's yields and reroll count cached
+	e = get_entity_type()
+	if e != None and e != Entities.Grass and not can_harvest():
+		if pos not in WANT or WANT[pos][0] == e:
+			return
+	if e != None:
+		harvest()
+	if pos in REQ:
+		c = REQ.pop(pos)
+		if c in WANT and WANT[c][1] == pos:
+			WANT.pop(c)
+	c = cdef
+	w = pos in WANT
+	if w:
+		c = WANT[pos][0]
+	if c == Entities.Grass:
+		if get_ground_type() == Grounds.Soil:
+			plant(Entities.Grass)
+	else:
+		if c == Entities.Carrot:
+			if get_ground_type() != Grounds.Soil:
+				till()
+		if not plant(c):
+			return
+		PEND[IT[c]] += YLD[c]
+		if not w and get_water() < WM_LO and num_items(Items.Water) >= 1:
+			use_item(Items.Water)
+	if w:
+		return
+	k = RRK[0]
+	for r in range(k):
+		comp = get_companion()
+		if comp == None:
+			return
+		cp = comp[1]
+		if cp[0] >= COLS[0] and cp[0] < COLS[1] and cp != pos:
+			WANT[cp] = (comp[0], pos)
+			REQ[pos] = cp
+			return
+		if r == k - 1:
+			return
+		harvest()
+		if c != Entities.Grass or get_ground_type() == Grounds.Soil:
+			if not plant(c):
+				return
+
+
+YLD = {}
+RRK = [1]
+
+
 def mixed_job(i, d, need, flags):
 	global NEED
 	global POLY
@@ -373,6 +425,13 @@ def mixed_job(i, d, need, flags):
 		# two or more drones on an unlock's round: pass after pass until it is affordable, checked every
 		# column (as one drone does), each drone carrying on from the column it stopped at last round
 		lp = d >= 2 and len(NEED) > 2
+		fm = POLY and not strip and not weird and PW_C1[0] == 0
+		if fm:
+			for ct in [Entities.Carrot, Entities.Tree, Entities.Bush, Entities.Grass]:
+				YLD[ct] = yield_of(ct)
+			RRK[0] = RR_N
+			if max_drones() <= RR_FEW_D:
+				RRK[0] = RR_FEW
 		k = 0
 		if lp and len(flags) > 2 and flags[2] != None and len(flags[2]) == d and flags[2][i][1] == POLY:
 			k = flags[2][i][0]
@@ -381,6 +440,8 @@ def mixed_job(i, d, need, flags):
 			goal = NEED[2]
 		need_vars()
 		j = 0
+		if m > 1 and m < w and n % 2 == 0 and HAM:
+			return mixed_ham(cl, m, n, k, lp, goal, strip, weird, fm)
 		while True:
 			if lp and j > 0:
 				done = True
@@ -407,9 +468,14 @@ def mixed_job(i, d, need, flags):
 				cs = [ce, co]
 			else:
 				cs = [co, ce]
-			for y in range(n):
-				mixed_cell(strip, weird, cs[y % 2])
-				move(North)
+			if fm:
+				for y in range(n):
+					tend_fm((x, y), cs[y % 2])
+					move(North)
+			else:
+				for y in range(n):
+					mixed_cell(strip, weird, cs[y % 2])
+					move(North)
 			k = (k + 1) % m
 			j += 1
 			if not lp and k == 0:
@@ -419,9 +485,9 @@ def mixed_job(i, d, need, flags):
 	small = w * n <= 3
 	lt = lvl_mult(Unlocks.Trees)
 	lc = lvl_mult(Unlocks.Carrots)
-	YC[Entities.Tree] = 5 * lt
-	YC[Entities.Bush] = lt
-	YC[Entities.Carrot] = lc
+	YC[Entities.Tree] = 5 * lt * 2
+	YC[Entities.Bush] = lt * 2
+	YC[Entities.Carrot] = lc * 2
 	sun_on = SUN_STRIP and w >= 6 and num_unlocked(Unlocks.Sunflowers) > 0
 	plant_on = num_unlocked(Unlocks.Plant) > 0
 	need_vars()
@@ -534,6 +600,76 @@ def mixed_job(i, d, need, flags):
 			return 0
 		for k in PEND:
 			PEND[k] = 0
+
+
+def mixed_ham(cl, m, n, k, lp, goal, strip, weird, fm):
+	# my columns walked as one closed loop (up the first column, then a snake back down the
+	# others): every cell once a lap with no steps back west; segment k is cells k*n..k*n+n-1
+	c0 = cl[0]
+	px = []
+	py = []
+	for y in range(n):
+		px.append(c0)
+		py.append(y)
+	for r in range(n - 1, -1, -1):
+		if (n - 1 - r) % 2 == 0:
+			for x in range(c0 + 1, c0 + m):
+				px.append(x)
+				py.append(r)
+		else:
+			for x in range(c0 + m - 1, c0, -1):
+				px.append(x)
+				py.append(r)
+	ds = []
+	N = m * n
+	for t in range(N):
+		u = (t + 1) % N
+		if px[u] > px[t]:
+			ds.append(East)
+		elif px[u] < px[t]:
+			ds.append(West)
+		elif py[u] > py[t]:
+			ds.append(North)
+		else:
+			ds.append(South)
+	j = 0
+	t = k * n
+	go(px[t], py[t])
+	while True:
+		if lp and j > 0:
+			done = True
+			for it in goal:
+				if num_items(it) < goal[it]:
+					done = False
+			if done or (k == 0 and num_items(Items.Power) < LP_PW):
+				return (k, POLY)
+			if k == 0:
+				for it in PEND:
+					PEND[it] = 0
+		ce = choose(True)
+		co = choose(False)
+		if ce == co and not POLY and num_unlocked(Unlocks.Plant) > 0:
+			if ce == Entities.Grass:
+				co = Entities.Bush
+			else:
+				co = Entities.Grass
+		cs = [ce, co]
+		if fm:
+			for q in range(t, t + n):
+				tend_fm((px[q], py[q]), cs[(px[q] + py[q]) % 2])
+				move(ds[q])
+		else:
+			for q in range(t, t + n):
+				mixed_cell(strip, weird, cs[(px[q] + py[q]) % 2])
+				move(ds[q])
+		k = (k + 1) % m
+		t = k * n
+		j += 1
+		if not lp and k == 0:
+			return (k, POLY)
+
+
+HAM = True
 
 
 def sh(have, c, l):
@@ -1023,11 +1159,70 @@ def sun_plant_job(i, d, a, b):
 SUN_WT = {15: 0.7, 14: 0.45, 13: 0.2, 12: 0.05, 11: 0.01}
 
 
-def sun_water(v):
-	if v in SUN_WT:
-		k = (SUN_WT[v] - get_water()) // 0.25 + 1
-		if k > 0 and num_items(Items.Water) >= k:
-			use_item(Items.Water, k)
+def bd_settle(k, a, f, b, dfr, LO, UP, MX, path, wf):
+	# insert cell k: fix it against the cells already in place. Planting forwards (dfr False) those
+	# are the indices up to k; on the walk back (dfr True) the indices from k to b - 1 and those
+	# before f. A mixed cell's neighbours all lie in its own stretch (cuts are between pure cells).
+	# A swap moves a pure cell's value the safe way; a mixed cell can be broken on one side only
+	# (the side it moved towards), so it goes back on the work list for that side.
+	# 0: lower, 1: upper, 2: both. wf: the stretch's weird flags (index - a), or None
+	work = [(k, 2)]
+	cur = k
+	while len(work) > 0:
+		it = work.pop()
+		c = it[0]
+		sd = it[1]
+		if c != cur:
+			if abs(path[cur][0] - path[c][0]) + abs(path[cur][1] - path[c][1]) == 1:
+				move(step_dir(path[cur][0], path[cur][1], path[c][0], path[c][1]))
+			else:
+				go(path[c][0], path[c][1])
+			cur = c
+		v = measure()
+		bd = None
+		bq = -1
+		bv = 0
+		bl = False
+		if sd != 1:
+			for e in LO[c]:
+				q = e[1]
+				if (dfr and ((q >= k and q < b) or q < f)) or (not dfr and q <= k):
+					w = measure(e[0])
+					if w - v > bv:
+						bv = w - v
+						bd = e[0]
+						bq = q
+						bl = True
+		if sd != 0:
+			for e in UP[c]:
+				q = e[1]
+				if (dfr and ((q >= k and q < b) or q < f)) or (not dfr and q <= k):
+					w = measure(e[0])
+					if v - w > bv:
+						bv = v - w
+						bd = e[0]
+						bq = q
+						bl = False
+		if bd != None:
+			swap(bd)
+			if wf != None:
+				t = wf[c - a]
+				wf[c - a] = wf[bq - a]
+				wf[bq - a] = t
+			# swapped with a lower neighbour: this cell got bigger (check its uppers), the
+			# neighbour smaller (check its lowers); the other way round for an upper one
+			if bl:
+				if MX[bq]:
+					work.append((bq, 0))
+				if MX[c]:
+					work.append((c, 1))
+			else:
+				if MX[bq]:
+					work.append((bq, 1))
+				if MX[c]:
+					work.append((c, 0))
+	if cur != k:
+		go(path[k][0], path[k][1])
 
 
 def sun_cut_job(i, d, lists, v):
@@ -2352,6 +2547,23 @@ def cactus_round(weird, R):
 	global CJ_S
 	d = drones()
 	n = get_world_size()
+	if d <= 4 and n * 1000 + d in bd_cuts():
+		if n * 1000 + d == 12004 and not 12004 in BANDS:
+			# bd_plan(12, 4) written out (saves 3 s of compute)
+			BANDS[12004] = ([(0,1),(0,0),(1,0),(2,0),(3,0),(3,1),(2,1),(2,2),(1,2),(1,3),(0,3),(0,4),(0,5),(0,6),(1,6),(1,5),(2,5),(2,4),(3,4),(3,3),(4,3),(4,2),(5,2),(5,1),(6,1),(6,0),(7,0),(8,0),(9,0),(9,1),(8,1),(8,2),(7,2),(7,3),(6,3),(6,4),(5,4),(5,5),(4,5),(4,6),(3,6),(3,7),(2,7),(2,8),(1,8),(1,9),(0,9),(0,10),(1,10),(1,11),(2,11),(2,10),(3,10),(3,9),(4,9),(4,8),(5,8),(5,7),(6,7),(6,6),(7,6),(7,5),(8,5),(8,4),(9,4),(9,3),(10,3),(10,2),(11,2),(11,3),(11,4),(11,5),(10,5),(10,6),(9,6),(9,7),(8,7),(8,8),(7,8),(7,9),(6,9),(6,10),(5,10),(5,11),(6,11),(7,11),(8,11),(8,10),(9,10),(9,9),(10,9),(10,8),(11,8),(11,9),(11,10),(11,11),(10,11)],[None,South,East,East,East,North,West,North,West,North,West,North,North,North,East,South,East,South,East,South,East,South,East,South,East,South,East,East,East,North,West,North,West,North,West,North,West,North,West,North,West,North,West,North,West,North,West,North,East,North,East,South,East,South,East,South,East,South,East,South,East,South,East,South,East,South,East,South,East,North,North,North,West,North,West,North,West,North,West,North,West,North,West,North,East,East,East,South,East,South,East,South,East,North,North,North,West],[None,North,West,West,West,South,East,South,East,South,East,South,South,South,West,North,West,North,West,North,West,North,West,North,West,North,West,West,West,South,East,South,East,South,East,South,East,South,East,South,East,South,East,South,East,South,East,South,West,South,West,North,West,North,West,North,West,North,West,North,West,North,West,North,West,North,West,North,West,South,South,South,East,South,East,South,East,South,East,South,East,South,East,South,West,West,West,North,West,North,West,North,West,South,South,South,East],[[(South,1,True)],[(North,0,False),(East,2,False)],[(West,1,True),(East,3,False)],[(West,2,True),(North,6,False),(East,4,False)],[(West,3,True),(North,5,False)],[(South,4,True),(West,6,True)],[(South,3,True),(North,7,False),(East,5,False)],[(South,6,True),(West,8,True)],[(North,9,False),(East,7,False)],[(South,8,True),(West,10,True)],[(North,11,False),(East,9,False)],[(South,10,True),(North,12,False)],[(South,11,True),(North,13,False),(East,15,False)],[(South,12,True),(East,14,False)],[(South,15,True),(West,13,True)],[(West,12,True),(North,14,False),(East,16,False)],[(South,17,True),(West,15,True)],[(North,16,False),(East,18,False)],[(South,19,True),(West,17,True)],[(North,18,False),(East,20,False)],[(South,21,True),(West,19,True)],[(North,20,False),(East,22,False)],[(South,23,True),(West,21,True)],[(North,22,False),(East,24,False)],[(South,25,True),(West,23,True)],[(North,24,False),(East,26,False)],[(West,25,True),(East,27,False)],[(West,26,True),(North,30,False),(East,28,False)],[(West,27,True),(North,29,False)],[(South,28,True),(West,30,True)],[(South,27,True),(North,31,False),(East,29,False)],[(South,30,True),(West,32,True)],[(North,33,False),(East,31,False)],[(South,32,True),(West,34,True)],[(North,35,False),(East,33,False)],[(South,34,True),(West,36,True)],[(North,37,False),(East,35,False)],[(South,36,True),(West,38,True)],[(North,39,False),(East,37,False)],[(South,38,True),(West,40,True)],[(North,41,False),(East,39,False)],[(South,40,True),(West,42,True)],[(North,43,False),(East,41,False)],[(South,42,True),(West,44,True)],[(North,45,False),(East,43,False)],[(South,44,True),(West,46,True),(North,48,False)],[(North,47,False),(East,45,False)],[(South,46,True),(East,48,False)],[(South,45,True),(West,47,True),(North,49,False),(East,51,False)],[(South,48,True),(East,50,False)],[(South,51,True),(West,49,True)],[(West,48,True),(North,50,False),(East,52,False)],[(South,53,True),(West,51,True)],[(North,52,False),(East,54,False)],[(South,55,True),(West,53,True)],[(North,54,False),(East,56,False)],[(South,57,True),(West,55,True)],[(North,56,False),(East,58,False)],[(South,59,True),(West,57,True)],[(North,58,False),(East,60,False)],[(South,61,True),(West,59,True)],[(North,60,False),(East,62,False)],[(South,63,True),(West,61,True)],[(North,62,False),(East,64,False)],[(South,65,True),(West,63,True)],[(North,64,False),(East,66,False)],[(South,67,True),(West,65,True),(East,69,False)],[(North,66,False),(East,68,False)],[(West,67,True),(North,69,False)],[(South,68,True),(West,66,True),(North,70,False)],[(South,69,True),(North,71,False)],[(South,70,True),(West,72,True)],[(North,73,False),(East,71,False)],[(South,72,True),(West,74,True)],[(North,75,False),(East,73,False)],[(South,74,True),(West,76,True)],[(North,77,False),(East,75,False)],[(South,76,True),(West,78,True)],[(North,79,False),(East,77,False)],[(South,78,True),(West,80,True)],[(North,81,False),(East,79,False)],[(South,80,True),(West,82,True),(North,84,False)],[(North,83,False),(East,81,False)],[(South,82,True),(East,84,False)],[(South,81,True),(West,83,True),(East,85,False)],[(West,84,True),(East,86,False)],[(South,87,True),(West,85,True)],[(North,86,False),(East,88,False)],[(South,89,True),(West,87,True)],[(North,88,False),(East,90,False)],[(South,91,True),(West,89,True),(East,93,False)],[(North,90,False),(East,92,False)],[(West,91,True),(North,93,False)],[(South,92,True),(West,90,True),(North,94,False)],[(South,93,True),(North,95,False)],[(South,94,True),(West,96,True)],[(East,95,False)]],[False,False,True,True,True,False,True,False,False,False,False,True,True,True,False,True,False,False,False,False,False,False,False,False,False,False,True,True,True,False,True,False,False,False,False,False,False,False,False,False,False,False,False,False,False,True,False,True,True,True,False,True,False,False,False,False,False,False,False,False,False,False,False,False,False,False,True,False,True,True,True,False,False,False,False,False,False,False,False,False,False,True,False,True,True,True,False,False,False,False,True,False,True,True,True,False,False],([0,24,44,72,97],[9,14,5,5]),[None,(North,False),None,None,None,None,None,None,(East,False),(South,True),(East,False),None,None,None,None,None,None,(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),None,None,None,None,None,None,(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),None,None,None,None,None,None,None,None,(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),None,None,None,None,None,None,(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),None,None,None,None,None,None,(North,False),(West,True),(North,False),None,None,None,None,None,None,(East,False)],[False,True,True,True,True,False,True,False,True,False,True,True,True,True,False,True,False,True,False,True,False,True,False,True,False,True,True,True,True,False,True,False,True,False,True,False,True,False,True,False,True,False,True,False,True,False,True,True,True,True,False,True,False,True,False,True,False,True,False,True,False,True,False,True,False,True,False,True,True,True,True,False,True,False,True,False,True,False,True,False,True,False,True,True,True,True,False,True,False,True,False,True,True,True,True,False,False],[(South,True),None,None,None,None,None,None,(West,True),(North,False),(West,True),None,None,None,None,None,None,(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),None,None,None,None,None,None,(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),None,None,None,None,None,None,None,None,(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),(East,False),(South,True),None,None,None,None,None,None,(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),(North,False),(West,True),None,None,None,None,None,None,(South,True),(East,False),(South,True),None,None,None,None,None,None,(West,True),None],[[(South,1)],[],[(West,1)],[(West,2)],[(West,3)],[(South,4),(West,6)],[(South,3)],[(South,6),(West,8)],[],[(South,8),(West,10)],[],[(South,10)],[(South,11)],[(South,12)],[(South,15),(West,13)],[(West,12)],[(South,17),(West,15)],[],[(South,19),(West,17)],[],[(South,21),(West,19)],[],[(South,23),(West,21)],[],[(South,25),(West,23)],[],[(West,25)],[(West,26)],[(West,27)],[(South,28),(West,30)],[(South,27)],[(South,30),(West,32)],[],[(South,32),(West,34)],[],[(South,34),(West,36)],[],[(South,36),(West,38)],[],[(South,38),(West,40)],[],[(South,40),(West,42)],[],[(South,42),(West,44)],[],[(South,44),(West,46)],[],[(South,46)],[(South,45),(West,47)],[(South,48)],[(South,51),(West,49)],[(West,48)],[(South,53),(West,51)],[],[(South,55),(West,53)],[],[(South,57),(West,55)],[],[(South,59),(West,57)],[],[(South,61),(West,59)],[],[(South,63),(West,61)],[],[(South,65),(West,63)],[],[(South,67),(West,65)],[],[(West,67)],[(South,68),(West,66)],[(South,69)],[(South,70),(West,72)],[],[(South,72),(West,74)],[],[(South,74),(West,76)],[],[(South,76),(West,78)],[],[(South,78),(West,80)],[],[(South,80),(West,82)],[],[(South,82)],[(South,81),(West,83)],[(West,84)],[(South,87),(West,85)],[],[(South,89),(West,87)],[],[(South,91),(West,89)],[],[(West,91)],[(South,92),(West,90)],[(South,93)],[(South,94),(West,96)],[]],[[],[(North,0),(East,2)],[(East,3)],[(North,6),(East,4)],[(North,5)],[],[(North,7),(East,5)],[],[(North,9),(East,7)],[],[(North,11),(East,9)],[(North,12)],[(North,13),(East,15)],[(East,14)],[],[(North,14),(East,16)],[],[(North,16),(East,18)],[],[(North,18),(East,20)],[],[(North,20),(East,22)],[],[(North,22),(East,24)],[],[(North,24),(East,26)],[(East,27)],[(North,30),(East,28)],[(North,29)],[],[(North,31),(East,29)],[],[(North,33),(East,31)],[],[(North,35),(East,33)],[],[(North,37),(East,35)],[],[(North,39),(East,37)],[],[(North,41),(East,39)],[],[(North,43),(East,41)],[],[(North,45),(East,43)],[(North,48)],[(North,47),(East,45)],[(East,48)],[(North,49),(East,51)],[(East,50)],[],[(North,50),(East,52)],[],[(North,52),(East,54)],[],[(North,54),(East,56)],[],[(North,56),(East,58)],[],[(North,58),(East,60)],[],[(North,60),(East,62)],[],[(North,62),(East,64)],[],[(North,64),(East,66)],[(East,69)],[(North,66),(East,68)],[(North,69)],[(North,70)],[(North,71)],[],[(North,73),(East,71)],[],[(North,75),(East,73)],[],[(North,77),(East,75)],[],[(North,79),(East,77)],[],[(North,81),(East,79)],[(North,84)],[(North,83),(East,81)],[(East,84)],[(East,85)],[(East,86)],[],[(North,86),(East,88)],[],[(North,88),(East,90)],[(East,93)],[(North,90),(East,92)],[(North,93)],[(North,94)],[(North,95)],[],[(East,95)]])
+		pl = bd_plan(n, d)
+		if R == 0:
+			return
+		for r in range(R):
+			fan(bd_job, 0, d, d, (pl, weird))
+			if get_entity_type() != Entities.Cactus:
+				go(pl[0][0][0], pl[0][0][1])
+			harvest()
+		return
+	if CJ_N != n * 100 + d and n * 100 + d == 1616:
+		# the 16x16 layout for 16 drones as worked out below, written out (saves 2.5 s of compute)
+		CJ_N = 1616
+		CJ_S = ({(0,3):True,(7,0):True,(0,11):True,(15,0):True,(4,15):True,(15,8):True,(12,15):True},{(1,3):True,(7,1):True,(1,11):True,(4,14):True,(14,8):True,(12,14):True},{(0,1):True,(0,2):True,(0,3):True,(0,4):True,(1,4):True,(0,5):True,(5,0):True,(6,0):True,(7,0):True,(8,0):True,(8,1):True,(9,0):True,(0,9):True,(0,10):True,(0,11):True,(0,12):True,(1,12):True,(0,13):True,(13,0):True,(14,0):True,(15,0):True,(15,1):True,(15,2):True,(3,14):True,(2,15):True,(3,15):True,(4,15):True,(5,15):True,(6,15):True,(14,7):True,(15,6):True,(15,7):True,(15,8):True,(15,9):True,(15,10):True,(11,14):True,(10,15):True,(11,15):True,(12,15):True,(13,15):True,(14,15):True},[0,10,18,41,62,85,90,98,120,141,162,183,203,225,237,247,256],[False,False,False,False,False,False,True,False,False,False,False,False,False,False,False,False],[[([(0,1),(0,2),(0,3),(0,4),(1,4),(0,5),(1,1),(0,0),(1,5),(2,4),(0,6)],[[(0,1,False),(1,6,False),(2,7,True)],[(0,2,False),(2,0,True)],[(0,3,False),(2,1,True)],[(0,5,False),(1,4,False),(2,2,True)],[(0,8,False),(1,9,False),(3,3,True)],[(0,10,False),(1,8,False),(2,3,True)]],6)],[([(0,9),(0,10),(0,11),(0,12),(1,12),(0,13),(1,9),(0,8),(1,13),(2,12),(0,14)],[[(0,1,False),(1,6,False),(2,7,True)],[(0,2,False),(2,0,True)],[(0,3,False),(2,1,True)],[(0,5,False),(1,4,False),(2,2,True)],[(0,8,False),(1,9,False),(3,3,True)],[(0,10,False),(1,8,False),(2,3,True)]],6)],[],[],[],[([(5,0),(6,0),(7,0),(8,0),(8,1),(9,0),(5,1),(4,0),(8,2),(9,1),(10,0)],[[(0,6,False),(1,1,False),(3,7,True)],[(1,2,False),(3,0,True)],[(1,3,False),(3,1,True)],[(0,4,False),(1,5,False),(3,2,True)],[(0,8,False),(1,9,False),(2,3,True)],[(0,9,False),(1,10,False),(3,3,True)]],6)],[([(6,15),(5,15),(4,15),(3,15),(2,15),(3,14),(7,15),(6,14),(2,14),(1,15),(3,13)],[[(1,6,False),(2,7,True),(3,1,True)],[(1,0,False),(3,2,True)],[(1,1,False),(3,3,True)],[(1,2,False),(2,5,True),(3,4,True)],[(1,3,False),(2,8,True),(3,9,True)],[(0,3,False),(2,10,True),(3,8,True)]],6)],[],[],[],[],[],[],[([(13,0),(14,0),(15,0),(15,1),(15,2),(13,1),(12,0),(15,3),(14,2)],[[(0,5,False),(1,1,False),(3,6,True)],[(1,2,False),(3,0,True)],[(0,3,False),(3,1,True)],[(0,4,False),(2,2,True)],[(0,7,False),(2,3,True),(3,8,True)]],5)],[([(14,15),(13,15),(12,15),(11,15),(10,15),(11,14),(15,15),(14,14),(10,14),(9,15),(11,13)],[[(1,6,False),(2,7,True),(3,1,True)],[(1,0,False),(3,2,True)],[(1,1,False),(3,3,True)],[(1,2,False),(2,5,True),(3,4,True)],[(1,3,False),(2,8,True),(3,9,True)],[(0,3,False),(2,10,True),(3,8,True)]],6)],[([(14,7),(15,6),(15,7),(15,8),(15,9),(15,10),(14,6),(13,7),(15,5),(15,11),(14,10)],[[(1,2,False),(2,6,True),(3,7,True)],[(0,2,False),(2,8,True),(3,6,True)],[(0,3,False),(2,1,True),(3,0,True)],[(0,4,False),(2,2,True)],[(0,5,False),(2,3,True)],[(0,9,False),(2,4,True),(3,10,True)]],6)]])
 	if CJ_N != n * 100 + d:
 		# the band layout, worked out once per field size: connectors, the cells left empty beside
 		# them, the junction chains and each drone's path with what to do on every cell
@@ -3686,13 +3898,6 @@ def block_setup(N):
 	# after them; every route enters at (1, 4s) and leaves at the segment's top left corner.
 	# The routes are worked out on BG_BLK drones of their own while the first snake runs
 	# (the block phase comes 40 s in); get_blocks() collects them.
-	global NBLK
-	global RDIR
-	global RPOS
-	global BGB
-	global TB
-	global DV
-	global CH
 	NBLK = N // 4
 	# the block routes form a tree (routes that start alike share a branch). DV[m]: pairs
 	# DV[m][i]: the branch route m is on at its cell i; TB[branch][x * 4 + y]:
@@ -3731,9 +3936,17 @@ def block_setup(N):
 		qs[b].append(q)
 		load[b] += tasks[q][0] + 1
 		q -= 1
-	BGB = []
-	for b in range(BG_BLK):
-		BGB.append(spawn_drone(blk_job, qs[b], tasks, N))
+	hs = []
+	for b in range(1, BG_BLK):
+		hs.append(spawn_drone(blk_job, qs[b], tasks, N))
+	rs = [blk_job(qs[0], tasks, N)]
+	for h in hs:
+		rs.append(wait_for(h))
+	for r in rs:
+		for e in r:
+			RDIR[e[0]][e[1]] = e[2]
+			RPOS[e[0]][e[1]] = e[3]
+	return [NBLK, TB, DV, CH, RDIR, RPOS]
 
 
 def blk_job(qs, tasks, N):
@@ -3757,11 +3970,21 @@ def blk_job(qs, tasks, N):
 
 def get_blocks():
 	global BGB
-	for h in BGB:
-		for e in wait_for(h):
-			RDIR[e[0]][e[1]] = e[2]
-			RPOS[e[0]][e[1]] = e[3]
-	BGB = []
+	global NBLK
+	global RDIR
+	global RPOS
+	global TB
+	global DV
+	global CH
+	if BGB != None:
+		r = wait_for(BGB)
+		BGB = None
+		NBLK = r[0]
+		TB = r[1]
+		DV = r[2]
+		CH = r[3]
+		RDIR = r[4]
+		RPOS = r[5]
 
 
 BG_BLK = 3
@@ -3817,6 +4040,9 @@ def dn_rows(j, d, a, b):
 def cyc_tables(a, b):
 	# AHEAD, WAY, TO and NEXT along the cycle, on a drone of its own while the first snake starts
 	# (they are first needed when the snake lines up on the cycle); get_tables() collects them
+	if a == 1:
+		# (a drone of its own) the move history list play() switches to once lined up
+		return list(range(16384))
 	S = SS
 	N = SN
 	ah = []
@@ -3924,6 +4150,8 @@ def get_tables():
 		ST2 = r[9]
 		ST0 = r[10]
 		G2 = r[11]
+		global HB
+		HB = wait_for(BGH)
 		if HALVES:
 			WALK = []
 			for i in range(2 * SS):
@@ -3937,10 +4165,13 @@ def dino_bg():
 	# the tables the snake needs only later (lining up on the cycle, the block routes), each built
 	# on a drone of its own while the first snake runs
 	global BGT
+	global BGB
 	DINO_BG[0] = True
 	BGT = spawn_drone(cyc_tables, 0, 0)
+	global BGH
+	BGH = spawn_drone(cyc_tables, 1, 0)
 	if not HALVES:
-		block_setup(SN)
+		BGB = spawn_drone(block_setup, SN)
 
 
 def dino_setup():
@@ -4734,6 +4965,11 @@ def play():
 			if nxt == None:
 				last = True
 	get_tables()
+	# from here on the move history is kept by move count: the last k moves copied over
+	global hist
+	for q in range(t - k, t + 1):
+		HB[q] = hist[q % S]
+	hist = HB
 	while not done:
 		if ch == ca:
 			if last:
@@ -4785,7 +5021,7 @@ def play():
 			done = True
 			break
 		t += 1
-		hist[t % S] = ch
+		hist[t] = ch
 		occ[ch] = t
 		for x in mk:
 			bad[x] = t
@@ -4808,7 +5044,7 @@ def play():
 				break
 			k += 1
 			ca = IDX[nxt[0]][nxt[1]]
-		L = (hist[(t + 1 - k) % S] - ch - 1) % S + 1 - MARGIN
+		L = (hist[t + 1 - k] - ch - 1) % S + 1 - MARGIN
 		ao = (ca - ch) % S
 		if ao <= L:
 			L = ao
@@ -4822,7 +5058,7 @@ def play():
 					move(NEXT[ch])
 					ch = ST0[ch]
 					t += 1
-					hist[t % S] = ch
+					hist[t] = ch
 				break
 			if SD2[ch] > L:
 				# SD2 is the shorter shortcut: none fits, the next cell on the cycle
@@ -4840,7 +5076,7 @@ def play():
 					ch = ST2[ch]
 				L -= d
 			t += 1
-			hist[t % S] = ch
+			hist[t] = ch
 		if ch == ca:
 			if get_entity_type() != Entities.Apple:
 				done = True
@@ -4882,7 +5118,7 @@ def play():
 			sj.append(0)
 			sm.append(0)
 		for q in range(t - k, t):
-			c = hist[q % S]
+			c = hist[q]
 			if PX[c] > 0:
 				blast[PY[c] // 4] = q
 		x = PX[ch]
@@ -5191,7 +5427,7 @@ def with_seeds(need):
 		if num_unlocked(Unlocks.Polyculture) > 0:
 			seeds = seeds // 6
 		else:
-			seeds = seeds // (lvl_mult(Unlocks.Carrots) * 5)
+			seeds = seeds // (lvl_mult(Unlocks.Carrots) * 10)
 		for it in [Items.Wood, Items.Hay]:
 			if it in need:
 				need[it] += seeds
