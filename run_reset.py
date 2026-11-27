@@ -1501,9 +1501,6 @@ def power_mini():
 					harvest()
 				soil()
 				if plant(Entities.Sunflower):
-					# watered: the first cut (and power) comes sooner, less polling for the tallest
-					if get_water() < 0.25 and num_items(Items.Water) >= 1:
-						use_item(Items.Water)
 					sf[pos] = measure()
 			if k < n - 1:
 				move(North)
@@ -1539,9 +1536,10 @@ def power_check():
 	lim = 50 * drones()
 	if drones() <= 2:
 		lim = 20 * drones()
-	if num_unlocked(Unlocks.Mazes) >= 4:
-		# only snakes (one drone and its helpers) and the last maze are left: that maze's own
-		# power check makes just what it needs
+	if num_unlocked(Unlocks.Dinosaurs) >= 5 or num_unlocked(Unlocks.Mazes) >= 4:
+		# only the Mazes 4 cactus, snakes (one drone and its helpers) and the last maze are left:
+		# that maze's own power check makes just what it needs, in a part round merged into the
+		# maze (~4 s), which is far cheaper than a whole-field round here (~9 s)
 		lim = PW_LATE
 	if num_items(Items.Power) < lim:
 		power_round()
@@ -4966,6 +4964,10 @@ def farm(item, amount):
 		n = with_seeds({item: amount})
 		mixed_round((n, n))
 	elif item == Items.Pumpkin:
+		if num_unlocked(Unlocks.Cactus) == 2 and num_unlocked(Unlocks.Expand) >= 7:
+			# Cactus 3's pumpkins: one more round in the same batch for the seeds of the cactus
+			# rounds after it, instead of a pumpkin round of its own between them
+			amount += 24000
 		m = lvl_mult(Unlocks.Pumpkins)
 		c = cells * 2 * m
 		if num_items(Items.Carrot) < c:
@@ -4996,6 +4998,20 @@ def farm(item, amount):
 			# every round this purchase needs, with the drones staying out between them
 			b = bd_cells_n()
 			y = b * b * lvl_mult(Unlocks.Cactus)
+			if num_unlocked(Unlocks.Dinosaurs) >= 3:
+				# the cactus of every purchase left (Dinosaurs up to 5, Mazes 4) in one batch, so
+				# the drones stay out between them
+				a2 = 0
+				dl = num_unlocked(Unlocks.Dinosaurs)
+				cc = get_cost(Unlocks.Dinosaurs)[Items.Cactus]
+				while dl < 5:
+					a2 += cc
+					cc = cc * 6
+					dl += 1
+				if num_unlocked(Unlocks.Mazes) < 4:
+					a2 += get_cost(Unlocks.Mazes)[Items.Cactus]
+				if a2 > amount:
+					amount = a2
 			R = min((amount - num_items(Items.Cactus) + y - 1) // y, num_items(Items.Pumpkin) // (b * pc), (num_items(Items.Power) - 100) // (drones() * CJ_P), num_items(Items.Weird_Substance) // (2 * drones()))
 			if R < 1:
 				R = 1
@@ -5020,6 +5036,9 @@ def farm(item, amount):
 			if num_unlocked(Unlocks.Sunflowers) > 0 and num_items(Items.Power) < pw:
 				if num_unlocked(Unlocks.Mazes) >= 4 and SUN_PART:
 					# the last maze: a power round just big enough for it
+					global MZ_RACE
+					# (16 drones, 16x16, ~490 finds: racing a spot's owner from a little further pays)
+					MZ_RACE = 5
 					global SUN_TARGET
 					global SUN_MZ
 					SUN_TARGET = pw * PW_MARGIN
