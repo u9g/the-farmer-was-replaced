@@ -1084,6 +1084,7 @@ SUN_MARGIN = 1.04
 SUN_SLACK = 0
 SUN_GROW = 0.05
 SUN_NEW = True
+SUN_BLK = 16
 # a sunflower's petals are drawn anew at every planting: in the last power round (carrots to
 # spare) one planted with fewer than SUN_MINP is cut at once (not grown: nothing lost but its
 # seed) and planted again, so the round has fewer petal levels and fewer passes of its drones.
@@ -1131,11 +1132,38 @@ def sun_plant2(i, d, wet, b):
 	if b > 0 and hi > lo + b:
 		# a part round: only the first b cells
 		hi = lo + b
-	for c in range(lo, hi):
-		x = c // n
-		y = c % n
-		if d > w and x % 2 == 1:
-			y = n - 1 - y
+	cl = []
+	if SUN_BLK > 0 and d >= SUN_BLK and w == n:
+		# square-ish blocks: my level-by-level cuts stay close together
+		gy = 1
+		while (gy + 1) * (gy + 1) <= d:
+			gy += 1
+		while d % gy != 0:
+			gy -= 1
+		gx = d // gy
+		bx = i % gx
+		bj = i // gx
+		y0 = bj * n // gy
+		y1 = (bj + 1) * n // gy
+		for x in range(bx * w // gx, (bx + 1) * w // gx):
+			if (x - bx * w // gx) % 2 == 0:
+				for y in range(y0, y1):
+					cl.append((x, y))
+			else:
+				for y in range(y1 - 1, y0 - 1, -1):
+					cl.append((x, y))
+		if b > 0 and len(cl) > b:
+			cl = cl[:b]
+	else:
+		for c in range(lo, hi):
+			x = c // n
+			y = c % n
+			if d > w and x % 2 == 1:
+				y = n - 1 - y
+			cl.append((x, y))
+	for xy in cl:
+		x = xy[0]
+		y = xy[1]
 		go(x, y)
 		if get_entity_type() != Entities.Sunflower:
 			clear_cell()
@@ -1173,6 +1201,26 @@ def sun_plant2(i, d, wet, b):
 	cy = c % n
 	if d > w and cx % 2 == 1:
 		cy = n - 1 - cy
+	if SUN_BLK > 0 and d >= SUN_BLK and w == n:
+		# drone 0's block ends where its snake ends
+		gy = 1
+		while (gy + 1) * (gy + 1) <= d:
+			gy += 1
+		while d % gy != 0:
+			gy -= 1
+		gx = d // gy
+		y1 = n // gy
+		x1 = w // gx
+		cx = x1 - 1
+		cy = y1 - 1
+		if (x1 - 1) % 2 == 1:
+			cy = 0
+		if b > 0 and b < x1 * y1:
+			k = b - 1
+			cx = k // y1
+			cy = k % y1
+			if cx % 2 == 1:
+				cy = y1 - 1 - cy
 	plan = []
 	for v in range(15, 6, -1):
 		left = by[v]
