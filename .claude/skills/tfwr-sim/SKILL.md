@@ -278,7 +278,8 @@ run_reset.py skips `opening()` once Carrots is unlocked and `run_plan` skips wha
 the base itself among the scripts as the paired baseline (a copy of the base reads exactly +0).
 Noise after a fork at Megafarm 4 (the last ~6.5 minutes): an unused extra `def` reads
 +0.6 ± 0.9 s on 32 seeds, against ±5 s at 48 seeds without the fork. Add `--until` to score only
-the stretch between the fork and that unlock.
+the stretch between the fork and that unlock. `--profile` with `--fork-at` profiles only the part after the fork
+(the time before it is one "(before the fork)" row in the unlock table).
 
 `--tweak` applies one such change to any run, to try a what-if by hand: `speed=1.2` (every tick),
 `compute=0.8` (everything but actions; actions keep their time), `grow=0.8` (growth times),

@@ -12885,6 +12885,8 @@ struct Prof {
     /// drone-seconds of capacity (drone limit x time), by segment
     seg_cap: Vec<f64>,
     cap_t: f64,
+    /// --fork-at: the game time the profile starts (the fork)
+    start: f64,
     cap_n: i32,
     /// seconds with sunflowers unlocked but no power in stock (every drone at half speed), by
     /// segment; and the time this was last brought up to date
@@ -12925,6 +12927,7 @@ impl Prof {
             segs: Vec::new(),
             seg_cap: vec![0.0],
             cap_t: 0.0,
+            start: 0.0,
             cap_n: drones,
             nopower: vec![0.0],
             pw_t: 0.0,
@@ -13227,7 +13230,7 @@ impl Sim {
         let drones = prof.cap_n;
         prof.segs.push(SegInfo { label: "(script ends)".into(), t, bottleneck: None, ready: t, drones });
         Some(Box::new(ProfOut {
-            total: t,
+            total: t - prof.start,
             fn_names: prof.fn_names,
             line_names: prof.line_names,
             stacks: prof.stacks,
@@ -13979,6 +13982,19 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
                     // the measured script starts from its top on the same farm, items and time
                     sim.stop_program_execution();
                     sim.fork_at = None;
+                    if sim.prof.is_some() {
+                        // --profile with --fork-at covers only the measured script's part
+                        let t = dur_seconds(sim.current_time);
+                        let mut p = Prof::new(sim.max_drones());
+                        p.start = t;
+                        p.cap_t = t;
+                        p.pw_t = t;
+                        p.segs.push(SegInfo { label: "(before the fork)".into(), t, bottleneck: None, ready: t, drones: 0 });
+                        p.seg_cap.push(0.0);
+                        p.nopower.push(0.0);
+                        p.inv.push((t, sim.items.clone()));
+                        sim.prof = Some(Box::new(p));
+                    }
                     sim.start_program_execution(fork_tree.take().unwrap());
                     continue;
                 } else if sim.finished {
