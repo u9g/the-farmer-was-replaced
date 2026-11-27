@@ -2151,13 +2151,25 @@ def power_check():
 	lim = 50 * drones()
 	if drones() <= 2:
 		lim = 20 * drones()
+	elif max_drones() >= 16:
+		# 16 drones (Megafarm 4 on): the power round comes before the first pumpkin round on the
+		# 12x12 field rather than after it, with enough stock for the stretch up to the cactus
+		# rounds' sunflowers
+		lim = 80 * drones()
 	if num_unlocked(Unlocks.Dinosaurs) >= 1 or num_unlocked(Unlocks.Mazes) >= 4:
 		# only the Mazes 4 cactus, snakes (one drone and its helpers) and the last maze are left:
 		# that maze's own power check makes just what it needs, in a part round merged into the
 		# maze (~4 s), which is far cheaper than a whole-field round here (~9 s)
 		lim = PW_LATE
 	if num_items(Items.Power) < lim:
+		global SUN_TARGET
+		if drones() == 4 and get_world_size() == 12:
+			# the 4-drone 12x12 round (before the Mazes 3 cactus and the Megafarm 3+4 maze): a
+			# part round up to 1000 power instead of the whole field (~1200): fewer flowers to
+			# plant and cut; the 16-drone rounds after Megafarm 4 make the rest faster
+			SUN_TARGET = 1000
 		power_round()
+		SUN_TARGET = 0
 
 
 # ---- pumpkins ----------------------------------------------------------------------------------
