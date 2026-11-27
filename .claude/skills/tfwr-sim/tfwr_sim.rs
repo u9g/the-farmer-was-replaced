@@ -217,7 +217,7 @@ mod stacks {
         }
         pub struct Stack {
             baton: Arc<Baton>,
-            thread: Option<std::thread::JoinHandle<()>>,
+            thread: RefCell<Option<std::thread::JoinHandle<()>>>,
         }
         impl Stack {
             pub fn new(body: Box<dyn FnOnce()>) -> Stack {
@@ -241,17 +241,28 @@ mod stacks {
                         b.cv.notify_all();
                     })
                     .expect("cannot start a drone thread");
-                Stack { baton, thread: Some(thread) }
+                Stack { baton, thread: RefCell::new(Some(thread)) }
             }
             pub fn resume(&self) {
-                let mut t = self.baton.turn.lock().unwrap();
-                if t.1 {
-                    return;
-                }
-                t.0 = true;
-                self.baton.cv.notify_all();
-                while t.0 {
-                    t = self.baton.cv.wait(t).unwrap();
+                let done = {
+                    let mut t = self.baton.turn.lock().unwrap();
+                    if t.1 {
+                        return;
+                    }
+                    t.0 = true;
+                    self.baton.cv.notify_all();
+                    while t.0 {
+                        t = self.baton.cv.wait(t).unwrap();
+                    }
+                    t.1
+                };
+                if done {
+                    // Wait for the thread to end before the scheduler goes on: its thread-local
+                    // caches (scopes, code, builtins) hold Rcs shared with the run, and dropping
+                    // them while the scheduler runs races on their counts and corrupts the heap.
+                    if let Some(h) = self.thread.borrow_mut().take() {
+                        let _ = h.join();
+                    }
                 }
             }
             pub fn done(&self) -> bool {
@@ -262,7 +273,7 @@ mod stacks {
             fn drop(&mut self) {
                 // An unfinished program's thread stays parked forever; it holds nothing shared.
                 if self.done() {
-                    if let Some(t) = self.thread.take() {
+                    if let Some(t) = self.thread.borrow_mut().take() {
                         let _ = t.join();
                     }
                 }
@@ -11957,6 +11968,11 @@ impl Sim {
                             }
                             let _ = self.apply_side_effect(num6);
                         }
+                        if self.execution.is_none() {
+                            // the last drone ended: the op counts consume_ops reads are freed
+                            self.used_power += num2 / (200.0 * self.tweak.action_scale()) / 30.0;
+                            return;
+                        }
                         let mut b = s.borrow_mut();
                         num2 += b.consume_ops();
                         b.set_se(SE::None);
@@ -12493,6 +12509,9 @@ impl Sim {
                 };
                 if all_done {
                     self.stop_program_execution();
+                    // The execution (and the op counts `op()` points into) is gone: touching
+                    // them below would write to freed memory.
+                    return Ok(ops);
                 } else {
                     self.remove_drone(drone_id);
                     let main = self.main_drone_id;
