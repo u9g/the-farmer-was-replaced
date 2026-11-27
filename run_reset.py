@@ -48,8 +48,31 @@ def lvl_mult(u):
 	return 2 ** (n - 1)
 
 
+def go_n(tx, ty, n):
+	# shortest torus walk on an n x n field (n >= 4, where width == n)
+	h = n // 2
+	dx = (tx - get_pos_x()) % n
+	if dx > 0:
+		if dx <= h:
+			for _ in range(dx):
+				move(East)
+		else:
+			for _ in range(n - dx):
+				move(West)
+	dy = (ty - get_pos_y()) % n
+	if dy > 0:
+		if dy <= h:
+			for _ in range(dy):
+				move(North)
+		else:
+			for _ in range(n - dy):
+				move(South)
+
 def go(tx, ty):
 	n = get_world_size()
+	if n > 3:
+		go_n(tx, ty, n)
+		return
 	w = width()
 	dx = (tx - get_pos_x()) % w
 	if dx <= w // 2:
@@ -381,7 +404,7 @@ def tend_fm(pos, cdef):
 			WANT[cp] = (comp[0], pos)
 			REQ[pos] = cp
 			return
-		if r == k - 1:
+		if r == k - 1 or (c == Entities.Grass and get_ground_type() != Grounds.Soil):
 			return
 		harvest()
 		if c != Entities.Grass or get_ground_type() == Grounds.Soil:
@@ -516,7 +539,7 @@ def mixed_job(i, d, need, flags):
 				if (px + 1) % w == x:
 					move(East)
 				else:
-					go(x, get_pos_y())
+					go_n(x, get_pos_y(), n)
 			if sun_on and x < SUN_COLS:
 				if len(SUN) >= SUN_COLS * n:
 					# the strip is full: only its highest flower is ever cut, so walk past the rest
@@ -622,9 +645,13 @@ def mixed_ham(cl, m, n, k, lp, goal, strip, weird, fm):
 			for x in range(c0 + m - 1, c0, -1):
 				px.append(x)
 				py.append(r)
+	pts = []
+	par = []
 	ds = []
 	N = m * n
 	for t in range(N):
+		pts.append((px[t], py[t]))
+		par.append((px[t] + py[t]) % 2)
 		u = (t + 1) % N
 		if px[u] > px[t]:
 			ds.append(East)
@@ -636,7 +663,7 @@ def mixed_ham(cl, m, n, k, lp, goal, strip, weird, fm):
 			ds.append(South)
 	j = 0
 	t = k * n
-	go(px[t], py[t])
+	go_n(px[t], py[t], n)
 	while True:
 		if lp and j > 0:
 			done = True
@@ -661,11 +688,11 @@ def mixed_ham(cl, m, n, k, lp, goal, strip, weird, fm):
 		cs = [ce, co]
 		if fm:
 			for q in range(t, t + n):
-				tend_fm((px[q], py[q]), cs[(px[q] + py[q]) % 2])
+				tend_fm(pts[q], cs[par[q]])
 				move(ds[q])
 		else:
 			for q in range(t, t + n):
-				mixed_cell(strip, weird, cs[(px[q] + py[q]) % 2])
+				mixed_cell(strip, weird, cs[par[q]])
 				move(ds[q])
 		k = (k + 1) % m
 		t = k * n
@@ -732,15 +759,36 @@ FL = []
 
 
 def choose3():
-	# (choose(True), choose(False)) on the needs and flags need_vars() set
+	# (choose(True), choose(False)) on the needs and flags need_vars() set; sh() inlined for speed
 	be = Entities.Grass
 	bo = be
-	bs = sh(num_items(Items.Hay) + PEND[Items.Hay], NV[0], NV[1])
+	hv = num_items(Items.Hay) + PEND[Items.Hay]
+	c0 = NV[0]
+	l0 = NV[1]
+	bs = 0
+	if c0 > hv:
+		bs = 10 + (c0 - hv) / c0
+	if l0 > hv:
+		bs += (l0 - hv) / l0
 	so = bs
 	if FL[0]:
-		s = sh(num_items(Items.Wood) + PEND[Items.Wood], NV[2], NV[3])
+		hv = num_items(Items.Wood) + PEND[Items.Wood]
+		c0 = NV[2]
+		l0 = NV[3]
+		s = 0
+		if c0 > hv:
+			s = 10 + (c0 - hv) / c0
+		if l0 > hv:
+			s += (l0 - hv) / l0
 		if FL[1]:
-			s2 = sh(num_items(Items.Weird_Substance) + PEND[Items.Weird_Substance], NV[4], NV[5])
+			hv = num_items(Items.Weird_Substance) + PEND[Items.Weird_Substance]
+			c0 = NV[4]
+			l0 = NV[5]
+			s2 = 0
+			if c0 > hv:
+				s2 = 10 + (c0 - hv) / c0
+			if l0 > hv:
+				s2 += (l0 - hv) / l0
 			if s2 > s:
 				s = s2
 		if s > bs:
@@ -752,13 +800,19 @@ def choose3():
 				be = Entities.Bush
 				bo = be
 	if FL[3]:
-		s = sh(num_items(Items.Carrot) + PEND[Items.Carrot], NV[6], NV[7])
-		if s > bs or s > so:
-			if num_items(Items.Wood) >= FL[4] and num_items(Items.Hay) >= FL[5]:
-				if s > bs:
-					be = Entities.Carrot
-				if s > so:
-					bo = Entities.Carrot
+		hv = num_items(Items.Carrot) + PEND[Items.Carrot]
+		c0 = NV[6]
+		l0 = NV[7]
+		s = 0
+		if c0 > hv:
+			s = 10 + (c0 - hv) / c0
+		if l0 > hv:
+			s += (l0 - hv) / l0
+		if (s > bs or s > so) and num_items(Items.Wood) >= FL[4] and num_items(Items.Hay) >= FL[5]:
+			if s > bs:
+				be = Entities.Carrot
+			if s > so:
+				bo = Entities.Carrot
 	return (be, bo)
 
 
@@ -895,10 +949,10 @@ def mz_serve3(goal, per, cost, g0, park):
 								todo.pop()
 								if len(st2) > 0 and len(todo) > 0:
 									k = st2.pop()
-									move(DIRS[BACK[k]])
+									move(RDIRS[k])
 									x = x - DX[k] - DY[k] * n
 				for i in range(len(p) - 1, -1, -1):
-					move(DIRS[BACK[p[i]]])
+					move(RDIRS[p[i]])
 		elif c in known:
 			# not mine, but on my map: fetch it if its owner has not come for a while
 			deadline = seen + MZ_RESCUE
@@ -938,7 +992,7 @@ def mz_serve3(goal, per, cost, g0, park):
 				if not (MZ_SC and mz_walk(cur, c, len(p) + len(q) - 2 * j)):
 					# (while no wall has come down on my map, the ways are its tree: this is its path)
 					for i in range(len(p) - 1, j - 1, -1):
-						move(DIRS[BACK[p[i]]])
+						move(RDIRS[p[i]])
 					for i in range(j, len(q)):
 						move(DIRS[q[i]])
 			else:
@@ -992,7 +1046,7 @@ def mz_serve3(goal, per, cost, g0, park):
 								# the maze is gone: off to my start for the next one, the short way
 								break
 						k = p[i]
-						move(DIRS[BACK[k]])
+						move(RDIRS[k])
 						x = x - DX[k] - DY[k] * n
 						wk.append(x)
 						if mz_try(x):
@@ -1446,7 +1500,7 @@ def mixed_seg(i, d, need, flags):
 			y = n - 1 - y
 		if x != cx:
 			cx = x
-			go(x, y)
+			go_n(x, y, n)
 			p3 = choose3()
 			ce = p3[0]
 			co = p3[1]
@@ -1507,7 +1561,7 @@ def wsub_job(i, d, goal, b):
 		for x in cols:
 			if num_items(Items.Weird_Substance) >= goal:
 				return 0
-			go(x, get_pos_y())
+			go_n(x, get_pos_y(), n)
 			if get_pos_y() == 0:
 				ys = range(n)
 				dy = North
@@ -1642,7 +1696,7 @@ def bd_settle(k, a, f, b, dfr, LO, UP, MX, path, wf):
 				if MX[c]:
 					work.append((c, 0))
 	if cur != k:
-		go(path[k][0], path[k][1])
+		go_n(path[k][0], path[k][1], get_world_size())
 
 
 def sun_cut_job(i, d, lists, v):
@@ -1787,7 +1841,7 @@ def sun_plant2(i, d, wet, b):
 	for xy in cl:
 		x = xy[0]
 		y = xy[1]
-		go(x, y)
+		go_n(x, y, n)
 		ci -= 1
 		if get_entity_type() != Entities.Sunflower:
 			clear_cell()
@@ -1878,6 +1932,7 @@ def sun_plant2(i, d, wet, b):
 
 
 def sun_cut2(i, d, a):
+	n = get_world_size()
 	plans = a[0]
 	T = a[1]
 	plan = plans[i]
@@ -1887,7 +1942,7 @@ def sun_cut2(i, d, a):
 		until = T[li]
 		for k in range(len(route)):
 			c = route[k]
-			go(c[0], c[1])
+			go_n(c[0], c[1], n)
 			if k == 0:
 				while get_time() < until:
 					pass
@@ -2275,21 +2330,27 @@ def pk_job(i, d, a):
 	py = p[1]
 	L = len(px)
 	seed = get_cost(Entities.Pumpkin)[Items.Carrot]
-	go(px[0], py[0])
+	go_n(px[0], py[0], n)
 	while get_pos_x() != px[0] or get_pos_y() != py[0]:
 		# a maze still stands (its walls stopped a move): cut it down from where this drone is
 		e = get_entity_type()
 		if e == Entities.Hedge or e == Entities.Treasure:
 			harvest()
-		go(px[0], py[0])
+		go_n(px[0], py[0], n)
+	pdir = []
+	for t in range(L - 1):
+		pdir.append(step_dir(px[t], py[t], px[t + 1], py[t + 1]))
+	rdir = []
+	for t in range(L - 1, 0, -1):
+		rdir.append(step_dir(px[t], py[t], px[t - 1], py[t - 1]))
 	while True:
-		pk_pass(px, py, L, seed, i, n, a)
+		pk_pass(px, py, L, seed, i, n, a, pdir)
 		if a <= 1:
 			return 0
 		a -= 1
 		if i == 0:
 			# the field is one pumpkin once (0, n - 1) and (0, 0) (north of it, round the edge) match
-			go(0, n - 1)
+			go_n(0, n - 1, n)
 			while not (can_harvest() and measure() == measure(North)):
 				pass
 			harvest()
@@ -2304,10 +2365,13 @@ def pk_job(i, d, a):
 			ry.insert(0, py[t])
 		px = rx
 		py = ry
-		go(px[0], py[0])
+		tmp = pdir
+		pdir = rdir
+		rdir = tmp
+		go_n(px[0], py[0], n)
 
 
-def pk_pass(px, py, L, seed, i, n, a):
+def pk_pass(px, py, L, seed, i, n, a, pdir):
 	todo = []
 	p0 = num_items(Items.Pumpkin)
 	for t in range(L):
@@ -2327,7 +2391,7 @@ def pk_pass(px, py, L, seed, i, n, a):
 		elif not can_harvest():
 			todo.append(t)
 		if t < L - 1:
-			move(step_dir(px[t], py[t], px[t + 1], py[t + 1]))
+			move(pdir[t])
 	# revisit the cells not grown yet, nearest first along the path; replant the dead ones
 	at = L - 1
 	while len(todo) > 0:
@@ -2340,7 +2404,7 @@ def pk_pass(px, py, L, seed, i, n, a):
 		alone = len(todo) == 1
 		fert = len(todo) <= PK_FA
 		for t in todo:
-			go(px[t], py[t])
+			go_n(px[t], py[t], n)
 			at = t
 			while True:
 				e = get_entity_type()
@@ -2630,6 +2694,32 @@ def cactus3_job(i, d, a):
 			y = py[k]
 			if not (((x + y) % 4 != 3 and not (x, y) in DR) or (x, y) in CN):
 				sfi[k] = (x + 4 * y) % 6 == 0
+	is_cac = []
+	is_mid = []
+	is_wd = []
+	fdir = []
+	bdir = []
+	mid_f = []
+	for k in range(L):
+		x = px[k]
+		y = py[k]
+		cc = ((x + y) % 4 != 3 and not (x, y) in DR) or (x, y) in CN
+		is_cac.append(cc)
+		mm = (x + y) % 4 == 1 and not (x, y) in JC and not (x, y) in DR
+		is_mid.append(mm)
+		is_wd.append(wd and (x + 2 * y) % 5 == 0)
+		if mm:
+			mid_f.append((x < n - 1 and not (x + 1, y) in DR, y < n - 1 and not (x, y + 1) in DR, x > 0 and not (x - 1, y) in DR, y > 0 and not (x, y - 1) in DR))
+		else:
+			mid_f.append(None)
+		if k < L - 1:
+			fdir.append(step_dir(x, y, px[k + 1], py[k + 1]))
+		else:
+			fdir.append(None)
+		if k > 0:
+			bdir.append(step_dir(x, y, px[k - 1], py[k - 1]))
+		else:
+			bdir.append(None)
 	for r in range(R):
 		if r > 0:
 			# the harvest pops my cell
@@ -2644,12 +2734,10 @@ def cactus3_job(i, d, a):
 			elif p > 2:
 				act = 2
 				lv = 15 - (p - 2 - 1)
-		go(px[0], py[0])
+		go_n(px[0], py[0], n)
 		tl = get_time()
 		for k in range(L):
-			x = px[k]
-			y = py[k]
-			if ((x + y) % 4 != 3 and not (x, y) in DR) or (x, y) in CN:
+			if is_cac[k]:
 				if get_entity_type() != Entities.Cactus:
 					clear_cell()
 					soil()
@@ -2659,12 +2747,10 @@ def cactus3_job(i, d, a):
 				if wd or not k in sfi or get_entity_type() != Entities.Sunflower:
 					harvest()
 			if k < L - 1:
-				move(step_dir(x, y, px[k + 1], py[k + 1]))
+				move(fdir[k])
 		# back along the path: fix the middles
 		k = L - 1
 		while k >= 0:
-			x = px[k]
-			y = py[k]
 			if act > 0 and k in sfi:
 				if act == 1:
 					if get_entity_type() == None and num_items(Items.Carrot) > 2000:
@@ -2680,8 +2766,8 @@ def cactus3_job(i, d, a):
 								plant(Entities.Sunflower)
 				elif get_entity_type() == Entities.Sunflower and measure() >= lv and can_harvest():
 					harvest()
-			if (x + y) % 4 == 1 and not (x, y) in JC and not (x, y) in DR:
-				f = (x < n - 1 and not (x + 1, y) in DR, y < n - 1 and not (x, y + 1) in DR, x > 0 and not (x - 1, y) in DR, y > 0 and not (x, y - 1) in DR)
+			if is_mid[k]:
+				f = mid_f[k]
 				while True:
 					h = measure()
 					e = h
@@ -2719,12 +2805,12 @@ def cactus3_job(i, d, a):
 						swap(North)
 						continue
 					break
-			if wd and (x + 2 * y) % 5 == 0 and num_items(Items.Weird_Substance) >= 1 and get_entity_type() == Entities.Cactus:
+			if is_wd[k] and num_items(Items.Weird_Substance) >= 1 and get_entity_type() == Entities.Cactus:
 				# a weird round: weird substance turns this cactus and its neighbours (the centres
 				# cover the field once)
 				use_item(Items.Weird_Substance)
 			if k > 0:
-				move(step_dir(px[k], py[k], px[k - 1], py[k - 1]))
+				move(bdir[k])
 			k -= 1
 		for ch in CJ_S[5][i]:
 			cj_sort(ch)
@@ -2756,7 +2842,7 @@ def cactus3_job(i, d, a):
 				w0 = num_items(Items.Weird_Substance)
 			else:
 				if get_entity_type() != Entities.Cactus:
-					go(px[k1], py[k1])
+					go_n(px[k1], py[k1], n)
 				use_item(Items.Weird_Substance)
 				use_item(Items.Weird_Substance)
 	return 0
@@ -2779,7 +2865,7 @@ def bd_job(i, d, x):
 	a = pl[5][0][i]
 	b = pl[5][0][i + 1]
 	f = b - pl[5][1][i]
-	go(path[a][0], path[a][1])
+	go_n(path[a][0], path[a][1], get_world_size())
 	tl = get_time()
 	wf = None
 	if wd:
@@ -2937,7 +3023,7 @@ def cj_sort(ch):
 	for k in range(m):
 		wl.append(False)
 	for k in range(m):
-		go(R[k][0], R[k][1])
+		go_n(R[k][0], R[k][1], get_world_size())
 		cj_fix(k, ch, V, wl)
 	while True:
 		x0 = get_pos_x()
@@ -2965,7 +3051,7 @@ def cj_sort(ch):
 		if best < 0:
 			break
 		wl[best] = False
-		go(R[best][0], R[best][1])
+		go_n(R[best][0], R[best][1], get_world_size())
 		cj_fix(best, ch, V, wl)
 
 
@@ -2984,7 +3070,7 @@ def cactus_round(weird, R):
 		for r in range(R):
 			fan(bd_job, 0, d, d, (pl, weird))
 			if get_entity_type() != Entities.Cactus:
-				go(pl[0][0][0], pl[0][0][1])
+				go_n(pl[0][0][0], pl[0][0][1], n)
 			harvest()
 		return
 	if CJ_N != n * 100 + d and n * 100 + d == 1616:
@@ -3157,6 +3243,7 @@ DIRS = [North, East, South, West]
 DX = [0, 1, 0, -1]
 DY = [1, 0, -1, 0]
 BACK = [2, 3, 0, 1]
+RDIRS = [South, West, North, East]
 # a step's change of cell index (set for the maze's size in mz_explore)
 DD = [0, 1, 0, -1]
 MAZE_SECS = 90
@@ -3234,7 +3321,7 @@ MZ_HEALN = 24
 MZ_PRX = 24
 # for these drone counts (bits: 2, 4, 8, 16) half the drones map the maze, then each hands half
 # of its cells (cut at one tree edge, so the halves are even) to a new drone
-MZ_HALF = 2
+MZ_HALF = 0
 
 
 def mz_starts(n, d):
@@ -3476,7 +3563,7 @@ def mz_explore(si):
 		else:
 			kids.pop()
 			k = stack.pop()
-			move(DIRS[BACK[k]])
+			move(RDIRS[k])
 			c = c - DD[k]
 	# cut every path to another start at its middle (ties to the lower index)
 	cut = {}
@@ -3558,7 +3645,7 @@ def mz_seek(tc, chase):
 			if len(stack) == 0:
 				return stack
 			k = stack.pop()
-			move(DIRS[BACK[k]])
+			move(RDIRS[k])
 			c = c - DX[k] - DY[k] * n
 	return stack
 
@@ -3684,10 +3771,10 @@ def mz_serve(goal, per, cost, g0, park):
 								todo.pop()
 								if len(st2) > 0 and len(todo) > 0:
 									k = st2.pop()
-									move(DIRS[BACK[k]])
+									move(RDIRS[k])
 									x = x - DX[k] - DY[k] * n
 				for i in range(len(p) - 1, -1, -1):
-					move(DIRS[BACK[p[i]]])
+					move(RDIRS[p[i]])
 		elif c in known:
 			# not mine, but on my map: fetch it if its owner has not come for a while
 			deadline = seen + MZ_RESCUE
@@ -3727,7 +3814,7 @@ def mz_serve(goal, per, cost, g0, park):
 				if not (MZ_SC and mz_walk(cur, c, len(p) + len(q) - 2 * j)):
 					# (while no wall has come down on my map, the ways are its tree: this is its path)
 					for i in range(len(p) - 1, j - 1, -1):
-						move(DIRS[BACK[p[i]]])
+						move(RDIRS[p[i]])
 					for i in range(j, len(q)):
 						move(DIRS[q[i]])
 			else:
@@ -3781,7 +3868,7 @@ def mz_serve(goal, per, cost, g0, park):
 								# the maze is gone: off to my start for the next one, the short way
 								break
 						k = p[i]
-						move(DIRS[BACK[k]])
+						move(RDIRS[k])
 						x = x - DX[k] - DY[k] * n
 						wk.append(x)
 						if mz_try(x):
@@ -4025,7 +4112,7 @@ def mz_life2(me, goal, stop, st, start_at, park):
 	for i in range(len(st)):
 		si[st[i]] = i
 	root = st[me]
-	go(root % n, root // n)
+	go_n(root % n, root // n, n)
 	if me == 0:
 		harvest()
 		plant(Entities.Bush)
@@ -4067,7 +4154,7 @@ def mz_life2(me, goal, stop, st, start_at, park):
 			finds = (goal - g) // per + 1
 			if g >= goal or get_time() > stop or num_items(Items.Weird_Substance) < cost * (min(finds, 300) + 1):
 				return 0
-			go(root % n, root // n)
+			go_n(root % n, root // n, n)
 			plant(Entities.Bush)
 			until = t0 + act * MZ_WAIT
 			while get_time() < until:
@@ -4082,7 +4169,7 @@ def mz_life2(me, goal, stop, st, start_at, park):
 			if get_pos_x() + get_pos_y() * n != root:
 				e = get_entity_type()
 				if e != Entities.Hedge and e != Entities.Treasure:
-					go(root % n, root // n)
+					go_n(root % n, root // n, n)
 				else:
 					mz_seek(root, False)
 			until = get_time() + act * (MZ_WAIT + 2 * n + 4)
@@ -4154,10 +4241,10 @@ def maze_round(s, goal):
 
 # ---- dinosaur snake (dinosaurs.py, whole field) ------------------------------------------------
 
-FREE_LIMIT = 24
+FREE_LIMIT = 26
 PLAN = True
 MARGIN = 1
-ROOM = 2
+ROOM = 1
 SN = 0
 SS = 0
 SHORTCUT_LIMIT = 0
@@ -4409,7 +4496,7 @@ def mz_explore3(si):
 		else:
 			kids.pop()
 			k = stack.pop()
-			move(DIRS[BACK[k]])
+			move(RDIRS[k])
 			c = c - DD[k]
 	# cut every path to another start at its middle (ties to the lower index)
 	cut = {}
@@ -5215,7 +5302,7 @@ def free_step(ch, ax, ay, low, need, t):
 	return [fallback, NOM]
 
 
-HL = 24
+HL = 26
 
 
 def leg(ch, ca, t, k):
@@ -5766,8 +5853,8 @@ def play():
 						for q in D:
 							move(q)
 					else:
-						for q in range(i, n):
-							move(D[q])
+						for q in D[i:]:
+							move(q)
 					e = seg + j
 					if e == nb - 1:
 						move(West)
@@ -5809,9 +5896,8 @@ def play():
 				for q in range(i, ia):
 					move(South)
 			else:
-				D = RDIR[sj[seg]][sm[seg]]
-				for q in range(i, ia):
-					move(D[q])
+				for q in RDIR[sj[seg]][sm[seg]][i:ia]:
+					move(q)
 			t += ia - i
 			i = ia
 			at = True
