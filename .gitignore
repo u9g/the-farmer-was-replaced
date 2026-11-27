@@ -4,3 +4,4 @@ __pycache__/
 *~RF*.TMP
 save.json
 __builtins__.py
+.claude/worktrees/
