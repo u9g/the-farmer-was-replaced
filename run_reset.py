@@ -916,7 +916,7 @@ SUN_WSAFE = 1.06
 # the snake's neighbour tables are built during a power round's wait for its flowers
 SUN_DINO = True
 SUN_MARGIN = 1.1
-SUN_SLACK = 2
+SUN_SLACK = 0
 SUN_GROW = 0.3
 SUN_NEW = True
 # a sunflower's petals are drawn anew at every planting: in the last power round (carrots to
@@ -1123,7 +1123,7 @@ def power_round2(n):
 		k = (SUN_TARGET - num_items(Items.Power) + d * SUN_PDR) // (8 * lvl_mult(Unlocks.Sunflowers)) + 12
 		b = k // d + 1
 		nf = min(n, b * d)
-	if num_unlocked(Unlocks.Mazes) >= 4 and SUN_GRADED:
+	if (num_unlocked(Unlocks.Dinosaurs) > 0 or num_unlocked(Unlocks.Mazes) >= 4) and SUN_GRADED:
 		wet = sun_water(nf, nf / d, 16 - max(SUN_MINP, 7))
 	else:
 		k = min(SUN_WN, (num_items(Items.Water) - SUN_WRES) // n)
@@ -1267,6 +1267,8 @@ def power_check():
 	if num_unlocked(Unlocks.Sunflowers) == 0 or width() < 6 or (SUN_STRIP and drones() == 1):
 		return
 	lim = 60 * drones()
+	if drones() <= 2:
+		lim = 20 * drones()
 	if num_unlocked(Unlocks.Mazes) >= 4:
 		# only snakes (one drone and its helpers) and the last maze are left: that maze's own
 		# power check makes just what it needs
@@ -1353,6 +1355,9 @@ PK_WLO = 0.5
 PK_FA = 2
 PK_RES = 6000
 PK_ALL = True
+PK_PERS = True
+PK_PERS_MIN = 16
+PK_PERS_C = 1.4
 
 
 def pk_wet():
@@ -1376,6 +1381,32 @@ def pk_job(i, d, a):
 	L = len(px)
 	seed = get_cost(Entities.Pumpkin)[Items.Carrot]
 	go(px[0], py[0])
+	while True:
+		pk_pass(px, py, L, seed, i, n, a)
+		if a <= 1:
+			return 0
+		a -= 1
+		if i == 0:
+			# the field is one pumpkin once (0, n - 1) and (0, 0) (north of it, round the edge) match
+			go(0, n - 1)
+			while not (can_harvest() and measure() == measure(North)):
+				pass
+			harvest()
+		else:
+			while get_entity_type() == Entities.Pumpkin:
+				pass
+		# the next round walks the path the other way, from where this drone is
+		rx = []
+		ry = []
+		for t in range(L):
+			rx.insert(0, px[t])
+			ry.insert(0, py[t])
+		px = rx
+		py = ry
+		go(px[0], py[0])
+
+
+def pk_pass(px, py, L, seed, i, n, a):
 	todo = []
 	for t in range(L):
 		e = get_entity_type()
@@ -1394,12 +1425,7 @@ def pk_job(i, d, a):
 		elif not can_harvest():
 			todo.append(t)
 		if t < L - 1:
-			if px[t + 1] != px[t]:
-				move(East)
-			elif py[t + 1] > py[t]:
-				move(North)
-			else:
-				move(South)
+			move(step_dir(px[t], py[t], px[t + 1], py[t + 1]))
 	# revisit the cells not grown yet, nearest first along the path; replant the dead ones
 	at = L - 1
 	while len(todo) > 0:
@@ -1426,6 +1452,9 @@ def pk_job(i, d, a):
 						nt.append(t)
 						break
 				else:
+					if e == None and a > 0:
+						# cut: drone 0 found the field whole
+						break
 					if e != Entities.Dead_Pumpkin and e != None:
 						harvest()
 					if num_items(Items.Carrot) < seed:
@@ -1440,22 +1469,26 @@ def pk_job(i, d, a):
 	return 0
 
 
-def pumpkin_round():
+def pumpkin_round(goal):
 	# every drone returns once its columns have grown, so the field is one pumpkin by then
 	d = drones()
 	if PK_ALL and width() > 1:
 		d = min(max_drones(), width() * get_world_size())
-	fan(pk_job, 0, d, d, 0)
+	n = get_world_size()
+	r = 0
+	if PK_PERS and d >= PK_PERS_MIN and n >= 6:
+		# several rounds with the same drones: drone 0 harvests once the field has merged and
+		# the others replant as soon as their cells are cut
+		per = n * n * 6 * lvl_mult(Unlocks.Pumpkins)
+		r = min((goal - num_items(Items.Pumpkin) + per - 1) // per, num_items(Items.Carrot) // (n * n * get_cost(Entities.Pumpkin)[Items.Carrot] * PK_PERS_C))
+	if r >= 2:
+		fan(pk_job, 0, d, d, r)
+	else:
+		fan(pk_job, 0, d, d, 0)
 	if get_entity_type() == Entities.Pumpkin:
 		harvest()
 
 
-def pumpkin_until(goal):
-	# pumpkin rounds until the inventory holds goal pumpkins (or carrots run out)
-	seed = get_cost(Entities.Pumpkin)[Items.Carrot]
-	n = get_world_size()
-	while num_items(Items.Pumpkin) < goal and num_items(Items.Carrot) >= seed * n * n:
-		pumpkin_round()
 
 
 # ---- cactus ------------------------------------------------------------------------------------
@@ -2120,7 +2153,8 @@ def mz_serve(goal, per, cost, g0, park):
 				adopt = -1
 			if not ok:
 				g = num_items(Items.Gold)
-				if g >= lim and get_entity_type() == Entities.Treasure:
+				# out of weird substance (a short final maze): cash the treasure in rather than spin
+				if (g >= lim or num_items(Items.Weird_Substance) < cost) and get_entity_type() == Entities.Treasure:
 					harvest()
 					if num_items(Items.Gold) > g:
 						MZ_CUR = cur
@@ -3377,17 +3411,49 @@ def fly(tx, ty):
 	return get_pos_x() == tx and get_pos_y() == ty
 
 
-def helper(w, x, t, k):
+def helper(w, x, t, k, p):
 	# flies to apple x, works out the snake's moves to it (as the drone that sent it did),
-	# reads the next apple off x as soon as it is there, sends the next helper on, and
-	# returns the snake's moves from x to that next apple. The game picks the next apple
-	# again when the snake steps off it, so a next apple on the way to x is not final: None.
-	# None too when the snake's body keeps it from reaching x (the snake may be waiting on x),
-	# and when the snake has ended (its bones came in) before x was an apple.
+	# sends the next helper off from x (it waits there with this drone), reads the next apple
+	# off x as soon as it is there and returns the snake's moves from x to that next apple.
+	# The next helper reads the same apple at the same moment and flies straight on, so no
+	# spawn is on either drone's way once the apple is up. p: the path to w when this drone
+	# was sent off at w before w's apple was there (x then still to be read off w).
+	# The game picks the next apple again when the snake steps off it, so a next apple on the
+	# way to x is not final: None. None too when the snake's body keeps it from reaching x
+	# (the snake may be waiting on x), and when the snake has ended (its bones came in)
+	# before x was an apple.
+	global bad
+	if p == 0:
+		# only the snake's moves from w to x, for the helper that flies to x meanwhile
+		r = leg(w, x, t, k)
+		return [r[0], r[1], r[2], None, None, bad]
+	b = None
+	if p != None:
+		b0 = num_items(Items.Bone)
+		while get_entity_type() != Entities.Apple:
+			if num_items(Items.Bone) != b0:
+				return [None, None, None, None, None, None]
+		nxt = measure()
+		x = IDX[nxt[0]][nxt[1]]
+		if x in p:
+			return [None, None, None, None, None, None]
+		if abs(PX[x] - PX[w]) + abs(PY[x] - PY[w]) >= 4:
+			# a far apple: a drone of its own works out the moves to it while this one flies
+			b = spawn_drone(helper, w, x, t, k, 0)
 	if not fly(PX[x], PY[x]):
 		return [None, None, None, None, None, None]
-	r = leg(w, x, t, k)
+	if b != None:
+		r = wait_for(b)
+		c = r[0]
+		for i in range(len(c)):
+			occ[c[i]] = t + i + 1
+		bad = r[5]
+	else:
+		r = leg(w, x, t, k)
 	t += len(r[0])
+	h = None
+	if k + 2 <= HL:
+		h = spawn_drone(helper, x, -1, t, k + 1, r[0])
 	b0 = num_items(Items.Bone)
 	while get_entity_type() != Entities.Apple:
 		if num_items(Items.Bone) != b0:
@@ -3396,9 +3462,6 @@ def helper(w, x, t, k):
 	y = IDX[nxt[0]][nxt[1]]
 	if y in r[0]:
 		return [None, None, None, None, None, bad]
-	h = None
-	if k + 2 <= HL:
-		h = spawn_drone(helper, x, y, t, k + 1)
 	r2 = leg(x, y, t, k + 1)
 	return [r2[0], r2[1], r2[2], h, nxt, bad]
 
@@ -3412,6 +3475,18 @@ def play():
 		change_hat(Hats.Straw_Hat)
 		return 0
 	nxt = measure()
+	# the first apple is under the drone and the next one anywhere, its moves at the full 400
+	# ticks: a far one is dropped for another (two hat changes, 400 ticks) while the expected
+	# saving beats that (from the corner one of 10 moves or fewer, near the middle 7)
+	x0 = get_pos_x()
+	y0 = get_pos_y()
+	lim = 6 + (abs(2 * x0 + 1 - SN) // 2 + abs(2 * y0 + 1 - SN) // 2) // 3
+	q = 0
+	while nxt != None and abs(nxt[0] - x0) + abs(nxt[1] - y0) > lim and q < 40:
+		change_hat(Hats.Straw_Hat)
+		change_hat(Hats.Dinosaur_Hat)
+		nxt = measure()
+		q += 1
 	for i in range(S):
 		occ[i] = -S - 2
 		bad[i] = -5
@@ -3436,7 +3511,7 @@ def play():
 	if HL >= 2:
 		k = 1
 		ca = IDX[nxt[0]][nxt[1]]
-		h = spawn_drone(helper, ch, ca, t, k)
+		h = spawn_drone(helper, ch, ca, t, k, None)
 		r = leg(ch, ca, t, k)
 		while True:
 			cells = r[0]
@@ -3465,7 +3540,7 @@ def play():
 					break
 				k += 1
 				ca = IDX[nxt[0]][nxt[1]]
-				h = spawn_drone(helper, ch, ca, t, k)
+				h = spawn_drone(helper, ch, ca, t, k, None)
 				r = leg(ch, ca, t, k)
 			else:
 				h = r[3]
@@ -3808,6 +3883,8 @@ def play():
 			if nxt == None:
 				last = True
 	change_hat(Hats.Straw_Hat)
+	FALLS = num_items(Items.Power)
+	SPLITS = num_items(Items.Cactus)
 	return k
 
 
@@ -3819,7 +3896,10 @@ def dino_round():
 	# a snake of k cells pays k * k * 2 ** (Dinosaurs - 1) bones: it stops at the length that
 	# covers what the purchase still needs (DINO_GOAL, set by farm), when that is under a full field
 	global DINO_KT
-	clear()
+	if SN != get_world_size() or num_items(Items.Power) > FALLS or num_items(Items.Cactus) > SPLITS:
+		# no other round since the last snake (it made no power or cactus): its field is empty,
+		# and the next snake starts where it ended rather than in the corner
+		clear()
 	if SN != get_world_size():
 		dino_setup()
 	if not DINO_BG[0]:
@@ -3859,14 +3939,14 @@ def farm(item, amount):
 		mixed_round((n, n))
 	elif item == Items.Pumpkin:
 		carrots_for(cells * 2 * lvl_mult(Unlocks.Pumpkins))
-		pumpkin_round()
+		pumpkin_round(amount)
 		e7 = get_cost(Unlocks.Expand)[Items.Pumpkin]
 		if num_unlocked(Unlocks.Expand) == 6 and num_items(Items.Pumpkin) >= e7 and num_items(Items.Pumpkin) < e7 + PK_RES:
 			# Expand 7 is affordable: first the pumpkins for the cactus seeds after it, made here
 			# on the 12x12 field (6,900 in ~5 s) instead of in a 16x16 round later (~20 s with
 			# the carrots for its seeds)
 			carrots_for(cells * 2 * lvl_mult(Unlocks.Pumpkins))
-			pumpkin_round()
+			pumpkin_round(e7 + PK_RES)
 	elif item == Items.Weird_Substance and num_unlocked(Unlocks.Cactus) == 0:
 		weird_round(amount)
 	elif item == Items.Cactus or item == Items.Weird_Substance:
@@ -4033,7 +4113,9 @@ def open_grass(x, y, w, n):
 OG1 = 2
 OG_H = True
 OG_M = 2
-OPENING_WOOD = [(Unlocks.Expand, 2), (Unlocks.Speed, 2), (Unlocks.Carrots, 1)]
+# Speed 2 on the 1x3 strip, before Expand 2: the strip is growth-bound (two bushes), so the
+# speed costs it little, and the 3x3 farm runs at Speed 2 from its start (~6 s a run)
+OPENING_WOOD = [(Unlocks.Speed, 2), (Unlocks.Expand, 2), (Unlocks.Carrots, 1)]
 
 
 
