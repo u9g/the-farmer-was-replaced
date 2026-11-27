@@ -1470,7 +1470,7 @@ SUN_PAD = 150
 SUN_TARGET = 0
 SUN_PART = True
 SUN_PDR = 12
-PW_LATE = 400
+PW_LATE = 100
 PW_MARGIN = 0.9
 
 
@@ -1537,7 +1537,7 @@ def power_check():
 	lim = 50 * drones()
 	if drones() <= 2:
 		lim = 20 * drones()
-	if num_unlocked(Unlocks.Dinosaurs) >= 5 or num_unlocked(Unlocks.Mazes) >= 4:
+	if num_unlocked(Unlocks.Dinosaurs) >= 1 or num_unlocked(Unlocks.Mazes) >= 4:
 		# only the Mazes 4 cactus, snakes (one drone and its helpers) and the last maze are left:
 		# that maze's own power check makes just what it needs, in a part round merged into the
 		# maze (~4 s), which is far cheaper than a whole-field round here (~9 s)
@@ -1995,11 +1995,29 @@ def cactus3_job(i, d, a):
 	k1 = 0
 	while not (((px[k1] + py[k1]) % 4 != 3 and not (px[k1], py[k1]) in DR) or (px[k1], py[k1]) in CN):
 		k1 += 1
+	# sunflowers on my path's empty cells (a few ballast ones with fewer than 12 petals that
+	# stay, so 10 always stand)
+	sfi = {}
+	if a[2]:
+		for k in range(L):
+			x = px[k]
+			y = py[k]
+			if not (((x + y) % 4 != 3 and not (x, y) in DR) or (x, y) in CN):
+				sfi[k] = (x + 4 * y) % 6 == 0
 	for r in range(R):
 		if r > 0:
 			# the harvest pops my cell
 			while get_entity_type() == Entities.Cactus:
 				pass
+		act = 0
+		if len(sfi) > 0:
+			p = (a[3] + r) % 7
+			if p == 0:
+				if a[4] - a[3] - r - 1 >= 2 + 4:
+					act = 1
+			elif p > 2:
+				act = 2
+				lv = 15 - (p - 2 - 1)
 		go(px[0], py[0])
 		tl = get_time()
 		for k in range(L):
@@ -2012,7 +2030,8 @@ def cactus3_job(i, d, a):
 					plant(Entities.Cactus)
 					tl = get_time()
 			elif get_entity_type() != None:
-				harvest()
+				if wd or not k in sfi or get_entity_type() != Entities.Sunflower:
+					harvest()
 			if k < L - 1:
 				move(step_dir(x, y, px[k + 1], py[k + 1]))
 		# back along the path: fix the middles
@@ -2020,6 +2039,21 @@ def cactus3_job(i, d, a):
 		while k >= 0:
 			x = px[k]
 			y = py[k]
+			if act > 0 and k in sfi:
+				if act == 1:
+					if get_entity_type() == None and num_items(Items.Carrot) > 2000:
+						soil()
+						plant(Entities.Sunflower)
+						if sfi[k]:
+							while measure() >= 12:
+								harvest()
+								plant(Entities.Sunflower)
+						else:
+							while measure() < 12:
+								harvest()
+								plant(Entities.Sunflower)
+				elif get_entity_type() == Entities.Sunflower and measure() >= lv and can_harvest():
+					harvest()
 			if (x + y) % 4 == 1 and not (x, y) in JC and not (x, y) in DR:
 				f = (x < n - 1 and not (x + 1, y) in DR, y < n - 1 and not (x, y + 1) in DR, x > 0 and not (x - 1, y) in DR, y > 0 and not (x, y - 1) in DR)
 				while True:
@@ -2066,82 +2100,8 @@ def cactus3_job(i, d, a):
 			if k > 0:
 				move(step_dir(px[k], py[k], px[k - 1], py[k - 1]))
 			k -= 1
-		# junction chains: a dirty flag per edge (chain cell to neighbour); stand on the chain cell
-		# with a dirty edge nearest to me, fix its edges (swap with the largest lower neighbour above
-		# it, else the smallest upper one below it), mark the edges at the swapped cell dirty
-		for jc in CJ_S[5][i]:
-			P = jc[0]
-			EJ = jc[1]
-			MK = jc[2]
-			dt = []
-			for e in range(jc[3]):
-				dt.append(True)
-			m = len(P)
-			rd = False
-			x = get_pos_x()
-			y = get_pos_y()
-			j = 0
-			if abs(P[m - 1][0] - x) + abs(P[m - 1][1] - y) < abs(P[0][0] - x) + abs(P[0][1] - y):
-				j = m - 1
-			while j >= 0:
-				x = P[j][0]
-				y = P[j][1]
-				go(x, y)
-				ej = EJ[j]
-				while True:
-					h = measure()
-					if h == None:
-						clear_cell()
-						soil()
-						plant(Entities.Cactus)
-						tl = get_time()
-						h = measure()
-					bl = -1
-					bv = h
-					tu = -1
-					tv = h
-					for e in ej:
-						z = measure(DIRS[e[0]])
-						if z == None and PREP and r > 0:
-							# not planted yet: move my cactus there and plant mine again
-							if swap(DIRS[e[0]]):
-								plant(Entities.Cactus)
-								tl = get_time()
-								rd = True
-								break
-						while z == None:
-							z = measure(DIRS[e[0]])
-						if e[0] < 2:
-							if z < tv:
-								tv = z
-								tu = e[0]
-						elif z > bv:
-							bv = z
-							bl = e[0]
-					if rd:
-						rd = False
-						continue
-					if bl >= 0:
-						dd = bl
-					elif tu >= 0:
-						dd = tu
-					else:
-						break
-					swap(DIRS[dd])
-					for e in MK[j][dd]:
-						dt[e] = True
-				for e in ej:
-					dt[e[1]] = False
-				j = -1
-				bd = 99
-				for t in range(m):
-					for e in EJ[t]:
-						if dt[e[1]]:
-							q = abs(P[t][0] - x) + abs(P[t][1] - y)
-							if q < bd:
-								bd = q
-								j = t
-							break
+		for ch in CJ_S[5][i]:
+			cj_sort(ch)
 		tl += 1.0
 		while get_time() < tl:
 			pass
@@ -2149,8 +2109,21 @@ def cactus3_job(i, d, a):
 			# done: drone 0 harvests once every other drone has used two weird substance (the
 			# second use undoes the first's weird cactus), then all go on with the next round
 			if i == 0:
-				while num_items(Items.Weird_Substance) > w0 - 2 * (d - 1):
-					pass
+				if len(sfi) > 0:
+					# a sunflower toggled weird by a drone's signal and cut (4 weird substance)
+					# would keep the count up: go on once it has stood still for a while
+					c0 = num_items(Items.Weird_Substance)
+					t0 = get_time()
+					while c0 > w0 - 2 * (d - 1):
+						c = num_items(Items.Weird_Substance)
+						if c != c0:
+							c0 = c
+							t0 = get_time()
+						elif get_time() > t0 + 2.5 and (c0 - w0 + 2 * (d - 1)) % 4 == 0:
+							break
+				else:
+					while num_items(Items.Weird_Substance) > w0 - 2 * (d - 1):
+						pass
 				if get_entity_type() != Entities.Cactus:
 					go(0, 0)
 				harvest()
@@ -2284,6 +2257,92 @@ def bd_cells_n():
 	return c
 
 
+def cj_fix(k, ch, V, wl):
+	# make chain cell k (the drone stands on it) fit all its neighbours: swap with the largest
+	# lower or smallest upper neighbour out of order until none is; cells a swap changed go on wl
+	NB = ch[1][k]
+	while True:
+		h = measure()
+		while h == None:
+			h = measure()
+		V[k] = h
+		for e in NB:
+			z = measure(DIRS[e[0]])
+			while z == None:
+				z = measure(DIRS[e[0]])
+			V[e[1]] = z
+		ml = -1
+		mu = 10
+		el = None
+		eu = None
+		for e in NB:
+			z = V[e[1]]
+			if e[2]:
+				if z > ml:
+					ml = z
+					el = e
+			elif z < mu:
+				mu = z
+				eu = e
+		if ml > h:
+			if mu < h and h - mu >= ml - h:
+				el = eu
+		elif mu < h:
+			el = eu
+		else:
+			break
+		swap(DIRS[el[0]])
+		V[k] = V[el[1]]
+		V[el[1]] = h
+		if el[1] < ch[2]:
+			wl[el[1]] = True
+
+
+def cj_sort(ch):
+	# one junction chain: every cell fixed in order, then (values kept in V) the nearest cell a
+	# swap may have put out of order, until none is
+	R = ch[0]
+	NB = ch[1]
+	m = ch[2]
+	V = []
+	wl = []
+	for _ in R:
+		V.append(-1)
+	for k in range(m):
+		wl.append(False)
+	for k in range(m):
+		go(R[k][0], R[k][1])
+		cj_fix(k, ch, V, wl)
+	while True:
+		x0 = get_pos_x()
+		y0 = get_pos_y()
+		best = -1
+		bd = 999
+		for k in range(m):
+			if wl[k]:
+				h = V[k]
+				bad = False
+				for e in NB[k]:
+					z = V[e[1]]
+					if e[2]:
+						if z > h:
+							bad = True
+					elif z < h:
+						bad = True
+				if bad:
+					dd = abs(R[k][0] - x0) + abs(R[k][1] - y0)
+					if dd < bd:
+						bd = dd
+						best = k
+				else:
+					wl[k] = False
+		if best < 0:
+			break
+		wl[best] = False
+		go(R[best][0], R[best][1])
+		cj_fix(best, ch, V, wl)
+
+
 def cactus_round(weird, R):
 	global CJ_N
 	global CJ_S
@@ -2401,60 +2460,49 @@ def cactus_round(weird, R):
 			ma = 0
 			for t in range(d):
 				ma += adj[t] / d
+			cd = CJ_D
+			if d < 8:
+				cd = CJ_D4
 			for t in range(d):
-				acc += (N + CJ_D * k) / d - CJ_D * len(OWN[t]) + adj[t] - ma
+				acc += (N + cd * k) / d - cd * len(OWN[t]) + adj[t] - ma
 				CUT[t + 1] = min(N, (acc + 0.5) // 1)
 			CUT[d] = N
 		for t in range(d):
 			cl2 = []
 			for cells in OWN[t]:
-				# per chain: cells, their edges (direction, edge id), and for each cell and direction
-				# the edges at that neighbour (made dirty by a swap with it)
-				P = []
+				# R: the chain's cells, then the band cells next to them; NB[k]: (dir, index in R,
+				# is lower) for chain cell k's cactus neighbours
+				RC = []
 				for b in cells:
-					P.append((b[0], b[1]))
-				EI = {}
-				CE = {}
-				ne = 0
-				EJ = []
-				for b in P:
-					ej = []
+					RC.append(b)
+				m = len(RC)
+				NB = []
+				for b in cells:
+					v = []
 					for dd in range(4):
 						x2 = b[0] + DX[dd]
 						y2 = b[1] + DY[dd]
 						if x2 >= 0 and x2 < n and y2 >= 0 and y2 < n and (((x2 + y2) % 4 != 3 and not (x2, y2) in DR) or (x2, y2) in CN):
-							o = (x2, y2)
-							if dd < 2:
-								key = (b, o)
-							else:
-								key = (o, b)
-							if not key in EI:
-								EI[key] = ne
-								ne += 1
-							e = EI[key]
-							ej.append((dd, e))
-							for c in [b, o]:
-								if not c in CE:
-									CE[c] = []
-								CE[c].append(e)
-					EJ.append(ej)
-				MK = []
-				for j in range(len(P)):
-					mk = [[], [], [], []]
-					for e in EJ[j]:
-						mk[e[0]] = CE[(P[j][0] + DX[e[0]], P[j][1] + DY[e[0]])]
-					MK.append(mk)
-				cl2.append((P, EJ, MK, ne))
+							if not (x2, y2) in RC:
+								RC.append((x2, y2))
+							j = 0
+							while RC[j] != (x2, y2):
+								j += 1
+							v.append((dd, j, dd >= 2))
+					NB.append(v)
+				cl2.append((RC, NB, m))
 			OWN[t] = cl2
 		CJ_S = (CN, DR, JC, CUT, RV, OWN)
+	sf = not weird and d >= 16
+	R0 = R
 	if R > 1:
 		# the first round on its own: plants it clears could yield weird substance, which the
 		# drones of the rounds after it count to tell they are done
-		fan(cactus3_job, 0, d, d, (weird, 1))
+		fan(cactus3_job, 0, d, d, (weird, 1, sf, 0, R0))
 		go(0, 0)
 		harvest()
 		R -= 1
-	fan(cactus3_job, 0, d, d, (weird, R))
+	fan(cactus3_job, 0, d, d, (weird, R, sf, R0 - R, R0))
 	if get_entity_type() != Entities.Cactus:
 		go(0, 0)
 	harvest()
@@ -4996,7 +5044,8 @@ def carrots_for(n):
 WSB = 60000
 CJ_N = 0
 CJ_S = 0
-CJ_D = 14
+CJ_D = 12
+CJ_D4 = 6
 PREP = True
 CJ_P = 5
 
@@ -5058,7 +5107,7 @@ def farm(item, amount):
 					a2 += get_cost(Unlocks.Mazes)[Items.Cactus]
 				if a2 > amount:
 					amount = a2
-			R = min((amount - num_items(Items.Cactus) + y - 1) // y, num_items(Items.Pumpkin) // (b * pc), (num_items(Items.Power) - 100) // (drones() * CJ_P), num_items(Items.Weird_Substance) // (2 * drones()))
+			R = min((amount - num_items(Items.Cactus) + y - 1) // y, num_items(Items.Pumpkin) // (b * pc), (num_items(Items.Power) - 100) // drones(), num_items(Items.Weird_Substance) // (2 * drones()))
 			if R < 1:
 				R = 1
 		cactus_round(w, R)
