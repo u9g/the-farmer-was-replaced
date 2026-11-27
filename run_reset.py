@@ -399,6 +399,7 @@ def mixed_job(i, d, need, flags):
 	# carry on from the column after the one the last round ended on
 	x0 = (get_pos_x() + 1) % w
 	while True:
+		p = None
 		for i in range(w):
 			x = (x0 + i) % w
 			if i > 0:
@@ -421,7 +422,9 @@ def mixed_job(i, d, need, flags):
 					if k < n - 1 or w == 1:
 						move(North)
 				continue
-			p = choose3()
+			if p == None or n != 3:
+				# a 3x3 farm keeps its crop types for the whole pass: rows of one type each
+				p = choose3()
 			ce = p[0]
 			co = p[1]
 			if ce == co and plant_on:
@@ -438,6 +441,15 @@ def mixed_job(i, d, need, flags):
 				for k in range(n):
 					tend_wait(cs[get_pos_y() % 2])
 					move(North)
+			elif n == 3:
+				# 3x3: a checkerboard does not fit the torus (column 2 meets column 0), so each row
+				# holds one of three types: a plant's companion cell then holds its own type 1 time
+				# in 5 instead of about 1 in 2, and 0.27 of the harvests get the x5 instead of 0.19
+				cl = [ce, co, third(ce, co)]
+				for k in range(2):
+					tend_fast(cl[get_pos_y()])
+					move(North)
+				tend_fast(cl[get_pos_y()])
 			else:
 				for k in range(n - 1):
 					tend_fast(cs[get_pos_y() % 2])
@@ -460,6 +472,30 @@ def sh(have, c, l):
 	if l > have:
 		r += (l - have) / l
 	return r
+
+
+def third(ce, co):
+	# the most needed crop type that is neither ce nor co (co if nothing else is needed)
+	best = co
+	bs = 0
+	have = [ce, co]
+	if Entities.Grass not in have:
+		s = sh(num_items(Items.Hay) + PEND[Items.Hay], NV[0], NV[1])
+		if s > bs:
+			bs = s
+			best = Entities.Grass
+	if FL[0] and not (Entities.Bush in have or Entities.Tree in have):
+		s = sh(num_items(Items.Wood) + PEND[Items.Wood], NV[2], NV[3])
+		if s > bs:
+			bs = s
+			best = Entities.Bush
+			if FL[2] and ce != Entities.Tree:
+				best = Entities.Tree
+	if FL[3] and Entities.Carrot not in have:
+		s = sh(num_items(Items.Carrot) + PEND[Items.Carrot], NV[6], NV[7])
+		if s > bs and num_items(Items.Wood) >= FL[4] and num_items(Items.Hay) >= FL[5]:
+			best = Entities.Carrot
+	return best
 
 
 def need_vars():
@@ -2076,6 +2112,9 @@ def mz_serve(goal, per, cost, g0, park):
 					harvest()
 				return 0
 			ok = use_item(Items.Weird_Substance, cost)
+			if ok:
+				# the treasure can come back to this cell after a find elsewhere: see it as new
+				last = -1
 			if adopt >= 0:
 				mz_adopt(adopt)
 				adopt = -1
@@ -2103,6 +2142,7 @@ def mz_serve(goal, per, cost, g0, park):
 					# on the way back, look for walls that came down, then re-plan
 					x = c
 					got = mz_try(x)
+					wk = [x]
 					for i in range(len(p) - 1, -1, -1):
 						if MZ_NEXT2:
 							t = measure()
@@ -2113,10 +2153,34 @@ def mz_serve(goal, per, cost, g0, park):
 						k = p[i]
 						move(DIRS[BACK[k]])
 						x = x - DX[k] - DY[k] * n
+						wk.append(x)
 						if mz_try(x):
 							got = True
 					if got:
-						paths = mz_paths(home)
+						# every side found open is next to a cell I walked: shorten the ways over
+						# those sides and pass the gain on (cheaper than a new search from the park)
+						adj = MZ_ADJ
+						q = []
+						for x2 in wk:
+							for k in adj[x2]:
+								y = x2 + DX[k] + DY[k] * n
+								if len(paths[x2]) + 1 < len(paths[y]):
+									paths[y] = paths[x2] + [k]
+									q.append(y)
+								elif len(paths[y]) + 1 < len(paths[x2]):
+									paths[x2] = paths[y] + [BACK[k]]
+									q.append(x2)
+						j = 0
+						while j < len(q):
+							x2 = q[j]
+							j += 1
+							px = paths[x2]
+							L = len(px) + 1
+							for k in adj[x2]:
+								y = x2 + DX[k] + DY[k] * n
+								if L < len(paths[y]):
+									paths[y] = px + [k]
+									q.append(y)
 						MZ_PATH = paths
 					cur = x
 				else:
@@ -2272,6 +2336,7 @@ def mz_life(me, goal, stop, st, start_at, park):
 
 
 def mz_life2(me, goal, stop, st, start_at, park):
+	global MZ_RESCUE
 	global MZ_MD
 	global MZ_BUY
 	global MZ_N
@@ -2290,6 +2355,11 @@ def mz_life2(me, goal, stop, st, start_at, park):
 	global MZ_GOAL
 	MZ_N = n
 	MZ_ME = me
+	if len(st) < 16:
+		# few drones: a rescue trip takes a drone far from home, so wait longer before one
+		MZ_RESCUE = 2.0
+	else:
+		MZ_RESCUE = 1.0
 	m = lvl_mult(Unlocks.Mazes)
 	cost = n * m
 	MZ_COST = cost
@@ -4050,11 +4120,13 @@ PLAN = [
 	(Unlocks.Speed, 5),
 	(Unlocks.Pumpkins, 1),
 	(Unlocks.Expand, 5),
+	(Unlocks.Trees, 4),
 	(Unlocks.Carrots, 4),
 	(Unlocks.Pumpkins, 2),
 	(Unlocks.Polyculture, 1),
 	(Unlocks.Watering, 5),
 	(Unlocks.Pumpkins, 3),
+	(Unlocks.Carrots, 5),
 	(Unlocks.Pumpkins, 4),
 	(Unlocks.Megafarm, 2),
 	(Unlocks.Cactus, 1),
