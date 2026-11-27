@@ -1088,7 +1088,7 @@ SUN_NEW = True
 # spare) one planted with fewer than SUN_MINP is cut at once (not grown: nothing lost but its
 # seed) and planted again, so the round has fewer petal levels and fewer passes of its drones.
 # Earlier rounds do not: the extra plantings cost them what the passes save.
-SUN_MINP = 10
+SUN_MINP = 7
 # carrots a round leaves alone when it plants again
 SUN_SEEDS = 100
 
@@ -5025,16 +5025,13 @@ def opening():
 	# the first unlocks with tight loops: grass on 1x1, then a 1x3 strip, then bushes for wood
 	# Plant before Expand 1 and Speed 1: a 1x1 grass cell gives 2 hay/s at any speed, and on
 	# the 1x3 strip the grass can then want one of the bushes as its companion (x5 hay)
-	while num_unlocked(Unlocks.Plant) == 0:
-		if can_harvest():
-			harvest()
-			if num_items(Items.Hay) >= 50:
-				buy(Unlocks.Plant)
-	while num_unlocked(Unlocks.Expand) == 0:
-		if can_harvest():
-			harvest()
-			if num_items(Items.Hay) >= 30:
-				buy(Unlocks.Expand)
+	# 1x1 grass regrows in exactly one harvest's time (0.5 s at speed 0): cut it blind
+	while num_items(Items.Hay) < 50:
+		harvest()
+	unlock(Unlocks.Plant)
+	while num_items(Items.Hay) < 30:
+		harvest()
+	unlock(Unlocks.Expand)
 	# 1x3: bushes at y 0 and 1; the drone sits on the grass at y 2 while they grow
 	due = 0
 	while num_unlocked(Unlocks.Expand) < 2:
@@ -5092,25 +5089,24 @@ def opening():
 				break
 			if w == 3:
 				# bushes on two columns, the third stays grass: the bushes' companion when they
-				# want grass, and never visited (2n cells for 2n moves: up a column, across, back)
+				# want grass, and cut on every pass (n * n cells in n * n moves on the torus): the
+				# hay it banks brings Grass 2 forward by more than the wood it costs
 				while num_unlocked(u[0]) < u[1]:
-					for k in range(2 * n):
+					for k in range(n * n):
 						e = get_entity_type()
-						if e == Entities.Bush:
-							while not can_harvest():
-								pass
-							harvest()
-							plant(Entities.Bush)
+						if get_pos_x() == 2:
+							if can_harvest():
+								harvest()
+						elif e == Entities.Bush:
+							if can_harvest():
+								harvest()
+								plant(Entities.Bush)
 						else:
 							if e != None:
 								harvest()
 							plant(Entities.Bush)
-						if k == n - 1 or k == 2 * n - 1:
-							# columns 0 and 1, whichever the drone is on
-							if get_pos_x() == 0:
-								move(East)
-							else:
-								move(West)
+						if k % n == n - 1:
+							move(East)
 							if buy(u[0]):
 								break
 						else:
@@ -5260,6 +5256,7 @@ PLAN = [
 	(Unlocks.Cactus, 1),
 	(Unlocks.Expand, 6),
 	(Unlocks.Cactus, 2),
+	(Unlocks.Pumpkins, 5),
 	(Unlocks.Mazes, 2),
 	(Unlocks.Mazes, 3),
 	(Unlocks.Megafarm, 3),
@@ -5267,8 +5264,10 @@ PLAN = [
 	(Unlocks.Expand, 7),
 	(Unlocks.Dinosaurs, 1),
 	(Unlocks.Dinosaurs, 2),
+	(Unlocks.Cactus, 3),
 	(Unlocks.Dinosaurs, 3),
 	(Unlocks.Dinosaurs, 4),
+	(Unlocks.Dinosaurs, 5),
 	(Unlocks.Mazes, 4),
 	(Unlocks.Leaderboard, 1),
 ]
