@@ -379,6 +379,7 @@ def mixed_job(i, d, need, flags):
 		goal = NEED[0]
 		if lp:
 			goal = NEED[2]
+		need_vars()
 		j = 0
 		while True:
 			if lp and j > 0:
@@ -393,8 +394,9 @@ def mixed_job(i, d, need, flags):
 						PEND[it] = 0
 			x = cl[k]
 			go(x, 0)
-			ce = choose(True)
-			co = choose(False)
+			p3 = choose3()
+			ce = p3[0]
+			co = p3[1]
 			if ce == co and not POLY and num_unlocked(Unlocks.Plant) > 0:
 				# a mix of crop types lets some plants find their companion (x5 even before polyculture)
 				if ce == Entities.Grass:
@@ -865,6 +867,7 @@ def mixed_seg(i, d, need, flags):
 	COLS[1] = w
 	cx = -1
 	cs = []
+	need_vars()
 	todo = range(lo, hi)
 	if len(need) > 2:
 		# whole passes until the goal is on hand, checked every column
@@ -887,8 +890,9 @@ def mixed_seg(i, d, need, flags):
 		if x != cx:
 			cx = x
 			go(x, y)
-			ce = choose(True)
-			co = choose(False)
+			p3 = choose3()
+			ce = p3[0]
+			co = p3[1]
 			if x % 2 == 0:
 				cs = [ce, co]
 			else:
