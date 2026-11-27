@@ -4692,6 +4692,8 @@ def with_seeds(need):
 		seeds = need[Items.Carrot]
 		if num_unlocked(Unlocks.Polyculture) > 0:
 			seeds = seeds // 6
+		else:
+			seeds = seeds // (lvl_mult(Unlocks.Carrots) * 5)
 		for it in [Items.Wood, Items.Hay]:
 			if it in need:
 				need[it] += seeds
@@ -4860,8 +4862,8 @@ PLAN = [
 	(Unlocks.Carrots, 2),
 	(Unlocks.Carrots, 3),
 	(Unlocks.Grass, 3),
-	(Unlocks.Expand, 4),
 	(Unlocks.Sunflowers, 1),
+	(Unlocks.Expand, 4),
 	(Unlocks.Speed, 4),
 	(Unlocks.Watering, 3),
 	(Unlocks.Fertilizer, 1),
