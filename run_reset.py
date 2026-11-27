@@ -460,7 +460,9 @@ def mixed_job(i, d, need, flags):
 			co = p3[1]
 			if ce == co and not POLY and num_unlocked(Unlocks.Plant) > 0:
 				# a mix of crop types lets some plants find their companion (x5 even before polyculture)
-				if ce == Entities.Grass:
+				if ce == Entities.Grass and FL[2]:
+					ce = Entities.Tree
+				elif ce == Entities.Grass:
 					co = Entities.Bush
 				else:
 					co = Entities.Grass
@@ -646,10 +648,13 @@ def mixed_ham(cl, m, n, k, lp, goal, strip, weird, fm):
 			if k == 0:
 				for it in PEND:
 					PEND[it] = 0
-		ce = choose(True)
-		co = choose(False)
+		p3 = choose3()
+		ce = p3[0]
+		co = p3[1]
 		if ce == co and not POLY and num_unlocked(Unlocks.Plant) > 0:
-			if ce == Entities.Grass:
+			if ce == Entities.Grass and FL[2]:
+				ce = Entities.Tree
+			elif ce == Entities.Grass:
 				co = Entities.Bush
 			else:
 				co = Entities.Grass
@@ -1097,10 +1102,9 @@ def wsub_job(i, d, goal, b):
 			for y in ys:
 				e = get_entity_type()
 				if (x + y) % 2 == 0:
-					if e == Entities.Tree:
-						# every tree is cut once a pass, so each is toggled exactly once
-						while not can_harvest():
-							pass
+					if e == Entities.Tree and not can_harvest():
+						pass
+					elif e == Entities.Tree:
 						# made weird just before it is cut (it and its four grass neighbours flip): every ripe
 						# tree yields weird substance in the same pass, from the first pass on
 						if num_items(Items.Weird_Substance) >= 1:
