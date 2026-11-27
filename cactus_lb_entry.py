@@ -325,7 +325,7 @@ def own(K, j, e):
 		if e - j >= 2:
 			a = SP[e - j + 1]
 			h = spawn_drone(hlp, K, j, j + a, e)
-			if h != None:
+			if h:
 				e = j + a - 1
 		FS[j]()
 		if j < e:
@@ -338,20 +338,18 @@ def fS_NE():
 	while True:
 		v = measure()
 		a = measure(South)
-		if a > v:
+		while a > v:
 			swap(South)
+			v = measure()
+			a = measure(South)
+		a = measure(North)
+		b = measure(East)
+		if a >= v <= b:
+			return
+		if b < a:
+			swap(East)
 		else:
-			a = measure(North)
-			b = measure(East)
-			if a < v:
-				if b < a:
-					swap(East)
-				else:
-					swap(North)
-			elif b < v:
-				swap(East)
-			else:
-				return
+			swap(North)
 
 
 def fsS_NE():
@@ -360,22 +358,36 @@ def fsS_NE():
 		a = measure(South)
 		if a == None:
 			continue
-		if a > v:
+		while a > v:
 			swap(South)
+			v = measure()
+			a = measure(South)
+		a = measure(North)
+		b = measure(East)
+		if not a != None != b:
+			continue
+		if a >= v <= b:
+			return
+		if b < a:
+			swap(East)
 		else:
-			a = measure(North)
-			b = measure(East)
-			if a == None or b == None:
-				continue
-			if a < v:
-				if b < a:
-					swap(East)
-				else:
-					swap(North)
-			elif b < v:
-				swap(East)
-			else:
-				return
+			swap(North)
+		break
+	while True:
+		v = measure()
+		a = measure(South)
+		while a > v:
+			swap(South)
+			v = measure()
+			a = measure(South)
+		a = measure(North)
+		b = measure(East)
+		if a >= v <= b:
+			return
+		if b < a:
+			swap(East)
+		else:
+			swap(North)
 
 
 def fSW_E():
@@ -383,19 +395,18 @@ def fSW_E():
 		v = measure()
 		a = measure(South)
 		b = measure(West)
-		if a > v:
+		while not a <= v >= b:
 			if b > a:
 				swap(West)
 			else:
 				swap(South)
-		elif b > v:
-			swap(West)
-		else:
-			a = measure(East)
-			if a < v:
-				swap(East)
-			else:
-				return
+			v = measure()
+			a = measure(South)
+			b = measure(West)
+		a = measure(East)
+		if a >= v:
+			return
+		swap(East)
 
 
 def fsSW_E():
@@ -403,23 +414,39 @@ def fsSW_E():
 		v = measure()
 		a = measure(South)
 		b = measure(West)
-		if a == None or b == None:
+		if not a != None != b:
 			continue
-		if a > v:
+		while not a <= v >= b:
 			if b > a:
 				swap(West)
 			else:
 				swap(South)
-		elif b > v:
-			swap(West)
-		else:
-			a = measure(East)
-			if a == None:
-				continue
-			if a < v:
-				swap(East)
+			v = measure()
+			a = measure(South)
+			b = measure(West)
+		a = measure(East)
+		if a == None:
+			continue
+		if a >= v:
+			return
+		swap(East)
+		break
+	while True:
+		v = measure()
+		a = measure(South)
+		b = measure(West)
+		while not a <= v >= b:
+			if b > a:
+				swap(West)
 			else:
-				return
+				swap(South)
+			v = measure()
+			a = measure(South)
+			b = measure(West)
+		a = measure(East)
+		if a >= v:
+			return
+		swap(East)
 
 
 def fsSW_N():
@@ -427,23 +454,39 @@ def fsSW_N():
 		v = measure()
 		a = measure(South)
 		b = measure(West)
-		if a == None or b == None:
+		if not a != None != b:
 			continue
-		if a > v:
+		while not a <= v >= b:
 			if b > a:
 				swap(West)
 			else:
 				swap(South)
-		elif b > v:
-			swap(West)
-		else:
-			a = measure(North)
-			if a == None:
-				continue
-			if a < v:
-				swap(North)
+			v = measure()
+			a = measure(South)
+			b = measure(West)
+		a = measure(North)
+		if a == None:
+			continue
+		if a >= v:
+			return
+		swap(North)
+		break
+	while True:
+		v = measure()
+		a = measure(South)
+		b = measure(West)
+		while not a <= v >= b:
+			if b > a:
+				swap(West)
 			else:
-				return
+				swap(South)
+			v = measure()
+			a = measure(South)
+			b = measure(West)
+		a = measure(North)
+		if a >= v:
+			return
+		swap(North)
 
 
 def fSW_NE():
@@ -451,25 +494,22 @@ def fSW_NE():
 		v = measure()
 		a = measure(South)
 		b = measure(West)
-		if a > v:
+		while not a <= v >= b:
 			if b > a:
 				swap(West)
 			else:
 				swap(South)
-		elif b > v:
-			swap(West)
+			v = measure()
+			a = measure(South)
+			b = measure(West)
+		a = measure(North)
+		b = measure(East)
+		if a >= v <= b:
+			return
+		if b < a:
+			swap(East)
 		else:
-			a = measure(North)
-			b = measure(East)
-			if a < v:
-				if b < a:
-					swap(East)
-				else:
-					swap(North)
-			elif b < v:
-				swap(East)
-			else:
-				return
+			swap(North)
 
 
 def fsSW_NE():
@@ -477,29 +517,47 @@ def fsSW_NE():
 		v = measure()
 		a = measure(South)
 		b = measure(West)
-		if a == None or b == None:
+		if not a != None != b:
 			continue
-		if a > v:
+		while not a <= v >= b:
 			if b > a:
 				swap(West)
 			else:
 				swap(South)
-		elif b > v:
-			swap(West)
+			v = measure()
+			a = measure(South)
+			b = measure(West)
+		a = measure(North)
+		b = measure(East)
+		if not a != None != b:
+			continue
+		if a >= v <= b:
+			return
+		if b < a:
+			swap(East)
 		else:
-			a = measure(North)
-			b = measure(East)
-			if a == None or b == None:
-				continue
-			if a < v:
-				if b < a:
-					swap(East)
-				else:
-					swap(North)
-			elif b < v:
-				swap(East)
+			swap(North)
+		break
+	while True:
+		v = measure()
+		a = measure(South)
+		b = measure(West)
+		while not a <= v >= b:
+			if b > a:
+				swap(West)
 			else:
-				return
+				swap(South)
+			v = measure()
+			a = measure(South)
+			b = measure(West)
+		a = measure(North)
+		b = measure(East)
+		if a >= v <= b:
+			return
+		if b < a:
+			swap(East)
+		else:
+			swap(North)
 
 
 def fsW_NE():
@@ -508,22 +566,36 @@ def fsW_NE():
 		a = measure(West)
 		if a == None:
 			continue
-		if a > v:
+		while a > v:
 			swap(West)
+			v = measure()
+			a = measure(West)
+		a = measure(North)
+		b = measure(East)
+		if not a != None != b:
+			continue
+		if a >= v <= b:
+			return
+		if b < a:
+			swap(East)
 		else:
-			a = measure(North)
-			b = measure(East)
-			if a == None or b == None:
-				continue
-			if a < v:
-				if b < a:
-					swap(East)
-				else:
-					swap(North)
-			elif b < v:
-				swap(East)
-			else:
-				return
+			swap(North)
+		break
+	while True:
+		v = measure()
+		a = measure(West)
+		while a > v:
+			swap(West)
+			v = measure()
+			a = measure(West)
+		a = measure(North)
+		b = measure(East)
+		if a >= v <= b:
+			return
+		if b < a:
+			swap(East)
+		else:
+			swap(North)
 
 
 def w0():
@@ -653,25 +725,45 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 											else:
 												swap(South)
-										elif jb > v:
-											swap(West)
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										while ja == None:
 											ja = measure(East)
-											while ja == None:
-												ja = measure(East)
-											if ja < v:
-												swap(East)
-												if not q2:
-													wk.append(2)
-													qn += 1
-													q2 = True
-											else:
+										if ja >= v:
+											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+												else:
+													swap(South)
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(East)
+											if ja >= v:
 												break
+											swap(East)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+										break
 								elif cx == 1:
 									q1 = False
 									if cur == 0:
@@ -691,25 +783,45 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 											else:
 												swap(South)
-										elif jb > v:
-											swap(West)
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										while ja == None:
 											ja = measure(North)
-											while ja == None:
-												ja = measure(North)
-											if ja < v:
-												swap(North)
-												if not q2:
-													wk.append(2)
-													qn += 1
-													q2 = True
-											else:
+										if ja >= v:
+											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+												else:
+													swap(South)
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(North)
+											if ja >= v:
 												break
+											swap(North)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+										break
 								elif cx == 2:
 									q2 = False
 									if cur == 0:
@@ -727,7 +839,7 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 												if not q0:
@@ -740,24 +852,48 @@ def w0():
 													wk.append(1)
 													qn += 1
 													q1 = True
-										elif jb > v:
-											swap(West)
-											if not q0:
-												wk.append(0)
-												qn += 1
-												q0 = True
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										while ja == None:
 											ja = measure(North)
-											while ja == None:
-												ja = measure(North)
-											if ja < v:
-												swap(North)
-												if not q3:
-													wk.append(3)
-													qn += 1
-													q3 = True
-											else:
+										if ja >= v:
+											break
+										swap(North)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+													if not q0:
+														wk.append(0)
+														qn += 1
+														q0 = True
+												else:
+													swap(South)
+													if not q1:
+														wk.append(1)
+														qn += 1
+														q1 = True
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(North)
+											if ja >= v:
 												break
+											swap(North)
+											if not q3:
+												wk.append(3)
+												qn += 1
+												q3 = True
+										break
 								else:
 									q3 = False
 									if cur == 0:
@@ -774,20 +910,36 @@ def w0():
 										ja = measure(South)
 										while ja == None:
 											ja = measure(South)
-										if ja > v:
+										while ja > v:
 											swap(South)
 											if not q2:
 												wk.append(2)
 												qn += 1
 												q2 = True
-										else:
+											v = measure()
+											ja = measure(South)
+										ja = measure(North)
+										while ja == None:
 											ja = measure(North)
-											while ja == None:
-												ja = measure(North)
-											if ja < v:
-												swap(North)
-											else:
+										if ja >= v:
+											break
+										swap(North)
+										while True:
+											v = measure()
+											ja = measure(South)
+											while ja > v:
+												swap(South)
+												if not q2:
+													wk.append(2)
+													qn += 1
+													q2 = True
+												v = measure()
+												ja = measure(South)
+											ja = measure(North)
+											if ja >= v:
 												break
+											swap(North)
+										break
 							if cur == 1:
 								move(West)
 								move(North)
@@ -831,25 +983,45 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 											else:
 												swap(South)
-										elif jb > v:
-											swap(West)
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										while ja == None:
 											ja = measure(North)
-											while ja == None:
-												ja = measure(North)
-											if ja < v:
-												swap(North)
-												if not q2:
-													wk.append(2)
-													qn += 1
-													q2 = True
-											else:
+										if ja >= v:
+											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+												else:
+													swap(South)
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(North)
+											if ja >= v:
 												break
+											swap(North)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+										break
 								elif cx == 1:
 									q1 = False
 									if cur == 0:
@@ -869,25 +1041,45 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 											else:
 												swap(South)
-										elif jb > v:
-											swap(West)
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										while ja == None:
 											ja = measure(East)
-											while ja == None:
-												ja = measure(East)
-											if ja < v:
-												swap(East)
-												if not q2:
-													wk.append(2)
-													qn += 1
-													q2 = True
-											else:
+										if ja >= v:
+											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+												else:
+													swap(South)
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(East)
+											if ja >= v:
 												break
+											swap(East)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+										break
 								elif cx == 2:
 									q2 = False
 									if cur == 0:
@@ -905,7 +1097,7 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 												if not q1:
@@ -918,24 +1110,48 @@ def w0():
 													wk.append(0)
 													qn += 1
 													q0 = True
-										elif jb > v:
-											swap(West)
-											if not q1:
-												wk.append(1)
-												qn += 1
-												q1 = True
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										while ja == None:
 											ja = measure(East)
-											while ja == None:
-												ja = measure(East)
-											if ja < v:
-												swap(East)
-												if not q3:
-													wk.append(3)
-													qn += 1
-													q3 = True
-											else:
+										if ja >= v:
+											break
+										swap(East)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+													if not q1:
+														wk.append(1)
+														qn += 1
+														q1 = True
+												else:
+													swap(South)
+													if not q0:
+														wk.append(0)
+														qn += 1
+														q0 = True
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(East)
+											if ja >= v:
 												break
+											swap(East)
+											if not q3:
+												wk.append(3)
+												qn += 1
+												q3 = True
+										break
 								else:
 									q3 = False
 									if cur == 0:
@@ -952,20 +1168,36 @@ def w0():
 										ja = measure(West)
 										while ja == None:
 											ja = measure(West)
-										if ja > v:
+										while ja > v:
 											swap(West)
 											if not q2:
 												wk.append(2)
 												qn += 1
 												q2 = True
-										else:
+											v = measure()
+											ja = measure(West)
+										ja = measure(East)
+										while ja == None:
 											ja = measure(East)
-											while ja == None:
-												ja = measure(East)
-											if ja < v:
-												swap(East)
-											else:
+										if ja >= v:
+											break
+										swap(East)
+										while True:
+											v = measure()
+											ja = measure(West)
+											while ja > v:
+												swap(West)
+												if not q2:
+													wk.append(2)
+													qn += 1
+													q2 = True
+												v = measure()
+												ja = measure(West)
+											ja = measure(East)
+											if ja >= v:
 												break
+											swap(East)
+										break
 							c = cur
 							e = tl + 0.9345
 							P = []
@@ -1109,25 +1341,45 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 											else:
 												swap(South)
-										elif jb > v:
-											swap(West)
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										while ja == None:
 											ja = measure(East)
-											while ja == None:
-												ja = measure(East)
-											if ja < v:
-												swap(East)
-												if not q2:
-													wk.append(2)
-													qn += 1
-													q2 = True
-											else:
+										if ja >= v:
+											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+												else:
+													swap(South)
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(East)
+											if ja >= v:
 												break
+											swap(East)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+										break
 								elif cx == 1:
 									q1 = False
 									if cur == 0:
@@ -1147,25 +1399,45 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 											else:
 												swap(South)
-										elif jb > v:
-											swap(West)
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										while ja == None:
 											ja = measure(North)
-											while ja == None:
-												ja = measure(North)
-											if ja < v:
-												swap(North)
-												if not q2:
-													wk.append(2)
-													qn += 1
-													q2 = True
-											else:
+										if ja >= v:
+											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+												else:
+													swap(South)
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(North)
+											if ja >= v:
 												break
+											swap(North)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+										break
 								elif cx == 2:
 									q2 = False
 									if cur == 0:
@@ -1183,7 +1455,7 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 												if not q0:
@@ -1196,24 +1468,48 @@ def w0():
 													wk.append(1)
 													qn += 1
 													q1 = True
-										elif jb > v:
-											swap(West)
-											if not q0:
-												wk.append(0)
-												qn += 1
-												q0 = True
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										while ja == None:
 											ja = measure(North)
-											while ja == None:
-												ja = measure(North)
-											if ja < v:
-												swap(North)
-												if not q3:
-													wk.append(3)
-													qn += 1
-													q3 = True
-											else:
+										if ja >= v:
+											break
+										swap(North)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+													if not q0:
+														wk.append(0)
+														qn += 1
+														q0 = True
+												else:
+													swap(South)
+													if not q1:
+														wk.append(1)
+														qn += 1
+														q1 = True
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(North)
+											if ja >= v:
 												break
+											swap(North)
+											if not q3:
+												wk.append(3)
+												qn += 1
+												q3 = True
+										break
 								else:
 									q3 = False
 									if cur == 0:
@@ -1230,20 +1526,36 @@ def w0():
 										ja = measure(South)
 										while ja == None:
 											ja = measure(South)
-										if ja > v:
+										while ja > v:
 											swap(South)
 											if not q2:
 												wk.append(2)
 												qn += 1
 												q2 = True
-										else:
+											v = measure()
+											ja = measure(South)
+										ja = measure(North)
+										while ja == None:
 											ja = measure(North)
-											while ja == None:
-												ja = measure(North)
-											if ja < v:
-												swap(North)
-											else:
+										if ja >= v:
+											break
+										swap(North)
+										while True:
+											v = measure()
+											ja = measure(South)
+											while ja > v:
+												swap(South)
+												if not q2:
+													wk.append(2)
+													qn += 1
+													q2 = True
+												v = measure()
+												ja = measure(South)
+											ja = measure(North)
+											if ja >= v:
 												break
+											swap(North)
+										break
 							if cur == 1:
 								move(West)
 								move(North)
@@ -1287,25 +1599,45 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 											else:
 												swap(South)
-										elif jb > v:
-											swap(West)
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										while ja == None:
 											ja = measure(North)
-											while ja == None:
-												ja = measure(North)
-											if ja < v:
-												swap(North)
-												if not q2:
-													wk.append(2)
-													qn += 1
-													q2 = True
-											else:
+										if ja >= v:
+											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+												else:
+													swap(South)
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(North)
+											if ja >= v:
 												break
+											swap(North)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+										break
 								elif cx == 1:
 									q1 = False
 									if cur == 0:
@@ -1325,25 +1657,45 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 											else:
 												swap(South)
-										elif jb > v:
-											swap(West)
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										while ja == None:
 											ja = measure(East)
-											while ja == None:
-												ja = measure(East)
-											if ja < v:
-												swap(East)
-												if not q2:
-													wk.append(2)
-													qn += 1
-													q2 = True
-											else:
+										if ja >= v:
+											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+												else:
+													swap(South)
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(East)
+											if ja >= v:
 												break
+											swap(East)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+										break
 								elif cx == 2:
 									q2 = False
 									if cur == 0:
@@ -1361,7 +1713,7 @@ def w0():
 										jb = measure(West)
 										while jb == None:
 											jb = measure(West)
-										if ja > v:
+										while not ja <= v >= jb:
 											if jb > ja:
 												swap(West)
 												if not q1:
@@ -1374,24 +1726,48 @@ def w0():
 													wk.append(0)
 													qn += 1
 													q0 = True
-										elif jb > v:
-											swap(West)
-											if not q1:
-												wk.append(1)
-												qn += 1
-												q1 = True
-										else:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										while ja == None:
 											ja = measure(East)
-											while ja == None:
-												ja = measure(East)
-											if ja < v:
-												swap(East)
-												if not q3:
-													wk.append(3)
-													qn += 1
-													q3 = True
-											else:
+										if ja >= v:
+											break
+										swap(East)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+										while True:
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+											while not ja <= v >= jb:
+												if jb > ja:
+													swap(West)
+													if not q1:
+														wk.append(1)
+														qn += 1
+														q1 = True
+												else:
+													swap(South)
+													if not q0:
+														wk.append(0)
+														qn += 1
+														q0 = True
+												v = measure()
+												ja = measure(South)
+												jb = measure(West)
+											ja = measure(East)
+											if ja >= v:
 												break
+											swap(East)
+											if not q3:
+												wk.append(3)
+												qn += 1
+												q3 = True
+										break
 								else:
 									q3 = False
 									if cur == 0:
@@ -1408,20 +1784,36 @@ def w0():
 										ja = measure(West)
 										while ja == None:
 											ja = measure(West)
-										if ja > v:
+										while ja > v:
 											swap(West)
 											if not q2:
 												wk.append(2)
 												qn += 1
 												q2 = True
-										else:
+											v = measure()
+											ja = measure(West)
+										ja = measure(East)
+										while ja == None:
 											ja = measure(East)
-											while ja == None:
-												ja = measure(East)
-											if ja < v:
-												swap(East)
-											else:
+										if ja >= v:
+											break
+										swap(East)
+										while True:
+											v = measure()
+											ja = measure(West)
+											while ja > v:
+												swap(West)
+												if not q2:
+													wk.append(2)
+													qn += 1
+													q2 = True
+												v = measure()
+												ja = measure(West)
+											ja = measure(East)
+											if ja >= v:
 												break
+											swap(East)
+										break
 							wait_until(tl + 0.9676)
 						spawn_drone(w31)
 						move(West)
@@ -1580,25 +1972,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									while ja == None:
 										ja = measure(North)
-										while ja == None:
-											ja = measure(North)
-										if ja < v:
-											swap(North)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(North)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										if ja >= v:
 											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 1:
 								q1 = False
 								if cur == 0:
@@ -1618,25 +2030,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 2:
 								q2 = False
 								if cur == 0:
@@ -1654,7 +2086,7 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 											if not q1:
@@ -1667,24 +2099,48 @@ def w0():
 												wk.append(0)
 												qn += 1
 												q0 = True
-									elif jb > v:
-										swap(West)
-										if not q1:
-											wk.append(1)
-											qn += 1
-											q1 = True
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q3:
-												wk.append(3)
-												qn += 1
-												q3 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+												if not q1:
+													wk.append(1)
+													qn += 1
+													q1 = True
+											else:
+												swap(South)
+												if not q0:
+													wk.append(0)
+													qn += 1
+													q0 = True
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+									break
 							else:
 								q3 = False
 								if cur == 0:
@@ -1701,20 +2157,36 @@ def w0():
 									ja = measure(West)
 									while ja == None:
 										ja = measure(West)
-									if ja > v:
+									while ja > v:
 										swap(West)
 										if not q2:
 											wk.append(2)
 											qn += 1
 											q2 = True
-									else:
+										v = measure()
+										ja = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									while True:
+										v = measure()
+										ja = measure(West)
+										while ja > v:
+											swap(West)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+											v = measure()
+											ja = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+									break
 						c = cur
 						e = tl + 0.9345
 						P = []
@@ -1963,25 +2435,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									while ja == None:
 										ja = measure(North)
-										while ja == None:
-											ja = measure(North)
-										if ja < v:
-											swap(North)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(North)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										if ja >= v:
 											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 1:
 								q1 = False
 								if cur == 0:
@@ -2001,25 +2493,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 2:
 								q2 = False
 								if cur == 0:
@@ -2037,7 +2549,7 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 											if not q1:
@@ -2050,24 +2562,48 @@ def w0():
 												wk.append(0)
 												qn += 1
 												q0 = True
-									elif jb > v:
-										swap(West)
-										if not q1:
-											wk.append(1)
-											qn += 1
-											q1 = True
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q3:
-												wk.append(3)
-												qn += 1
-												q3 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+												if not q1:
+													wk.append(1)
+													qn += 1
+													q1 = True
+											else:
+												swap(South)
+												if not q0:
+													wk.append(0)
+													qn += 1
+													q0 = True
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+									break
 							else:
 								q3 = False
 								if cur == 0:
@@ -2084,20 +2620,36 @@ def w0():
 									ja = measure(West)
 									while ja == None:
 										ja = measure(West)
-									if ja > v:
+									while ja > v:
 										swap(West)
 										if not q2:
 											wk.append(2)
 											qn += 1
 											q2 = True
-									else:
+										v = measure()
+										ja = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									while True:
+										v = measure()
+										ja = measure(West)
+										while ja > v:
+											swap(West)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+											v = measure()
+											ja = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+									break
 						if cur == 1:
 							move(East)
 							move(South)
@@ -2288,25 +2840,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 1:
 								q1 = False
 								if cur == 0:
@@ -2326,25 +2898,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									while ja == None:
 										ja = measure(North)
-										while ja == None:
-											ja = measure(North)
-										if ja < v:
-											swap(North)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(North)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										if ja >= v:
 											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 2:
 								q2 = False
 								if cur == 0:
@@ -2362,7 +2954,7 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 											if not q0:
@@ -2375,24 +2967,48 @@ def w0():
 												wk.append(1)
 												qn += 1
 												q1 = True
-									elif jb > v:
-										swap(West)
-										if not q0:
-											wk.append(0)
-											qn += 1
-											q0 = True
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									while ja == None:
 										ja = measure(North)
-										while ja == None:
-											ja = measure(North)
-										if ja < v:
-											swap(North)
-											if not q3:
-												wk.append(3)
-												qn += 1
-												q3 = True
-										else:
+									if ja >= v:
+										break
+									swap(North)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+												if not q0:
+													wk.append(0)
+													qn += 1
+													q0 = True
+											else:
+												swap(South)
+												if not q1:
+													wk.append(1)
+													qn += 1
+													q1 = True
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										if ja >= v:
 											break
+										swap(North)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+									break
 							else:
 								q3 = False
 								if cur == 0:
@@ -2409,20 +3025,36 @@ def w0():
 									ja = measure(South)
 									while ja == None:
 										ja = measure(South)
-									if ja > v:
+									while ja > v:
 										swap(South)
 										if not q2:
 											wk.append(2)
 											qn += 1
 											q2 = True
-									else:
+										v = measure()
+										ja = measure(South)
+									ja = measure(North)
+									while ja == None:
 										ja = measure(North)
-										while ja == None:
-											ja = measure(North)
-										if ja < v:
-											swap(North)
-										else:
+									if ja >= v:
+										break
+									swap(North)
+									while True:
+										v = measure()
+										ja = measure(South)
+										while ja > v:
+											swap(South)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+											v = measure()
+											ja = measure(South)
+										ja = measure(North)
+										if ja >= v:
 											break
+										swap(North)
+									break
 						c = cur
 						e = tl + 0.9345
 						P = []
@@ -2700,25 +3332,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									while ja == None:
 										ja = measure(North)
-										while ja == None:
-											ja = measure(North)
-										if ja < v:
-											swap(North)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(North)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										if ja >= v:
 											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 1:
 								q1 = False
 								if cur == 0:
@@ -2738,25 +3390,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 2:
 								q2 = False
 								if cur == 0:
@@ -2774,7 +3446,7 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 											if not q1:
@@ -2787,24 +3459,48 @@ def w0():
 												wk.append(0)
 												qn += 1
 												q0 = True
-									elif jb > v:
-										swap(West)
-										if not q1:
-											wk.append(1)
-											qn += 1
-											q1 = True
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q3:
-												wk.append(3)
-												qn += 1
-												q3 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+												if not q1:
+													wk.append(1)
+													qn += 1
+													q1 = True
+											else:
+												swap(South)
+												if not q0:
+													wk.append(0)
+													qn += 1
+													q0 = True
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+									break
 							else:
 								q3 = False
 								if cur == 0:
@@ -2821,20 +3517,36 @@ def w0():
 									ja = measure(West)
 									while ja == None:
 										ja = measure(West)
-									if ja > v:
+									while ja > v:
 										swap(West)
 										if not q2:
 											wk.append(2)
 											qn += 1
 											q2 = True
-									else:
+										v = measure()
+										ja = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									while True:
+										v = measure()
+										ja = measure(West)
+										while ja > v:
+											swap(West)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+											v = measure()
+											ja = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+									break
 						wait_until(tl + 0.9676)
 					spawn_drone(w29)
 					move(West)
@@ -2995,25 +3707,45 @@ def w0():
 								jb = measure(West)
 								while jb == None:
 									jb = measure(West)
-								if ja > v:
+								while not ja <= v >= jb:
 									if jb > ja:
 										swap(West)
 									else:
 										swap(South)
-								elif jb > v:
-									swap(West)
-								else:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								while ja == None:
 									ja = measure(North)
-									while ja == None:
-										ja = measure(North)
-									if ja < v:
-										swap(North)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-									else:
+								if ja >= v:
+									break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+								while True:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+									while not ja <= v >= jb:
+										if jb > ja:
+											swap(West)
+										else:
+											swap(South)
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									if ja >= v:
 										break
+									swap(North)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+								break
 						elif cx == 1:
 							q1 = False
 							if cur == 0:
@@ -3033,25 +3765,45 @@ def w0():
 								jb = measure(West)
 								while jb == None:
 									jb = measure(West)
-								if ja > v:
+								while not ja <= v >= jb:
 									if jb > ja:
 										swap(West)
 									else:
 										swap(South)
-								elif jb > v:
-									swap(West)
-								else:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								while ja == None:
 									ja = measure(East)
-									while ja == None:
-										ja = measure(East)
-									if ja < v:
-										swap(East)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-									else:
+								if ja >= v:
+									break
+								swap(East)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+								while True:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+									while not ja <= v >= jb:
+										if jb > ja:
+											swap(West)
+										else:
+											swap(South)
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									if ja >= v:
 										break
+									swap(East)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+								break
 						elif cx == 2:
 							q2 = False
 							if cur == 0:
@@ -3069,7 +3821,7 @@ def w0():
 								jb = measure(West)
 								while jb == None:
 									jb = measure(West)
-								if ja > v:
+								while not ja <= v >= jb:
 									if jb > ja:
 										swap(West)
 										if not q1:
@@ -3082,24 +3834,48 @@ def w0():
 											wk.append(0)
 											qn += 1
 											q0 = True
-								elif jb > v:
-									swap(West)
-									if not q1:
-										wk.append(1)
-										qn += 1
-										q1 = True
-								else:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								while ja == None:
 									ja = measure(East)
-									while ja == None:
-										ja = measure(East)
-									if ja < v:
-										swap(East)
-										if not q3:
-											wk.append(3)
-											qn += 1
-											q3 = True
-									else:
+								if ja >= v:
+									break
+								swap(East)
+								if not q3:
+									wk.append(3)
+									qn += 1
+									q3 = True
+								while True:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+									while not ja <= v >= jb:
+										if jb > ja:
+											swap(West)
+											if not q1:
+												wk.append(1)
+												qn += 1
+												q1 = True
+										else:
+											swap(South)
+											if not q0:
+												wk.append(0)
+												qn += 1
+												q0 = True
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									if ja >= v:
 										break
+									swap(East)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+								break
 						else:
 							q3 = False
 							if cur == 0:
@@ -3116,20 +3892,36 @@ def w0():
 								ja = measure(West)
 								while ja == None:
 									ja = measure(West)
-								if ja > v:
+								while ja > v:
 									swap(West)
 									if not q2:
 										wk.append(2)
 										qn += 1
 										q2 = True
-								else:
+									v = measure()
+									ja = measure(West)
+								ja = measure(East)
+								while ja == None:
 									ja = measure(East)
-									while ja == None:
-										ja = measure(East)
-									if ja < v:
-										swap(East)
-									else:
+								if ja >= v:
+									break
+								swap(East)
+								while True:
+									v = measure()
+									ja = measure(West)
+									while ja > v:
+										swap(West)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										v = measure()
+										ja = measure(West)
+									ja = measure(East)
+									if ja >= v:
 										break
+									swap(East)
+								break
 					c = cur
 					e = tl + 0.9345
 					P = []
@@ -3450,25 +4242,45 @@ def w0():
 								jb = measure(West)
 								while jb == None:
 									jb = measure(West)
-								if ja > v:
+								while not ja <= v >= jb:
 									if jb > ja:
 										swap(West)
 									else:
 										swap(South)
-								elif jb > v:
-									swap(West)
-								else:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								while ja == None:
 									ja = measure(East)
-									while ja == None:
-										ja = measure(East)
-									if ja < v:
-										swap(East)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-									else:
+								if ja >= v:
+									break
+								swap(East)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+								while True:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+									while not ja <= v >= jb:
+										if jb > ja:
+											swap(West)
+										else:
+											swap(South)
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									if ja >= v:
 										break
+									swap(East)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+								break
 						elif cx == 1:
 							q1 = False
 							if cur == 0:
@@ -3488,25 +4300,45 @@ def w0():
 								jb = measure(West)
 								while jb == None:
 									jb = measure(West)
-								if ja > v:
+								while not ja <= v >= jb:
 									if jb > ja:
 										swap(West)
 									else:
 										swap(South)
-								elif jb > v:
-									swap(West)
-								else:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								while ja == None:
 									ja = measure(North)
-									while ja == None:
-										ja = measure(North)
-									if ja < v:
-										swap(North)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-									else:
+								if ja >= v:
+									break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+								while True:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+									while not ja <= v >= jb:
+										if jb > ja:
+											swap(West)
+										else:
+											swap(South)
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									if ja >= v:
 										break
+									swap(North)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+								break
 						elif cx == 2:
 							q2 = False
 							if cur == 0:
@@ -3524,7 +4356,7 @@ def w0():
 								jb = measure(West)
 								while jb == None:
 									jb = measure(West)
-								if ja > v:
+								while not ja <= v >= jb:
 									if jb > ja:
 										swap(West)
 										if not q0:
@@ -3537,24 +4369,48 @@ def w0():
 											wk.append(1)
 											qn += 1
 											q1 = True
-								elif jb > v:
-									swap(West)
-									if not q0:
-										wk.append(0)
-										qn += 1
-										q0 = True
-								else:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								while ja == None:
 									ja = measure(North)
-									while ja == None:
-										ja = measure(North)
-									if ja < v:
-										swap(North)
-										if not q3:
-											wk.append(3)
-											qn += 1
-											q3 = True
-									else:
+								if ja >= v:
+									break
+								swap(North)
+								if not q3:
+									wk.append(3)
+									qn += 1
+									q3 = True
+								while True:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+									while not ja <= v >= jb:
+										if jb > ja:
+											swap(West)
+											if not q0:
+												wk.append(0)
+												qn += 1
+												q0 = True
+										else:
+											swap(South)
+											if not q1:
+												wk.append(1)
+												qn += 1
+												q1 = True
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									if ja >= v:
 										break
+									swap(North)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+								break
 						else:
 							q3 = False
 							if cur == 0:
@@ -3571,20 +4427,36 @@ def w0():
 								ja = measure(South)
 								while ja == None:
 									ja = measure(South)
-								if ja > v:
+								while ja > v:
 									swap(South)
 									if not q2:
 										wk.append(2)
 										qn += 1
 										q2 = True
-								else:
+									v = measure()
+									ja = measure(South)
+								ja = measure(North)
+								while ja == None:
 									ja = measure(North)
-									while ja == None:
-										ja = measure(North)
-									if ja < v:
-										swap(North)
-									else:
+								if ja >= v:
+									break
+								swap(North)
+								while True:
+									v = measure()
+									ja = measure(South)
+									while ja > v:
+										swap(South)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										v = measure()
+										ja = measure(South)
+									ja = measure(North)
+									if ja >= v:
 										break
+									swap(North)
+								break
 					if cur == 1:
 						move(West)
 						move(North)
@@ -3779,25 +4651,45 @@ def w0():
 								jb = measure(West)
 								while jb == None:
 									jb = measure(West)
-								if ja > v:
+								while not ja <= v >= jb:
 									if jb > ja:
 										swap(West)
 									else:
 										swap(South)
-								elif jb > v:
-									swap(West)
-								else:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								while ja == None:
 									ja = measure(East)
-									while ja == None:
-										ja = measure(East)
-									if ja < v:
-										swap(East)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-									else:
+								if ja >= v:
+									break
+								swap(East)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+								while True:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+									while not ja <= v >= jb:
+										if jb > ja:
+											swap(West)
+										else:
+											swap(South)
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									if ja >= v:
 										break
+									swap(East)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+								break
 						elif cx == 1:
 							q1 = False
 							if cur == 0:
@@ -3817,25 +4709,45 @@ def w0():
 								jb = measure(West)
 								while jb == None:
 									jb = measure(West)
-								if ja > v:
+								while not ja <= v >= jb:
 									if jb > ja:
 										swap(West)
 									else:
 										swap(South)
-								elif jb > v:
-									swap(West)
-								else:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								while ja == None:
 									ja = measure(North)
-									while ja == None:
-										ja = measure(North)
-									if ja < v:
-										swap(North)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-									else:
+								if ja >= v:
+									break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+								while True:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+									while not ja <= v >= jb:
+										if jb > ja:
+											swap(West)
+										else:
+											swap(South)
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									if ja >= v:
 										break
+									swap(North)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+								break
 						elif cx == 2:
 							q2 = False
 							if cur == 0:
@@ -3853,7 +4765,7 @@ def w0():
 								jb = measure(West)
 								while jb == None:
 									jb = measure(West)
-								if ja > v:
+								while not ja <= v >= jb:
 									if jb > ja:
 										swap(West)
 										if not q0:
@@ -3866,24 +4778,48 @@ def w0():
 											wk.append(1)
 											qn += 1
 											q1 = True
-								elif jb > v:
-									swap(West)
-									if not q0:
-										wk.append(0)
-										qn += 1
-										q0 = True
-								else:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								while ja == None:
 									ja = measure(North)
-									while ja == None:
-										ja = measure(North)
-									if ja < v:
-										swap(North)
-										if not q3:
-											wk.append(3)
-											qn += 1
-											q3 = True
-									else:
+								if ja >= v:
+									break
+								swap(North)
+								if not q3:
+									wk.append(3)
+									qn += 1
+									q3 = True
+								while True:
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+									while not ja <= v >= jb:
+										if jb > ja:
+											swap(West)
+											if not q0:
+												wk.append(0)
+												qn += 1
+												q0 = True
+										else:
+											swap(South)
+											if not q1:
+												wk.append(1)
+												qn += 1
+												q1 = True
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									if ja >= v:
 										break
+									swap(North)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+								break
 						else:
 							q3 = False
 							if cur == 0:
@@ -3900,20 +4836,36 @@ def w0():
 								ja = measure(South)
 								while ja == None:
 									ja = measure(South)
-								if ja > v:
+								while ja > v:
 									swap(South)
 									if not q2:
 										wk.append(2)
 										qn += 1
 										q2 = True
-								else:
+									v = measure()
+									ja = measure(South)
+								ja = measure(North)
+								while ja == None:
 									ja = measure(North)
-									while ja == None:
-										ja = measure(North)
-									if ja < v:
-										swap(North)
-									else:
+								if ja >= v:
+									break
+								swap(North)
+								while True:
+									v = measure()
+									ja = measure(South)
+									while ja > v:
+										swap(South)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+										v = measure()
+										ja = measure(South)
+									ja = measure(North)
+									if ja >= v:
 										break
+									swap(North)
+								break
 					wait_until(tl + 0.9676)
 				spawn_drone(w27)
 				move(West)
@@ -4376,25 +5328,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									while ja == None:
 										ja = measure(North)
-										while ja == None:
-											ja = measure(North)
-										if ja < v:
-											swap(North)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(North)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										if ja >= v:
 											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 1:
 								q1 = False
 								if cur == 0:
@@ -4414,25 +5386,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 2:
 								q2 = False
 								if cur == 0:
@@ -4450,7 +5442,7 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 											if not q1:
@@ -4463,24 +5455,48 @@ def w0():
 												wk.append(0)
 												qn += 1
 												q0 = True
-									elif jb > v:
-										swap(West)
-										if not q1:
-											wk.append(1)
-											qn += 1
-											q1 = True
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q3:
-												wk.append(3)
-												qn += 1
-												q3 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+												if not q1:
+													wk.append(1)
+													qn += 1
+													q1 = True
+											else:
+												swap(South)
+												if not q0:
+													wk.append(0)
+													qn += 1
+													q0 = True
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+									break
 							else:
 								q3 = False
 								if cur == 0:
@@ -4497,20 +5513,36 @@ def w0():
 									ja = measure(West)
 									while ja == None:
 										ja = measure(West)
-									if ja > v:
+									while ja > v:
 										swap(West)
 										if not q2:
 											wk.append(2)
 											qn += 1
 											q2 = True
-									else:
+										v = measure()
+										ja = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									while True:
+										v = measure()
+										ja = measure(West)
+										while ja > v:
+											swap(West)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+											v = measure()
+											ja = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+									break
 						c = cur
 						e = tl + 0.9345
 						P = []
@@ -4671,25 +5703,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(North)
+									while ja == None:
 										ja = measure(North)
-										while ja == None:
-											ja = measure(North)
-										if ja < v:
-											swap(North)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(North)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(North)
+										if ja >= v:
 											break
+										swap(North)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 1:
 								q1 = False
 								if cur == 0:
@@ -4709,25 +5761,45 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 										else:
 											swap(South)
-									elif jb > v:
-										swap(West)
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q2:
-												wk.append(2)
-												qn += 1
-												q2 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q2:
+										wk.append(2)
+										qn += 1
+										q2 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+											else:
+												swap(South)
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q2:
+											wk.append(2)
+											qn += 1
+											q2 = True
+									break
 							elif cx == 2:
 								q2 = False
 								if cur == 0:
@@ -4745,7 +5817,7 @@ def w0():
 									jb = measure(West)
 									while jb == None:
 										jb = measure(West)
-									if ja > v:
+									while not ja <= v >= jb:
 										if jb > ja:
 											swap(West)
 											if not q1:
@@ -4758,24 +5830,48 @@ def w0():
 												wk.append(0)
 												qn += 1
 												q0 = True
-									elif jb > v:
-										swap(West)
-										if not q1:
-											wk.append(1)
-											qn += 1
-											q1 = True
-									else:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-											if not q3:
-												wk.append(3)
-												qn += 1
-												q3 = True
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+									while True:
+										v = measure()
+										ja = measure(South)
+										jb = measure(West)
+										while not ja <= v >= jb:
+											if jb > ja:
+												swap(West)
+												if not q1:
+													wk.append(1)
+													qn += 1
+													q1 = True
+											else:
+												swap(South)
+												if not q0:
+													wk.append(0)
+													qn += 1
+													q0 = True
+											v = measure()
+											ja = measure(South)
+											jb = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+									break
 							else:
 								q3 = False
 								if cur == 0:
@@ -4792,20 +5888,36 @@ def w0():
 									ja = measure(West)
 									while ja == None:
 										ja = measure(West)
-									if ja > v:
+									while ja > v:
 										swap(West)
 										if not q2:
 											wk.append(2)
 											qn += 1
 											q2 = True
-									else:
+										v = measure()
+										ja = measure(West)
+									ja = measure(East)
+									while ja == None:
 										ja = measure(East)
-										while ja == None:
-											ja = measure(East)
-										if ja < v:
-											swap(East)
-										else:
+									if ja >= v:
+										break
+									swap(East)
+									while True:
+										v = measure()
+										ja = measure(West)
+										while ja > v:
+											swap(West)
+											if not q2:
+												wk.append(2)
+												qn += 1
+												q2 = True
+											v = measure()
+											ja = measure(West)
+										ja = measure(East)
+										if ja >= v:
 											break
+										swap(East)
+									break
 						wait_until(tl + 0.9676)
 					spawn_drone(w25)
 					move(East)
@@ -4961,42 +6073,42 @@ def w0():
 					pk_West_South_None_1_0()
 					tl = get_time()
 					h = spawn_drone(hlp, 49, 0, 6, 7)
-					if h != None:
+					if h:
 						own(49, 0, 5)
 					else:
 						fsSW_NE()
 						move(West)
 						move(North)
 						h = spawn_drone(hlp, 49, 1, 6, 7)
-						if h != None:
+						if h:
 							own(49, 1, 5)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
 							h = spawn_drone(hlp, 49, 2, 6, 7)
-							if h != None:
+							if h:
 								own(49, 2, 5)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
 								h = spawn_drone(hlp, 49, 3, 7, 7)
-								if h != None:
+								if h:
 									own(49, 3, 6)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
 									h = spawn_drone(hlp, 49, 4, 7, 7)
-									if h != None:
+									if h:
 										own(49, 4, 6)
 									else:
 										fSW_NE()
 										move(West)
 										move(North)
 										h = spawn_drone(hlp, 49, 5, 7, 7)
-										if h != None:
+										if h:
 											own(49, 5, 6)
 										else:
 											fSW_NE()
@@ -5158,42 +6270,42 @@ def w0():
 				plant(Entities.Cactus)
 				tl = get_time()
 				h = spawn_drone(hlp, 47, 0, 6, 7)
-				if h != None:
+				if h:
 					own(47, 0, 5)
 				else:
 					fsSW_NE()
 					move(West)
 					move(North)
 					h = spawn_drone(hlp, 47, 1, 6, 7)
-					if h != None:
+					if h:
 						own(47, 1, 5)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
 						h = spawn_drone(hlp, 47, 2, 6, 7)
-						if h != None:
+						if h:
 							own(47, 2, 5)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
 							h = spawn_drone(hlp, 47, 3, 7, 7)
-							if h != None:
+							if h:
 								own(47, 3, 6)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
 								h = spawn_drone(hlp, 47, 4, 7, 7)
-								if h != None:
+								if h:
 									own(47, 4, 6)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
 									h = spawn_drone(hlp, 47, 5, 7, 7)
-									if h != None:
+									if h:
 										own(47, 5, 6)
 									else:
 										fSW_NE()
@@ -5328,25 +6440,45 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 								else:
 									swap(South)
-							elif jb > v:
-								swap(West)
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-								else:
+							if ja >= v:
+								break
+							swap(East)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+									else:
+										swap(South)
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+							break
 					elif cx == 1:
 						q1 = False
 						if cur == 0:
@@ -5370,25 +6502,45 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 								else:
 									swap(South)
-							elif jb > v:
-								swap(West)
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							while ja == None:
 								ja = measure(North)
-								while ja == None:
-									ja = measure(North)
-								if ja < v:
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-								else:
+							if ja >= v:
+								break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+									else:
+										swap(South)
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								if ja >= v:
 									break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+							break
 					elif cx == 2:
 						q2 = False
 						if cur == 0:
@@ -5409,7 +6561,7 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 									if not q0:
@@ -5422,24 +6574,48 @@ def w0():
 										wk.append(1)
 										qn += 1
 										q1 = True
-							elif jb > v:
-								swap(West)
-								if not q0:
-									wk.append(0)
-									qn += 1
-									q0 = True
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							while ja == None:
 								ja = measure(North)
-								while ja == None:
-									ja = measure(North)
-								if ja < v:
-									swap(North)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-								else:
+							if ja >= v:
+								break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+										if not q0:
+											wk.append(0)
+											qn += 1
+											q0 = True
+									else:
+										swap(South)
+										if not q1:
+											wk.append(1)
+											qn += 1
+											q1 = True
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								if ja >= v:
 									break
+								swap(North)
+								if not q3:
+									wk.append(3)
+									qn += 1
+									q3 = True
+							break
 					elif cx == 3:
 						q3 = False
 						if cur == 0:
@@ -5458,24 +6634,44 @@ def w0():
 							ja = measure(South)
 							while ja == None:
 								ja = measure(South)
-							if ja > v:
+							while ja > v:
 								swap(South)
 								if not q2:
 									wk.append(2)
 									qn += 1
 									q2 = True
-							else:
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							while ja == None:
 								ja = measure(North)
-								while ja == None:
-									ja = measure(North)
-								if ja < v:
-									swap(North)
-									if not q4:
-										wk.append(4)
+							if ja >= v:
+								break
+							swap(North)
+							if not q4:
+								wk.append(4)
+								qn += 1
+								q4 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								while ja > v:
+									swap(South)
+									if not q2:
+										wk.append(2)
 										qn += 1
-										q4 = True
-								else:
+										q2 = True
+									v = measure()
+									ja = measure(South)
+								ja = measure(North)
+								if ja >= v:
 									break
+								swap(North)
+								if not q4:
+									wk.append(4)
+									qn += 1
+									q4 = True
+							break
 					else:
 						q4 = False
 						if cur == 0:
@@ -5500,7 +6696,7 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 								else:
@@ -5509,16 +6705,36 @@ def w0():
 										wk.append(3)
 										qn += 1
 										q3 = True
-							elif jb > v:
-								swap(West)
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							while ja == None:
 								ja = measure(North)
-								while ja == None:
-									ja = measure(North)
-								if ja < v:
-									swap(North)
-								else:
+							if ja >= v:
+								break
+							swap(North)
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+									else:
+										swap(South)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								if ja >= v:
 									break
+								swap(North)
+							break
 				if cur == 1:
 					move(West)
 					move(North)
@@ -5666,20 +6882,36 @@ def w0():
 							ja = measure(West)
 							while ja == None:
 								ja = measure(West)
-							if ja > v:
+							while ja > v:
 								swap(West)
-							else:
+								v = measure()
+								ja = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-									if not q1:
-										wk.append(1)
-										qn += 1
-										q1 = True
-								else:
+							if ja >= v:
+								break
+							swap(East)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							while True:
+								v = measure()
+								ja = measure(West)
+								while ja > v:
+									swap(West)
+									v = measure()
+									ja = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+							break
 					elif cx == 1:
 						q1 = False
 						if cur == 0:
@@ -5694,40 +6926,62 @@ def w0():
 							ja = measure(West)
 							while ja == None:
 								ja = measure(West)
-							if ja > v:
+							while ja > v:
 								swap(West)
 								if not q0:
 									wk.append(0)
 									qn += 1
 									q0 = True
-							else:
+								v = measure()
+								ja = measure(West)
+							ja = measure(North)
+							while ja == None:
 								ja = measure(North)
-								while ja == None:
-									ja = measure(North)
+							jb = measure(East)
+							while jb == None:
 								jb = measure(East)
-								while jb == None:
-									jb = measure(East)
-								if ja < v:
-									if jb < ja:
-										swap(East)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-									else:
-										swap(North)
-										if not q3:
-											wk.append(3)
-											qn += 1
-											q3 = True
-								elif jb < v:
+							if ja >= v <= jb:
+								break
+							if jb < ja:
+								swap(East)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+							else:
+								swap(North)
+								if not q3:
+									wk.append(3)
+									qn += 1
+									q3 = True
+							while True:
+								v = measure()
+								ja = measure(West)
+								while ja > v:
+									swap(West)
+									if not q0:
+										wk.append(0)
+										qn += 1
+										q0 = True
+									v = measure()
+									ja = measure(West)
+								ja = measure(North)
+								jb = measure(East)
+								if ja >= v <= jb:
+									break
+								if jb < ja:
 									swap(East)
 									if not q2:
 										wk.append(2)
 										qn += 1
 										q2 = True
 								else:
-									break
+									swap(North)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+							break
 					elif cx == 2:
 						q2 = False
 						if cur == 0:
@@ -5744,20 +6998,36 @@ def w0():
 							ja = measure(West)
 							while ja == None:
 								ja = measure(West)
-							if ja > v:
+							while ja > v:
 								swap(West)
 								if not q1:
 									wk.append(1)
 									qn += 1
 									q1 = True
-							else:
+								v = measure()
+								ja = measure(West)
+							ja = measure(North)
+							while ja == None:
 								ja = measure(North)
-								while ja == None:
-									ja = measure(North)
-								if ja < v:
-									swap(North)
-								else:
+							if ja >= v:
+								break
+							swap(North)
+							while True:
+								v = measure()
+								ja = measure(West)
+								while ja > v:
+									swap(West)
+									if not q1:
+										wk.append(1)
+										qn += 1
+										q1 = True
+									v = measure()
+									ja = measure(West)
+								ja = measure(North)
+								if ja >= v:
 									break
+								swap(North)
+							break
 					else:
 						q3 = False
 						if cur == 0:
@@ -5774,28 +7044,46 @@ def w0():
 							ja = measure(South)
 							while ja == None:
 								ja = measure(South)
-							if ja > v:
+							while ja > v:
 								swap(South)
 								if not q1:
 									wk.append(1)
 									qn += 1
 									q1 = True
-							else:
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							while ja == None:
 								ja = measure(North)
-								while ja == None:
-									ja = measure(North)
+							jb = measure(East)
+							while jb == None:
 								jb = measure(East)
-								while jb == None:
-									jb = measure(East)
-								if ja < v:
-									if jb < ja:
-										swap(East)
-									else:
-										swap(North)
-								elif jb < v:
+							if ja >= v <= jb:
+								break
+							if jb < ja:
+								swap(East)
+							else:
+								swap(North)
+							while True:
+								v = measure()
+								ja = measure(South)
+								while ja > v:
+									swap(South)
+									if not q1:
+										wk.append(1)
+										qn += 1
+										q1 = True
+									v = measure()
+									ja = measure(South)
+								ja = measure(North)
+								jb = measure(East)
+								if ja >= v <= jb:
+									break
+								if jb < ja:
 									swap(East)
 								else:
-									break
+									swap(North)
+							break
 				wait_until(tl + 0.9676)
 			spawn_drone(w22)
 			move(West)
@@ -6021,25 +7309,45 @@ def w0():
 						jb = measure(West)
 						while jb == None:
 							jb = measure(West)
-						if ja > v:
+						while not ja <= v >= jb:
 							if jb > ja:
 								swap(West)
 							else:
 								swap(South)
-						elif jb > v:
-							swap(West)
-						else:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+						ja = measure(East)
+						while ja == None:
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
-							if ja < v:
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
+						if ja >= v:
+							break
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							while not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+								else:
+									swap(South)
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(East)
+							if ja >= v:
 								break
+							swap(East)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						break
 				elif cx == 1:
 					q1 = False
 					if cur == 0:
@@ -6063,25 +7371,45 @@ def w0():
 						jb = measure(West)
 						while jb == None:
 							jb = measure(West)
-						if ja > v:
+						while not ja <= v >= jb:
 							if jb > ja:
 								swap(West)
 							else:
 								swap(South)
-						elif jb > v:
-							swap(West)
-						else:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							while not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+								else:
+									swap(South)
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						break
 				elif cx == 2:
 					q2 = False
 					if cur == 0:
@@ -6102,7 +7430,7 @@ def w0():
 						jb = measure(West)
 						while jb == None:
 							jb = measure(West)
-						if ja > v:
+						while not ja <= v >= jb:
 							if jb > ja:
 								swap(West)
 								if not q0:
@@ -6115,24 +7443,48 @@ def w0():
 									wk.append(1)
 									qn += 1
 									q1 = True
-						elif jb > v:
-							swap(West)
-							if not q0:
-								wk.append(0)
-								qn += 1
-								q0 = True
-						else:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							while not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+									if not q0:
+										wk.append(0)
+										qn += 1
+										q0 = True
+								else:
+									swap(South)
+									if not q1:
+										wk.append(1)
+										qn += 1
+										q1 = True
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+						break
 				elif cx == 3:
 					q3 = False
 					if cur == 0:
@@ -6151,24 +7503,44 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q2:
 								wk.append(2)
 								qn += 1
 								q2 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-								if not q4:
-									wk.append(4)
+						if ja >= v:
+							break
+						swap(North)
+						if not q4:
+							wk.append(4)
+							qn += 1
+							q4 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q2:
+									wk.append(2)
 									qn += 1
-									q4 = True
-							else:
+									q2 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+							if not q4:
+								wk.append(4)
+								qn += 1
+								q4 = True
+						break
 				else:
 					q4 = False
 					if cur == 0:
@@ -6193,7 +7565,7 @@ def w0():
 						jb = measure(West)
 						while jb == None:
 							jb = measure(West)
-						if ja > v:
+						while not ja <= v >= jb:
 							if jb > ja:
 								swap(West)
 							else:
@@ -6202,16 +7574,36 @@ def w0():
 									wk.append(3)
 									qn += 1
 									q3 = True
-						elif jb > v:
-							swap(West)
-						else:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							while not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+								else:
+									swap(South)
+									if not q3:
+										wk.append(3)
+										qn += 1
+										q3 = True
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+						break
 			wait_until(tl + 0.9676)
 		spawn_drone(w21)
 		def w16():
@@ -6392,49 +7784,49 @@ def w0():
 						if tw:
 							tl = tw
 						h = spawn_drone(hlp, 41, 0, 7, 8)
-						if h != None:
+						if h:
 							own(41, 0, 6)
 						else:
 							fsSW_N()
 							move(West)
 							move(North)
 							h = spawn_drone(hlp, 41, 1, 7, 8)
-							if h != None:
+							if h:
 								own(41, 1, 6)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
 								h = spawn_drone(hlp, 41, 2, 7, 8)
-								if h != None:
+								if h:
 									own(41, 2, 6)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
 									h = spawn_drone(hlp, 41, 3, 7, 8)
-									if h != None:
+									if h:
 										own(41, 3, 6)
 									else:
 										fSW_NE()
 										move(West)
 										move(North)
 										h = spawn_drone(hlp, 41, 4, 8, 8)
-										if h != None:
+										if h:
 											own(41, 4, 7)
 										else:
 											fSW_NE()
 											move(West)
 											move(North)
 											h = spawn_drone(hlp, 41, 5, 8, 8)
-											if h != None:
+											if h:
 												own(41, 5, 7)
 											else:
 												fSW_NE()
 												move(West)
 												move(North)
 												h = spawn_drone(hlp, 41, 6, 8, 8)
-												if h != None:
+												if h:
 													own(41, 6, 7)
 												else:
 													fSW_NE()
@@ -6610,42 +8002,42 @@ def w0():
 					pk_West_South_None_1_0()
 					tl = get_time()
 					h = spawn_drone(hlp, 39, 0, 6, 7)
-					if h != None:
+					if h:
 						own(39, 0, 5)
 					else:
 						fsSW_NE()
 						move(West)
 						move(North)
 						h = spawn_drone(hlp, 39, 1, 6, 7)
-						if h != None:
+						if h:
 							own(39, 1, 5)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
 							h = spawn_drone(hlp, 39, 2, 6, 7)
-							if h != None:
+							if h:
 								own(39, 2, 5)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
 								h = spawn_drone(hlp, 39, 3, 7, 7)
-								if h != None:
+								if h:
 									own(39, 3, 6)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
 									h = spawn_drone(hlp, 39, 4, 7, 7)
-									if h != None:
+									if h:
 										own(39, 4, 6)
 									else:
 										fSW_NE()
 										move(West)
 										move(North)
 										h = spawn_drone(hlp, 39, 5, 7, 7)
-										if h != None:
+										if h:
 											own(39, 5, 6)
 										else:
 											fSW_NE()
@@ -6788,25 +8180,45 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 								else:
 									swap(South)
-							elif jb > v:
-								swap(West)
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							while ja == None:
 								ja = measure(North)
-								while ja == None:
-									ja = measure(North)
-								if ja < v:
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-								else:
+							if ja >= v:
+								break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+									else:
+										swap(South)
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								if ja >= v:
 									break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+							break
 					elif cx == 1:
 						q1 = False
 						if cur == 0:
@@ -6830,25 +8242,45 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 								else:
 									swap(South)
-							elif jb > v:
-								swap(West)
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-								else:
+							if ja >= v:
+								break
+							swap(East)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+									else:
+										swap(South)
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+							break
 					elif cx == 2:
 						q2 = False
 						if cur == 0:
@@ -6869,7 +8301,7 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 									if not q1:
@@ -6882,24 +8314,48 @@ def w0():
 										wk.append(0)
 										qn += 1
 										q0 = True
-							elif jb > v:
-								swap(West)
-								if not q1:
-									wk.append(1)
-									qn += 1
-									q1 = True
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-								else:
+							if ja >= v:
+								break
+							swap(East)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+										if not q1:
+											wk.append(1)
+											qn += 1
+											q1 = True
+									else:
+										swap(South)
+										if not q0:
+											wk.append(0)
+											qn += 1
+											q0 = True
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+								if not q3:
+									wk.append(3)
+									qn += 1
+									q3 = True
+							break
 					elif cx == 3:
 						q3 = False
 						if cur == 0:
@@ -6918,24 +8374,44 @@ def w0():
 							ja = measure(West)
 							while ja == None:
 								ja = measure(West)
-							if ja > v:
+							while ja > v:
 								swap(West)
 								if not q2:
 									wk.append(2)
 									qn += 1
 									q2 = True
-							else:
+								v = measure()
+								ja = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-									if not q4:
-										wk.append(4)
+							if ja >= v:
+								break
+							swap(East)
+							if not q4:
+								wk.append(4)
+								qn += 1
+								q4 = True
+							while True:
+								v = measure()
+								ja = measure(West)
+								while ja > v:
+									swap(West)
+									if not q2:
+										wk.append(2)
 										qn += 1
-										q4 = True
-								else:
+										q2 = True
+									v = measure()
+									ja = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+								if not q4:
+									wk.append(4)
+									qn += 1
+									q4 = True
+							break
 					else:
 						q4 = False
 						if cur == 0:
@@ -6960,7 +8436,7 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 									if not q3:
@@ -6969,20 +8445,36 @@ def w0():
 										q3 = True
 								else:
 									swap(South)
-							elif jb > v:
-								swap(West)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-								else:
+							if ja >= v:
+								break
+							swap(East)
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+									else:
+										swap(South)
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+							break
 				c = cur
 				e = tl + 0.9345
 				P = []
@@ -7076,49 +8568,49 @@ def w0():
 				plant(Entities.Cactus)
 				tl = get_time()
 				h = spawn_drone(hlp, 37, 0, 7, 8)
-				if h != None:
+				if h:
 					own(37, 0, 6)
 				else:
 					fsSW_NE()
 					move(West)
 					move(North)
 					h = spawn_drone(hlp, 37, 1, 7, 8)
-					if h != None:
+					if h:
 						own(37, 1, 6)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
 						h = spawn_drone(hlp, 37, 2, 7, 8)
-						if h != None:
+						if h:
 							own(37, 2, 6)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
 							h = spawn_drone(hlp, 37, 3, 7, 8)
-							if h != None:
+							if h:
 								own(37, 3, 6)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
 								h = spawn_drone(hlp, 37, 4, 8, 8)
-								if h != None:
+								if h:
 									own(37, 4, 7)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
 									h = spawn_drone(hlp, 37, 5, 8, 8)
-									if h != None:
+									if h:
 										own(37, 5, 7)
 									else:
 										fSW_NE()
 										move(West)
 										move(North)
 										h = spawn_drone(hlp, 37, 6, 8, 8)
-										if h != None:
+										if h:
 											own(37, 6, 7)
 										else:
 											fSW_NE()
@@ -7346,25 +8838,45 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 								else:
 									swap(South)
-							elif jb > v:
-								swap(West)
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							while ja == None:
 								ja = measure(North)
-								while ja == None:
-									ja = measure(North)
-								if ja < v:
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-								else:
+							if ja >= v:
+								break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+									else:
+										swap(South)
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(North)
+								if ja >= v:
 									break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+							break
 					elif cx == 1:
 						q1 = False
 						if cur == 0:
@@ -7388,25 +8900,45 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 								else:
 									swap(South)
-							elif jb > v:
-								swap(West)
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-								else:
+							if ja >= v:
+								break
+							swap(East)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+									else:
+										swap(South)
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+							break
 					elif cx == 2:
 						q2 = False
 						if cur == 0:
@@ -7427,7 +8959,7 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 									if not q1:
@@ -7440,24 +8972,48 @@ def w0():
 										wk.append(0)
 										qn += 1
 										q0 = True
-							elif jb > v:
-								swap(West)
-								if not q1:
-									wk.append(1)
-									qn += 1
-									q1 = True
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-								else:
+							if ja >= v:
+								break
+							swap(East)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+										if not q1:
+											wk.append(1)
+											qn += 1
+											q1 = True
+									else:
+										swap(South)
+										if not q0:
+											wk.append(0)
+											qn += 1
+											q0 = True
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+								if not q3:
+									wk.append(3)
+									qn += 1
+									q3 = True
+							break
 					elif cx == 3:
 						q3 = False
 						if cur == 0:
@@ -7476,24 +9032,44 @@ def w0():
 							ja = measure(West)
 							while ja == None:
 								ja = measure(West)
-							if ja > v:
+							while ja > v:
 								swap(West)
 								if not q2:
 									wk.append(2)
 									qn += 1
 									q2 = True
-							else:
+								v = measure()
+								ja = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-									if not q4:
-										wk.append(4)
+							if ja >= v:
+								break
+							swap(East)
+							if not q4:
+								wk.append(4)
+								qn += 1
+								q4 = True
+							while True:
+								v = measure()
+								ja = measure(West)
+								while ja > v:
+									swap(West)
+									if not q2:
+										wk.append(2)
 										qn += 1
-										q4 = True
-								else:
+										q2 = True
+									v = measure()
+									ja = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+								if not q4:
+									wk.append(4)
+									qn += 1
+									q4 = True
+							break
 					else:
 						q4 = False
 						if cur == 0:
@@ -7518,7 +9094,7 @@ def w0():
 							jb = measure(West)
 							while jb == None:
 								jb = measure(West)
-							if ja > v:
+							while not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
 									if not q3:
@@ -7527,20 +9103,36 @@ def w0():
 										q3 = True
 								else:
 									swap(South)
-							elif jb > v:
-								swap(West)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-							else:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(East)
+							while ja == None:
 								ja = measure(East)
-								while ja == None:
-									ja = measure(East)
-								if ja < v:
-									swap(East)
-								else:
+							if ja >= v:
+								break
+							swap(East)
+							while True:
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+								while not ja <= v >= jb:
+									if jb > ja:
+										swap(West)
+										if not q3:
+											wk.append(3)
+											qn += 1
+											q3 = True
+									else:
+										swap(South)
+									v = measure()
+									ja = measure(South)
+									jb = measure(West)
+								ja = measure(East)
+								if ja >= v:
 									break
+								swap(East)
+							break
 				if cur == 1:
 					move(East)
 					move(South)
@@ -7713,49 +9305,49 @@ def w0():
 			plant(Entities.Cactus)
 			tl = get_time()
 			h = spawn_drone(hlp, 33, 0, 7, 8)
-			if h != None:
+			if h:
 				own(33, 0, 6)
 			else:
 				fsSW_NE()
 				move(East)
 				move(South)
 				h = spawn_drone(hlp, 33, 1, 7, 8)
-				if h != None:
+				if h:
 					own(33, 1, 6)
 				else:
 					fSW_NE()
 					move(East)
 					move(South)
 					h = spawn_drone(hlp, 33, 2, 7, 8)
-					if h != None:
+					if h:
 						own(33, 2, 6)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
 						h = spawn_drone(hlp, 33, 3, 7, 8)
-						if h != None:
+						if h:
 							own(33, 3, 6)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
 							h = spawn_drone(hlp, 33, 4, 8, 8)
-							if h != None:
+							if h:
 								own(33, 4, 7)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
 								h = spawn_drone(hlp, 33, 5, 8, 8)
-								if h != None:
+								if h:
 									own(33, 5, 7)
 								else:
 									fSW_NE()
 									move(East)
 									move(South)
 									h = spawn_drone(hlp, 33, 6, 8, 8)
-									if h != None:
+									if h:
 										own(33, 6, 7)
 									else:
 										fSW_NE()
@@ -7937,42 +9529,42 @@ def w0():
 				tl = tw
 			move(East)
 			h = spawn_drone(hlp, 31, 0, 6, 7)
-			if h != None:
+			if h:
 				own(31, 0, 5)
 			else:
 				fsSW_NE()
 				move(East)
 				move(South)
 				h = spawn_drone(hlp, 31, 1, 6, 7)
-				if h != None:
+				if h:
 					own(31, 1, 5)
 				else:
 					fSW_NE()
 					move(East)
 					move(South)
 					h = spawn_drone(hlp, 31, 2, 6, 7)
-					if h != None:
+					if h:
 						own(31, 2, 5)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
 						h = spawn_drone(hlp, 31, 3, 7, 7)
-						if h != None:
+						if h:
 							own(31, 3, 6)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
 							h = spawn_drone(hlp, 31, 4, 7, 7)
-							if h != None:
+							if h:
 								own(31, 4, 6)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
 								h = spawn_drone(hlp, 31, 5, 7, 7)
-								if h != None:
+								if h:
 									own(31, 5, 6)
 								else:
 									fSW_NE()
@@ -8115,20 +9707,36 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(East)
+					while ja == None:
 						ja = measure(East)
-						while ja == None:
-							ja = measure(East)
-						if ja < v:
-							swap(East)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							v = measure()
+							ja = measure(West)
+						ja = measure(East)
+						if ja >= v:
 							break
+						swap(East)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -8143,40 +9751,62 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					else:
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q2:
 								wk.append(2)
 								qn += 1
 								q2 = True
 						else:
-							break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -8193,20 +9823,36 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
-						if ja < v:
-							swap(North)
-						else:
+					if ja >= v:
+						break
+					swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						if ja >= v:
 							break
+						swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -8223,28 +9869,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		c = cur
 		e = tl + 0.9345
 		P = []
@@ -8385,20 +10049,36 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
-						if ja < v:
-							swap(North)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(North)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						if ja >= v:
 							break
+						swap(North)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -8413,40 +10093,62 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-							else:
-								swap(North)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					else:
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q3:
 								wk.append(3)
 								qn += 1
 								q3 = True
 						else:
-							break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -8463,28 +10165,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -8501,28 +10221,46 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		if cur == 0:
 			move(East)
 			move(North)
@@ -8563,20 +10301,36 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(East)
+					while ja == None:
 						ja = measure(East)
-						while ja == None:
-							ja = measure(East)
-						if ja < v:
-							swap(East)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							v = measure()
+							ja = measure(West)
+						ja = measure(East)
+						if ja >= v:
 							break
+						swap(East)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -8591,40 +10345,62 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					else:
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q2:
 								wk.append(2)
 								qn += 1
 								q2 = True
 						else:
-							break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -8641,28 +10417,46 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -8679,28 +10473,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		wait_until(tl + 0.9676)
 	spawn_drone(w14)
 	def w10():
@@ -8877,49 +10689,49 @@ def w0():
 				if use_item(Items.Fertilizer):
 					tl = get_time() - 0.0988
 				h = spawn_drone(hlp, 27, 0, 7, 8)
-				if h != None:
+				if h:
 					own(27, 0, 6)
 				else:
 					fsSW_NE()
 					move(East)
 					move(South)
 					h = spawn_drone(hlp, 27, 1, 7, 8)
-					if h != None:
+					if h:
 						own(27, 1, 6)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
 						h = spawn_drone(hlp, 27, 2, 7, 8)
-						if h != None:
+						if h:
 							own(27, 2, 6)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
 							h = spawn_drone(hlp, 27, 3, 7, 8)
-							if h != None:
+							if h:
 								own(27, 3, 6)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
 								h = spawn_drone(hlp, 27, 4, 8, 8)
-								if h != None:
+								if h:
 									own(27, 4, 7)
 								else:
 									fSW_NE()
 									move(East)
 									move(South)
 									h = spawn_drone(hlp, 27, 5, 8, 8)
-									if h != None:
+									if h:
 										own(27, 5, 7)
 									else:
 										fSW_NE()
 										move(East)
 										move(South)
 										h = spawn_drone(hlp, 27, 6, 8, 8)
-										if h != None:
+										if h:
 											own(27, 6, 7)
 										else:
 											fSW_NE()
@@ -9090,42 +10902,42 @@ def w0():
 			pk_East_North_None_0_0()
 			tl = get_time()
 			h = spawn_drone(hlp, 25, 0, 6, 7)
-			if h != None:
+			if h:
 				own(25, 0, 5)
 			else:
 				fsSW_NE()
 				move(East)
 				move(South)
 				h = spawn_drone(hlp, 25, 1, 6, 7)
-				if h != None:
+				if h:
 					own(25, 1, 5)
 				else:
 					fSW_NE()
 					move(East)
 					move(South)
 					h = spawn_drone(hlp, 25, 2, 6, 7)
-					if h != None:
+					if h:
 						own(25, 2, 5)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
 						h = spawn_drone(hlp, 25, 3, 7, 7)
-						if h != None:
+						if h:
 							own(25, 3, 6)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
 							h = spawn_drone(hlp, 25, 4, 7, 7)
-							if h != None:
+							if h:
 								own(25, 4, 6)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
 								h = spawn_drone(hlp, 25, 5, 7, 7)
-								if h != None:
+								if h:
 									own(25, 5, 6)
 								else:
 									fSW_NE()
@@ -9264,20 +11076,36 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-								if not q1:
-									wk.append(1)
-									qn += 1
-									q1 = True
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+						break
 				elif cx == 1:
 					q1 = False
 					if cur == 0:
@@ -9292,40 +11120,62 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q0:
 								wk.append(0)
 								qn += 1
 								q0 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-								else:
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+						else:
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 								if not q3:
 									wk.append(3)
 									qn += 1
 									q3 = True
 							else:
-								break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+						break
 				elif cx == 2:
 					q2 = False
 					if cur == 0:
@@ -9342,28 +11192,46 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q1:
 								wk.append(1)
 								qn += 1
 								q1 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-								else:
-									swap(North)
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 							else:
-								break
+								swap(North)
+						break
 				else:
 					q3 = False
 					if cur == 0:
@@ -9380,28 +11248,46 @@ def w0():
 						ja = measure(West)
 						while ja == None:
 							ja = measure(West)
-						if ja > v:
+						while ja > v:
 							swap(West)
 							if not q1:
 								wk.append(1)
 								qn += 1
 								q1 = True
-						else:
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-								else:
-									swap(North)
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+						while True:
+							v = measure()
+							ja = measure(West)
+							while ja > v:
+								swap(West)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+								ja = measure(West)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 							else:
-								break
+								swap(North)
+						break
 			if cur == 0:
 				move(East)
 				move(North)
@@ -9504,20 +11390,36 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-								if not q1:
-									wk.append(1)
-									qn += 1
-									q1 = True
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+						break
 				elif cx == 1:
 					q1 = False
 					if cur == 0:
@@ -9532,40 +11434,62 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q0:
 								wk.append(0)
 								qn += 1
 								q0 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-								else:
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+						else:
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 								if not q3:
 									wk.append(3)
 									qn += 1
 									q3 = True
 							else:
-								break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+						break
 				elif cx == 2:
 					q2 = False
 					if cur == 0:
@@ -9582,28 +11506,46 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q1:
 								wk.append(1)
 								qn += 1
 								q1 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-								else:
-									swap(North)
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 							else:
-								break
+								swap(North)
+						break
 				else:
 					q3 = False
 					if cur == 0:
@@ -9620,28 +11562,46 @@ def w0():
 						ja = measure(West)
 						while ja == None:
 							ja = measure(West)
-						if ja > v:
+						while ja > v:
 							swap(West)
 							if not q1:
 								wk.append(1)
 								qn += 1
 								q1 = True
-						else:
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-								else:
-									swap(North)
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+						while True:
+							v = measure()
+							ja = measure(West)
+							while ja > v:
+								swap(West)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+								ja = measure(West)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 							else:
-								break
+								swap(North)
+						break
 			if cur == 0:
 				move(East)
 				move(North)
@@ -9815,42 +11775,42 @@ def w0():
 			tl = get_time() - 0.0988
 		move(West)
 		h = spawn_drone(hlp, 21, 0, 6, 7)
-		if h != None:
+		if h:
 			own(21, 0, 5)
 		else:
 			fsSW_NE()
 			move(West)
 			move(North)
 			h = spawn_drone(hlp, 21, 1, 6, 7)
-			if h != None:
+			if h:
 				own(21, 1, 5)
 			else:
 				fSW_NE()
 				move(West)
 				move(North)
 				h = spawn_drone(hlp, 21, 2, 6, 7)
-				if h != None:
+				if h:
 					own(21, 2, 5)
 				else:
 					fSW_NE()
 					move(West)
 					move(North)
 					h = spawn_drone(hlp, 21, 3, 7, 7)
-					if h != None:
+					if h:
 						own(21, 3, 6)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
 						h = spawn_drone(hlp, 21, 4, 7, 7)
-						if h != None:
+						if h:
 							own(21, 4, 6)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
 							h = spawn_drone(hlp, 21, 5, 7, 7)
-							if h != None:
+							if h:
 								own(21, 5, 6)
 							else:
 								fSW_NE()
@@ -10021,49 +11981,49 @@ def w0():
 			plant(Entities.Cactus)
 			tl = get_time()
 			h = spawn_drone(hlp, 19, 0, 7, 8)
-			if h != None:
+			if h:
 				own(19, 0, 6)
 			else:
 				fsSW_NE()
 				move(West)
 				move(North)
 				h = spawn_drone(hlp, 19, 1, 7, 8)
-				if h != None:
+				if h:
 					own(19, 1, 6)
 				else:
 					fSW_NE()
 					move(West)
 					move(North)
 					h = spawn_drone(hlp, 19, 2, 7, 8)
-					if h != None:
+					if h:
 						own(19, 2, 6)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
 						h = spawn_drone(hlp, 19, 3, 7, 8)
-						if h != None:
+						if h:
 							own(19, 3, 6)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
 							h = spawn_drone(hlp, 19, 4, 8, 8)
-							if h != None:
+							if h:
 								own(19, 4, 7)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
 								h = spawn_drone(hlp, 19, 5, 8, 8)
-								if h != None:
+								if h:
 									own(19, 5, 7)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
 									h = spawn_drone(hlp, 19, 6, 8, 8)
-									if h != None:
+									if h:
 										own(19, 6, 7)
 									else:
 										fSW_NE()
@@ -10195,20 +12155,36 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(East)
+					while ja == None:
 						ja = measure(East)
-						while ja == None:
-							ja = measure(East)
-						if ja < v:
-							swap(East)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							v = measure()
+							ja = measure(West)
+						ja = measure(East)
+						if ja >= v:
 							break
+						swap(East)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -10223,40 +12199,62 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					else:
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q2:
 								wk.append(2)
 								qn += 1
 								q2 = True
 						else:
-							break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -10273,28 +12271,46 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -10311,28 +12327,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		if cur == 0:
 			move(East)
 			move(North)
@@ -10432,20 +12466,36 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(East)
+					while ja == None:
 						ja = measure(East)
-						while ja == None:
-							ja = measure(East)
-						if ja < v:
-							swap(East)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							v = measure()
+							ja = measure(West)
+						ja = measure(East)
+						if ja >= v:
 							break
+						swap(East)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -10460,40 +12510,62 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					else:
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q2:
 								wk.append(2)
 								qn += 1
 								q2 = True
 						else:
-							break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -10510,28 +12582,46 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -10548,28 +12638,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		if cur == 0:
 			move(East)
 			move(North)
@@ -10746,42 +12854,42 @@ def w0():
 				tl = get_time()
 				move(East)
 				h = spawn_drone(hlp, 15, 0, 6, 7)
-				if h != None:
+				if h:
 					own(15, 0, 5)
 				else:
 					fsSW_NE()
 					move(East)
 					move(South)
 					h = spawn_drone(hlp, 15, 1, 6, 7)
-					if h != None:
+					if h:
 						own(15, 1, 5)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
 						h = spawn_drone(hlp, 15, 2, 6, 7)
-						if h != None:
+						if h:
 							own(15, 2, 5)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
 							h = spawn_drone(hlp, 15, 3, 7, 7)
-							if h != None:
+							if h:
 								own(15, 3, 6)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
 								h = spawn_drone(hlp, 15, 4, 7, 7)
-								if h != None:
+								if h:
 									own(15, 4, 6)
 								else:
 									fSW_NE()
 									move(East)
 									move(South)
 									h = spawn_drone(hlp, 15, 5, 7, 7)
-									if h != None:
+									if h:
 										own(15, 5, 6)
 									else:
 										fSW_NE()
@@ -10931,49 +13039,49 @@ def w0():
 				plant(Entities.Cactus)
 				tl = get_time()
 				h = spawn_drone(hlp, 13, 0, 7, 8)
-				if h != None:
+				if h:
 					own(13, 0, 6)
 				else:
 					fsSW_E()
 					move(East)
 					move(South)
 					h = spawn_drone(hlp, 13, 1, 7, 8)
-					if h != None:
+					if h:
 						own(13, 1, 6)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
 						h = spawn_drone(hlp, 13, 2, 7, 8)
-						if h != None:
+						if h:
 							own(13, 2, 6)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
 							h = spawn_drone(hlp, 13, 3, 7, 8)
-							if h != None:
+							if h:
 								own(13, 3, 6)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
 								h = spawn_drone(hlp, 13, 4, 8, 8)
-								if h != None:
+								if h:
 									own(13, 4, 7)
 								else:
 									fSW_NE()
 									move(East)
 									move(South)
 									h = spawn_drone(hlp, 13, 5, 8, 8)
-									if h != None:
+									if h:
 										own(13, 5, 7)
 									else:
 										fSW_NE()
 										move(East)
 										move(South)
 										h = spawn_drone(hlp, 13, 6, 8, 8)
-										if h != None:
+										if h:
 											own(13, 6, 7)
 										else:
 											fSW_NE()
@@ -11110,20 +13218,36 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-								if not q1:
-									wk.append(1)
-									qn += 1
-									q1 = True
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+						break
 				elif cx == 1:
 					q1 = False
 					if cur == 0:
@@ -11138,40 +13262,62 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q0:
 								wk.append(0)
 								qn += 1
 								q0 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-								else:
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+						else:
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 								if not q3:
 									wk.append(3)
 									qn += 1
 									q3 = True
 							else:
-								break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+						break
 				elif cx == 2:
 					q2 = False
 					if cur == 0:
@@ -11188,28 +13334,46 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q1:
 								wk.append(1)
 								qn += 1
 								q1 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-								else:
-									swap(North)
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 							else:
-								break
+								swap(North)
+						break
 				else:
 					q3 = False
 					if cur == 0:
@@ -11226,28 +13390,46 @@ def w0():
 						ja = measure(West)
 						while ja == None:
 							ja = measure(West)
-						if ja > v:
+						while ja > v:
 							swap(West)
 							if not q1:
 								wk.append(1)
 								qn += 1
 								q1 = True
-						else:
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-								else:
-									swap(North)
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+						while True:
+							v = measure()
+							ja = measure(West)
+							while ja > v:
+								swap(West)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+								ja = measure(West)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 							else:
-								break
+								swap(North)
+						break
 			if cur == 0:
 				move(East)
 				move(North)
@@ -11411,25 +13593,45 @@ def w0():
 						jb = measure(West)
 						while jb == None:
 							jb = measure(West)
-						if ja > v:
+						while not ja <= v >= jb:
 							if jb > ja:
 								swap(West)
 							else:
 								swap(South)
-						elif jb > v:
-							swap(West)
-						else:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+						ja = measure(East)
+						while ja == None:
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
-							if ja < v:
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
+						if ja >= v:
+							break
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							while not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+								else:
+									swap(South)
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(East)
+							if ja >= v:
 								break
+							swap(East)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						break
 				elif cx == 1:
 					q1 = False
 					if cur == 0:
@@ -11449,25 +13651,45 @@ def w0():
 						jb = measure(West)
 						while jb == None:
 							jb = measure(West)
-						if ja > v:
+						while not ja <= v >= jb:
 							if jb > ja:
 								swap(West)
 							else:
 								swap(South)
-						elif jb > v:
-							swap(West)
-						else:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							while not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+								else:
+									swap(South)
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						break
 				elif cx == 2:
 					q2 = False
 					if cur == 0:
@@ -11485,7 +13707,7 @@ def w0():
 						jb = measure(West)
 						while jb == None:
 							jb = measure(West)
-						if ja > v:
+						while not ja <= v >= jb:
 							if jb > ja:
 								swap(West)
 								if not q0:
@@ -11498,24 +13720,48 @@ def w0():
 									wk.append(1)
 									qn += 1
 									q1 = True
-						elif jb > v:
-							swap(West)
-							if not q0:
-								wk.append(0)
-								qn += 1
-								q0 = True
-						else:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							while not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+									if not q0:
+										wk.append(0)
+										qn += 1
+										q0 = True
+								else:
+									swap(South)
+									if not q1:
+										wk.append(1)
+										qn += 1
+										q1 = True
+								v = measure()
+								ja = measure(South)
+								jb = measure(West)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+						break
 				else:
 					q3 = False
 					if cur == 0:
@@ -11532,20 +13778,36 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q2:
 								wk.append(2)
 								qn += 1
 								q2 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+						break
 			wait_until(tl + 0.9676)
 		spawn_drone(w5)
 		def w4():
@@ -11772,20 +14034,36 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja < v:
-								swap(North)
-								if not q1:
-									wk.append(1)
-									qn += 1
-									q1 = True
-							else:
+						if ja >= v:
+							break
+						swap(North)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							if ja >= v:
 								break
+							swap(North)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+						break
 				elif cx == 1:
 					q1 = False
 					if cur == 0:
@@ -11800,40 +14078,62 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q0:
 								wk.append(0)
 								qn += 1
 								q0 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-								else:
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+						else:
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 								if not q3:
 									wk.append(3)
 									qn += 1
 									q3 = True
 							else:
-								break
+								swap(North)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+						break
 				elif cx == 2:
 					q2 = False
 					if cur == 0:
@@ -11850,28 +14150,46 @@ def w0():
 						ja = measure(South)
 						while ja == None:
 							ja = measure(South)
-						if ja > v:
+						while ja > v:
 							swap(South)
 							if not q1:
 								wk.append(1)
 								qn += 1
 								q1 = True
-						else:
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-								else:
-									swap(North)
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+						while True:
+							v = measure()
+							ja = measure(South)
+							while ja > v:
+								swap(South)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+								ja = measure(South)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 							else:
-								break
+								swap(North)
+						break
 				else:
 					q3 = False
 					if cur == 0:
@@ -11888,28 +14206,46 @@ def w0():
 						ja = measure(West)
 						while ja == None:
 							ja = measure(West)
-						if ja > v:
+						while ja > v:
 							swap(West)
 							if not q1:
 								wk.append(1)
 								qn += 1
 								q1 = True
-						else:
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						while ja == None:
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
+						jb = measure(East)
+						while jb == None:
 							jb = measure(East)
-							while jb == None:
-								jb = measure(East)
-							if ja < v:
-								if jb < ja:
-									swap(East)
-								else:
-									swap(North)
-							elif jb < v:
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+						while True:
+							v = measure()
+							ja = measure(West)
+							while ja > v:
+								swap(West)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+								ja = measure(West)
+							ja = measure(North)
+							jb = measure(East)
+							if ja >= v <= jb:
+								break
+							if jb < ja:
 								swap(East)
 							else:
-								break
+								swap(North)
+						break
 			wait_until(tl + 0.9676)
 		spawn_drone(w4)
 		move(East)
@@ -12032,20 +14368,36 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(East)
+					while ja == None:
 						ja = measure(East)
-						while ja == None:
-							ja = measure(East)
-						if ja < v:
-							swap(East)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							v = measure()
+							ja = measure(West)
+						ja = measure(East)
+						if ja >= v:
 							break
+						swap(East)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -12060,40 +14412,62 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					else:
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q2:
 								wk.append(2)
 								qn += 1
 								q2 = True
 						else:
-							break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -12110,28 +14484,46 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -12148,28 +14540,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		if cur == 0:
 			move(East)
 			move(North)
@@ -12352,20 +14762,36 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
-						if ja < v:
-							swap(North)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(North)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						if ja >= v:
 							break
+						swap(North)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -12380,40 +14806,62 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-							else:
-								swap(North)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					else:
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q3:
 								wk.append(3)
 								qn += 1
 								q3 = True
 						else:
-							break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -12430,28 +14878,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -12468,28 +14934,46 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		wait_until(tl + 0.9676)
 	spawn_drone(w3)
 	def w2():
@@ -12642,20 +15126,36 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
-						if ja < v:
-							swap(North)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(North)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						if ja >= v:
 							break
+						swap(North)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -12670,40 +15170,62 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-							else:
-								swap(North)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					else:
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q3:
 								wk.append(3)
 								qn += 1
 								q3 = True
 						else:
-							break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -12720,28 +15242,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -12758,28 +15298,46 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		if cur == 0:
 			move(East)
 			move(North)
@@ -12852,49 +15410,49 @@ def w0():
 		if use_item(Items.Fertilizer):
 			tl = get_time() - 0.0988
 		h = spawn_drone(hlp, 5, 0, 7, 8)
-		if h != None:
+		if h:
 			own(5, 0, 6)
 		else:
 			fsSW_N()
 			move(West)
 			move(North)
 			h = spawn_drone(hlp, 5, 1, 7, 8)
-			if h != None:
+			if h:
 				own(5, 1, 6)
 			else:
 				fSW_NE()
 				move(West)
 				move(North)
 				h = spawn_drone(hlp, 5, 2, 7, 8)
-				if h != None:
+				if h:
 					own(5, 2, 6)
 				else:
 					fSW_NE()
 					move(West)
 					move(North)
 					h = spawn_drone(hlp, 5, 3, 7, 8)
-					if h != None:
+					if h:
 						own(5, 3, 6)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
 						h = spawn_drone(hlp, 5, 4, 8, 8)
-						if h != None:
+						if h:
 							own(5, 4, 7)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
 							h = spawn_drone(hlp, 5, 5, 8, 8)
-							if h != None:
+							if h:
 								own(5, 5, 7)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
 								h = spawn_drone(hlp, 5, 6, 8, 8)
-								if h != None:
+								if h:
 									own(5, 6, 7)
 								else:
 									fSW_NE()
@@ -13061,20 +15619,36 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(East)
+					while ja == None:
 						ja = measure(East)
-						while ja == None:
-							ja = measure(East)
-						if ja < v:
-							swap(East)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							v = measure()
+							ja = measure(West)
+						ja = measure(East)
+						if ja >= v:
 							break
+						swap(East)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -13089,40 +15663,62 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					else:
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q2:
 								wk.append(2)
 								qn += 1
 								q2 = True
 						else:
-							break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -13139,28 +15735,46 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -13177,28 +15791,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		if cur == 0:
 			move(East)
 			move(North)
@@ -13356,20 +15988,36 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(East)
+					while ja == None:
 						ja = measure(East)
-						while ja == None:
-							ja = measure(East)
-						if ja < v:
-							swap(East)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-						else:
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							v = measure()
+							ja = measure(West)
+						ja = measure(East)
+						if ja >= v:
 							break
+						swap(East)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+					break
 			elif cx == 1:
 				q1 = False
 				if cur == 0:
@@ -13384,40 +16032,62 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q0:
 							wk.append(0)
 							qn += 1
 							q0 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							else:
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					else:
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 							if not q2:
 								wk.append(2)
 								qn += 1
 								q2 = True
 						else:
-							break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+					break
 			elif cx == 2:
 				q2 = False
 				if cur == 0:
@@ -13434,28 +16104,46 @@ def w0():
 					ja = measure(West)
 					while ja == None:
 						ja = measure(West)
-					if ja > v:
+					while ja > v:
 						swap(West)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(West)
+						while ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(West)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 			else:
 				q3 = False
 				if cur == 0:
@@ -13472,28 +16160,46 @@ def w0():
 					ja = measure(South)
 					while ja == None:
 						ja = measure(South)
-					if ja > v:
+					while ja > v:
 						swap(South)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
-					else:
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					while ja == None:
 						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
+					jb = measure(East)
+					while jb == None:
 						jb = measure(East)
-						while jb == None:
-							jb = measure(East)
-						if ja < v:
-							if jb < ja:
-								swap(East)
-							else:
-								swap(North)
-						elif jb < v:
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+							ja = measure(South)
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
 							swap(East)
 						else:
-							break
+							swap(North)
+					break
 		wait_until(tl + 0.9676)
 	spawn_drone(w1)
 	move(East)
@@ -13611,20 +16317,36 @@ def w0():
 				ja = measure(West)
 				while ja == None:
 					ja = measure(West)
-				if ja > v:
+				while ja > v:
 					swap(West)
-				else:
+					v = measure()
+					ja = measure(West)
+				ja = measure(East)
+				while ja == None:
 					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja < v:
-						swap(East)
-						if not q1:
-							wk.append(1)
-							qn += 1
-							q1 = True
-					else:
+				if ja >= v:
+					break
+				swap(East)
+				if not q1:
+					wk.append(1)
+					qn += 1
+					q1 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					while ja > v:
+						swap(West)
+						v = measure()
+						ja = measure(West)
+					ja = measure(East)
+					if ja >= v:
 						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+				break
 		elif cx == 1:
 			q1 = False
 			if cur == 0:
@@ -13639,40 +16361,62 @@ def w0():
 				ja = measure(West)
 				while ja == None:
 					ja = measure(West)
-				if ja > v:
+				while ja > v:
 					swap(West)
 					if not q0:
 						wk.append(0)
 						qn += 1
 						q0 = True
-				else:
+					v = measure()
+					ja = measure(West)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
+				jb = measure(East)
+				while jb == None:
 					jb = measure(East)
-					while jb == None:
-						jb = measure(East)
-					if ja < v:
-						if jb < ja:
-							swap(East)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
-						else:
-							swap(North)
-							if not q3:
-								wk.append(3)
-								qn += 1
-								q3 = True
-					elif jb < v:
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				else:
+					swap(North)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					while ja > v:
+						swap(West)
+						if not q0:
+							wk.append(0)
+							qn += 1
+							q0 = True
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
 						swap(East)
 						if not q2:
 							wk.append(2)
 							qn += 1
 							q2 = True
 					else:
-						break
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+				break
 		elif cx == 2:
 			q2 = False
 			if cur == 0:
@@ -13689,28 +16433,46 @@ def w0():
 				ja = measure(West)
 				while ja == None:
 					ja = measure(West)
-				if ja > v:
+				while ja > v:
 					swap(West)
 					if not q1:
 						wk.append(1)
 						qn += 1
 						q1 = True
-				else:
+					v = measure()
+					ja = measure(West)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
+				jb = measure(East)
+				while jb == None:
 					jb = measure(East)
-					while jb == None:
-						jb = measure(East)
-					if ja < v:
-						if jb < ja:
-							swap(East)
-						else:
-							swap(North)
-					elif jb < v:
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+				else:
+					swap(North)
+				while True:
+					v = measure()
+					ja = measure(West)
+					while ja > v:
+						swap(West)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
 						swap(East)
 					else:
-						break
+						swap(North)
+				break
 		else:
 			q3 = False
 			if cur == 0:
@@ -13727,28 +16489,46 @@ def w0():
 				ja = measure(South)
 				while ja == None:
 					ja = measure(South)
-				if ja > v:
+				while ja > v:
 					swap(South)
 					if not q1:
 						wk.append(1)
 						qn += 1
 						q1 = True
-				else:
+					v = measure()
+					ja = measure(South)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
+				jb = measure(East)
+				while jb == None:
 					jb = measure(East)
-					while jb == None:
-						jb = measure(East)
-					if ja < v:
-						if jb < ja:
-							swap(East)
-						else:
-							swap(North)
-					elif jb < v:
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+				else:
+					swap(North)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja > v:
+						swap(South)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
 						swap(East)
 					else:
-						break
+						swap(North)
+				break
 	if cur == 0:
 		move(East)
 		move(North)
@@ -13791,20 +16571,36 @@ def w0():
 				ja = measure(South)
 				while ja == None:
 					ja = measure(South)
-				if ja > v:
+				while ja > v:
 					swap(South)
-				else:
+					v = measure()
+					ja = measure(South)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
-					if ja < v:
-						swap(North)
-						if not q1:
-							wk.append(1)
-							qn += 1
-							q1 = True
-					else:
+				if ja >= v:
+					break
+				swap(North)
+				if not q1:
+					wk.append(1)
+					qn += 1
+					q1 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja > v:
+						swap(South)
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					if ja >= v:
 						break
+					swap(North)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+				break
 		elif cx == 1:
 			q1 = False
 			if cur == 0:
@@ -13819,40 +16615,62 @@ def w0():
 				ja = measure(South)
 				while ja == None:
 					ja = measure(South)
-				if ja > v:
+				while ja > v:
 					swap(South)
 					if not q0:
 						wk.append(0)
 						qn += 1
 						q0 = True
-				else:
+					v = measure()
+					ja = measure(South)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
+				jb = measure(East)
+				while jb == None:
 					jb = measure(East)
-					while jb == None:
-						jb = measure(East)
-					if ja < v:
-						if jb < ja:
-							swap(East)
-							if not q3:
-								wk.append(3)
-								qn += 1
-								q3 = True
-						else:
-							swap(North)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
-					elif jb < v:
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+				else:
+					swap(North)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja > v:
+						swap(South)
+						if not q0:
+							wk.append(0)
+							qn += 1
+							q0 = True
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
 						swap(East)
 						if not q3:
 							wk.append(3)
 							qn += 1
 							q3 = True
 					else:
-						break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+				break
 		elif cx == 2:
 			q2 = False
 			if cur == 0:
@@ -13869,28 +16687,46 @@ def w0():
 				ja = measure(South)
 				while ja == None:
 					ja = measure(South)
-				if ja > v:
+				while ja > v:
 					swap(South)
 					if not q1:
 						wk.append(1)
 						qn += 1
 						q1 = True
-				else:
+					v = measure()
+					ja = measure(South)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
+				jb = measure(East)
+				while jb == None:
 					jb = measure(East)
-					while jb == None:
-						jb = measure(East)
-					if ja < v:
-						if jb < ja:
-							swap(East)
-						else:
-							swap(North)
-					elif jb < v:
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+				else:
+					swap(North)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja > v:
+						swap(South)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
 						swap(East)
 					else:
-						break
+						swap(North)
+				break
 		else:
 			q3 = False
 			if cur == 0:
@@ -13907,28 +16743,46 @@ def w0():
 				ja = measure(West)
 				while ja == None:
 					ja = measure(West)
-				if ja > v:
+				while ja > v:
 					swap(West)
 					if not q1:
 						wk.append(1)
 						qn += 1
 						q1 = True
-				else:
+					v = measure()
+					ja = measure(West)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
+				jb = measure(East)
+				while jb == None:
 					jb = measure(East)
-					while jb == None:
-						jb = measure(East)
-					if ja < v:
-						if jb < ja:
-							swap(East)
-						else:
-							swap(North)
-					elif jb < v:
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+				else:
+					swap(North)
+				while True:
+					v = measure()
+					ja = measure(West)
+					while ja > v:
+						swap(West)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
 						swap(East)
 					else:
-						break
+						swap(North)
+				break
 	c = cur
 	e = tl + 0.9345
 	P = []
@@ -14105,20 +16959,36 @@ def w0():
 				ja = measure(West)
 				while ja == None:
 					ja = measure(West)
-				if ja > v:
+				while ja > v:
 					swap(West)
-				else:
+					v = measure()
+					ja = measure(West)
+				ja = measure(East)
+				while ja == None:
 					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja < v:
-						swap(East)
-						if not q1:
-							wk.append(1)
-							qn += 1
-							q1 = True
-					else:
+				if ja >= v:
+					break
+				swap(East)
+				if not q1:
+					wk.append(1)
+					qn += 1
+					q1 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					while ja > v:
+						swap(West)
+						v = measure()
+						ja = measure(West)
+					ja = measure(East)
+					if ja >= v:
 						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+				break
 		elif cx == 1:
 			q1 = False
 			if cur == 0:
@@ -14133,40 +17003,62 @@ def w0():
 				ja = measure(West)
 				while ja == None:
 					ja = measure(West)
-				if ja > v:
+				while ja > v:
 					swap(West)
 					if not q0:
 						wk.append(0)
 						qn += 1
 						q0 = True
-				else:
+					v = measure()
+					ja = measure(West)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
+				jb = measure(East)
+				while jb == None:
 					jb = measure(East)
-					while jb == None:
-						jb = measure(East)
-					if ja < v:
-						if jb < ja:
-							swap(East)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
-						else:
-							swap(North)
-							if not q3:
-								wk.append(3)
-								qn += 1
-								q3 = True
-					elif jb < v:
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				else:
+					swap(North)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					while ja > v:
+						swap(West)
+						if not q0:
+							wk.append(0)
+							qn += 1
+							q0 = True
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
 						swap(East)
 						if not q2:
 							wk.append(2)
 							qn += 1
 							q2 = True
 					else:
-						break
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+				break
 		elif cx == 2:
 			q2 = False
 			if cur == 0:
@@ -14183,28 +17075,46 @@ def w0():
 				ja = measure(West)
 				while ja == None:
 					ja = measure(West)
-				if ja > v:
+				while ja > v:
 					swap(West)
 					if not q1:
 						wk.append(1)
 						qn += 1
 						q1 = True
-				else:
+					v = measure()
+					ja = measure(West)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
+				jb = measure(East)
+				while jb == None:
 					jb = measure(East)
-					while jb == None:
-						jb = measure(East)
-					if ja < v:
-						if jb < ja:
-							swap(East)
-						else:
-							swap(North)
-					elif jb < v:
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+				else:
+					swap(North)
+				while True:
+					v = measure()
+					ja = measure(West)
+					while ja > v:
+						swap(West)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+						ja = measure(West)
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
 						swap(East)
 					else:
-						break
+						swap(North)
+				break
 		else:
 			q3 = False
 			if cur == 0:
@@ -14221,28 +17131,46 @@ def w0():
 				ja = measure(South)
 				while ja == None:
 					ja = measure(South)
-				if ja > v:
+				while ja > v:
 					swap(South)
 					if not q1:
 						wk.append(1)
 						qn += 1
 						q1 = True
-				else:
+					v = measure()
+					ja = measure(South)
+				ja = measure(North)
+				while ja == None:
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
+				jb = measure(East)
+				while jb == None:
 					jb = measure(East)
-					while jb == None:
-						jb = measure(East)
-					if ja < v:
-						if jb < ja:
-							swap(East)
-						else:
-							swap(North)
-					elif jb < v:
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+				else:
+					swap(North)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja > v:
+						swap(South)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+						ja = measure(South)
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
 						swap(East)
 					else:
-						break
+						swap(North)
+				break
 	wait_until(tl + 0.9676)
 	while num_drones() > 1:
 		pass
