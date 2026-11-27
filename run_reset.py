@@ -1161,10 +1161,12 @@ def sun_plant2(i, d, wet, b):
 			if d > w and x % 2 == 1:
 				y = n - 1 - y
 			cl.append((x, y))
+	ci = len(cl)
 	for xy in cl:
 		x = xy[0]
 		y = xy[1]
 		go(x, y)
+		ci -= 1
 		if get_entity_type() != Entities.Sunflower:
 			clear_cell()
 			soil()
@@ -1175,6 +1177,10 @@ def sun_plant2(i, d, wet, b):
 				plant(Entities.Sunflower)
 				m = measure()
 		m = measure()
+		# two drones, too little water to wet them all (wet[0] == 2): the last-planted high-petal
+		# flowers, which set when the cuts can start, get one water each
+		if wet[0] == 2 and m != None and ci < 17 and m >= 11 and get_water() < 0.2 and num_items(Items.Water) >= 1:
+			use_item(Items.Water, 1)
 		if m != None and wet[m] > 0:
 			if wet[0] > 0:
 				# by petal count: up to the level this flower's turn in the cutting order needs
@@ -1343,6 +1349,8 @@ def power_round2(n):
 		wet = [0]
 		for v in range(1, 16):
 			wet.append(k)
+		if k == 0 and d == 2:
+			wet[0] = 2
 	res = spawn_node(0, d, d, (sun_plant2, wet, b))
 	if SUN_DINO and SUN_TARGET == 0 and num_unlocked(Unlocks.Dinosaurs) > 0 and SN != get_world_size():
 		# the snake's neighbour tables, built by every drone while the sunflowers grow
@@ -1493,6 +1501,9 @@ def power_mini():
 					harvest()
 				soil()
 				if plant(Entities.Sunflower):
+					# watered: the first cut (and power) comes sooner, less polling for the tallest
+					if get_water() < 0.25 and num_items(Items.Water) >= 1:
+						use_item(Items.Water)
 					sf[pos] = measure()
 			if k < n - 1:
 				move(North)
@@ -5240,8 +5251,9 @@ def run_plan(plan):
 			elif item == Items.Weird_Substance and num_unlocked(Unlocks.Cactus) == 0:
 				power_check()
 				g = get_cost(u)[item]
-				if u == Unlocks.Mazes and num_unlocked(u) == 0 and i + 1 < len(plan) and plan[i + 1][0] == Unlocks.Megafarm:
+				if u == Unlocks.Mazes and num_unlocked(u) == 0 and i + 2 < len(plan) and Unlocks.Megafarm in (plan[i + 1][0], plan[i + 2][0]):
 					# the first maze's own weird substance (one maze cost per treasure) in the same round
+					# (Watering 3 sits between Mazes 1 and Megafarm 1 in PLAN, so look two entries ahead)
 					n = get_world_size()
 					g += ((get_cost(Unlocks.Megafarm)[Items.Gold] - num_items(Items.Gold)) // (n * n) + 2) * n
 				weird_round(g)
@@ -5303,8 +5315,8 @@ PLAN = [
 	(Unlocks.Megafarm, 2),
 	(Unlocks.Cactus, 1),
 	(Unlocks.Expand, 6),
-	(Unlocks.Cactus, 2),
 	(Unlocks.Pumpkins, 5),
+	(Unlocks.Cactus, 2),
 	(Unlocks.Mazes, 2),
 	(Unlocks.Mazes, 3),
 	(Unlocks.Megafarm, 3),
