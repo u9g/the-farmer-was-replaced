@@ -2281,6 +2281,13 @@ MZ_SPENT = 0
 MZ_MD = 0
 MZ_KID = None
 MERGE_MF = True
+# a wall on my map has come down: its shortest ways may leave the tree
+MZ_SC = False
+MZ_HEAL = True
+MZ_HOME = True
+MZ_HEALN = 24
+# with at least this many cells of my own, ways only to my cells and those a race takes me to
+MZ_PRX = 24
 
 
 def mz_starts(n, d):
@@ -2297,8 +2304,8 @@ def mz_starts(n, d):
 	return st
 
 
-def mz_walk(a, b):
-	# along the map's tree from cell a to cell b
+def mz_walk(a, b, lim):
+	# along the map's tree from cell a to cell b, if that is under lim steps (True if walked)
 	n = MZ_N
 	pd = MZ_PD
 	dp = MZ_DP
@@ -2319,16 +2326,24 @@ def mz_walk(a, b):
 		k = pd[b]
 		down.append(k)
 		b = b - DX[k] - DY[k] * n
+	if len(up) + len(down) >= lim:
+		return False
 	for k in up:
 		move(DIRS[k])
 	for i in range(len(down) - 1, -1, -1):
 		move(DIRS[down[i]])
+	return True
 
 
 def mz_paths(park):
-	# shortest ways from the park to every walked cell over the sides known open
+	# shortest ways from the park over the sides known open, to my cells and to the walked cells
+	# a race could take me to (and one step on)
 	n = MZ_N
 	adj = MZ_ADJ
+	own = MZ_OWN
+	race = MZ_RACE
+	if len(own) < MZ_PRX:
+		race = 999
 	path = {park: []}
 	q = [park]
 	i = 0
@@ -2336,6 +2351,8 @@ def mz_paths(park):
 		x = q[i]
 		i += 1
 		px = path[x]
+		if len(px) >= race and not (x in own):
+			continue
 		for k in adj[x]:
 			y = x + DX[k] + DY[k] * n
 			if not (y in path):
@@ -2414,6 +2431,7 @@ def mz_explore(si):
 	global MZ_PATH
 	global MZ_ADJ
 	global MZ_PROBE
+	global MZ_SC
 	n = MZ_N
 	global DD
 	DD = [n, 1, -n, -1]
@@ -2424,6 +2442,8 @@ def mz_explore(si):
 	ry = c // n
 	pd = {c: -1}
 	dp = {c: 0}
+	par = {c: c}
+	adj = {c: []}
 	order = [c]
 	found = []
 	stack = []
@@ -2456,11 +2476,14 @@ def mz_explore(si):
 				use_item(Items.Weird_Substance, MZ_COST)
 			stack.append(k)
 			nd = dp[c] + 1
+			adj[c].append(k)
+			par[nc] = c
 			c = nc
 			pd[c] = k
 			dp[c] = nd
 			order.append(c)
 			b = BACK[k]
+			adj[c] = [b]
 			ks = []
 			ks2 = []
 			hit = False
@@ -2513,21 +2536,19 @@ def mz_explore(si):
 	for f in found:
 		j = si[f]
 		h = dp[f]
-		x = f
+		k = pd[f]
+		x = f - DX[k] - DY[k] * n
 		while x != root:
 			if 2 * dp[x] > h or (2 * dp[x] == h and j < me):
 				cut[x] = True
-				k = pd[x]
-				x = x - DX[k] - DY[k] * n
+				x = par[x]
 			else:
 				break
 	own = {root: True}
 	cnt = {root: 1}
 	for i in range(1, len(order)):
 		x = order[i]
-		k = pd[x]
-		p = x - DX[k] - DY[k] * n
-		if p in own and not (x in cut):
+		if par[x] in own and not (x in cut):
 			own[x] = True
 			cnt[x] = 1
 		else:
@@ -2535,26 +2556,16 @@ def mz_explore(si):
 	for i in range(len(order) - 1, 0, -1):
 		x = order[i]
 		if cnt[x] > 0:
-			k = pd[x]
-			p = x - DX[k] - DY[k] * n
-			cnt[p] += cnt[x]
+			cnt[par[x]] += cnt[x]
 	tot = len(own)
 	park = root
 	for x in own:
 		if 2 * cnt[x] > tot and dp[x] > dp[park]:
 			park = x
-	# the open sides of every cell walked (tree edges for now; walls only ever come down),
-	# and the sides toward other walked cells still to be tried
-	adj = {}
-	for x in order:
-		adj[x] = []
-	for i in range(1, len(order)):
-		x = order[i]
-		k = pd[x]
-		p = x - DX[k] - DY[k] * n
-		adj[p].append(k)
-		adj[x].append(BACK[k])
+	# adj: the open sides of every cell walked (tree edges for now; walls only ever come down)
 	MZ_ADJ = adj
+	MZ_OWN = own
+	MZ_SC = False
 	MZ_PROBE = {}
 	path = mz_paths(park)
 	MZ_PATH = path
@@ -2609,6 +2620,7 @@ def mz_serve(goal, per, cost, g0, park):
 	# 0: done, 1: the maze's uses are spent, 2: I harvested the spent maze
 	global MZ_CUR
 	global MZ_PATH
+	global MZ_SC
 	n = MZ_N
 	own = MZ_OWN
 	known = MZ_DP
@@ -2619,7 +2631,7 @@ def mz_serve(goal, per, cost, g0, park):
 	lim = g0 + 300 * per
 	cur = MZ_CUR
 	if park:
-		mz_walk(cur, home)
+		mz_walk(cur, home, 9999)
 		cur = home
 	last = -1
 	seen = 0
@@ -2667,9 +2679,66 @@ def mz_serve(goal, per, cost, g0, park):
 				else:
 					c = t[0] + t[1] * n
 			if c == last:
+				x = get_pos_x() + get_pos_y() * n
 				p = mz_seek(c, True)
 				if get_pos_x() + get_pos_y() * n == c:
 					use_item(Items.Weird_Substance, cost)
+					if MZ_HEAL and x in known:
+						# nobody maps this spot: the way I found to it becomes mine, so the next
+						# treasure there is fetched at once instead of after another search
+						pd = MZ_PD
+						adj = MZ_ADJ
+						if not (x in adj):
+							adj[x] = []
+						for k in p:
+							y = x + DX[k] + DY[k] * n
+							if not (y in known):
+								pd[y] = k
+								known[y] = known[x] + 1
+							if not (y in adj):
+								adj[y] = []
+							if not (k in adj[x]):
+								adj[x].append(k)
+								adj[y].append(BACK[k])
+							own[y] = True
+							if x in paths:
+								if not (y in paths) or len(paths[x]) + 1 < len(paths[y]):
+									paths[y] = paths[x] + [k]
+							x = y
+						# and the cells round it that nobody I know of maps, depth first
+						st2 = []
+						todo = [[]]
+						for k in range(4):
+							if can_move(DIRS[k]) and not ((x + DX[k] + DY[k] * n) in known):
+								todo[0].append(k)
+						left = MZ_HEALN
+						while len(todo) > 0:
+							if len(todo[-1]) > 0 and left > 0:
+								k = todo[-1].pop()
+								y = x + DX[k] + DY[k] * n
+								if y in known or not move(DIRS[k]):
+									continue
+								left -= 1
+								pd[y] = k
+								known[y] = known[x] + 1
+								adj[x].append(k)
+								adj[y] = [BACK[k]]
+								own[y] = True
+								if x in paths:
+									paths[y] = paths[x] + [k]
+								st2.append(k)
+								x = y
+								ks = []
+								for k2 in range(4):
+									if k2 != BACK[k] and can_move(DIRS[k2]) and not ((x + DX[k2] + DY[k2] * n) in known):
+										ks.append(k2)
+								todo.append(ks)
+							else:
+								todo.pop()
+								if len(st2) > 0 and len(todo) > 0:
+									k = st2.pop()
+									move(DIRS[BACK[k]])
+									x = x - DX[k] - DY[k] * n
 				for i in range(len(p) - 1, -1, -1):
 					move(DIRS[BACK[p[i]]])
 		elif c in known:
@@ -2708,15 +2777,14 @@ def mz_serve(goal, per, cost, g0, park):
 				m = min(len(p), len(q))
 				while j < m and p[j] == q[j]:
 					j += 1
-				if len(p) + len(q) - 2 * j < mz_dist(cur, c):
+				if not (MZ_SC and mz_walk(cur, c, len(p) + len(q) - 2 * j)):
+					# (while no wall has come down on my map, the ways are its tree: this is its path)
 					for i in range(len(p) - 1, j - 1, -1):
 						move(DIRS[BACK[p[i]]])
 					for i in range(j, len(q)):
 						move(DIRS[q[i]])
-				else:
-					mz_walk(cur, c)
 			else:
-				mz_walk(cur, c)
+				mz_walk(cur, c, 9999)
 			cur = c
 			if num_items(Items.Gold) >= goal:
 				if get_entity_type() == Entities.Treasure:
@@ -2762,6 +2830,9 @@ def mz_serve(goal, per, cost, g0, park):
 								y = t[0] + t[1] * n
 								if y != nxt and y in own:
 									break
+							elif MZ_HOME:
+								# the maze is gone: off to my start for the next one, the short way
+								break
 						k = p[i]
 						move(DIRS[BACK[k]])
 						x = x - DX[k] - DY[k] * n
@@ -2776,7 +2847,9 @@ def mz_serve(goal, per, cost, g0, park):
 						for x2 in wk:
 							for k in adj[x2]:
 								y = x2 + DX[k] + DY[k] * n
-								if len(paths[x2]) + 1 < len(paths[y]):
+								if not (y in paths):
+									pass
+								elif len(paths[x2]) + 1 < len(paths[y]):
 									paths[y] = paths[x2] + [k]
 									q.append(y)
 								elif len(paths[y]) + 1 < len(paths[x2]):
@@ -2790,13 +2863,14 @@ def mz_serve(goal, per, cost, g0, park):
 							L = len(px) + 1
 							for k in adj[x2]:
 								y = x2 + DX[k] + DY[k] * n
-								if L < len(paths[y]):
+								if y in paths and L < len(paths[y]):
 									paths[y] = px + [k]
 									q.append(y)
 						MZ_PATH = paths
+						MZ_SC = True
 					cur = x
 				else:
-					mz_walk(cur, home)
+					mz_walk(cur, home, 9999)
 					cur = home
 			while get_time() < until:
 				pass
