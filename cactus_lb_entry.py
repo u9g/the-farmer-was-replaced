@@ -1354,8 +1354,6 @@ def w0():
 							move(East)
 							plant(Entities.Cactus)
 							tl = get_time()
-							if use_item(Items.Fertilizer):
-								tl = get_time() - 0.0988
 							if measure() < measure(West):
 								swap(West)
 							xcas(South, 0)
@@ -2378,8 +2376,14 @@ def w0():
 						move(East)
 						plant(Entities.Cactus)
 						move(South)
+						tw = 0
+						if get_time() > 6.0:
+							if use_item(Items.Water, 4):
+								tw = 1
 						plant(Entities.Cactus)
 						tl = get_time()
+						if tw:
+							tl = tl - 0.0988
 						xcas(East, 1)
 						move(North)
 						wk = [0, 1, 2, 3]
@@ -4342,8 +4346,14 @@ def w0():
 					move(South)
 					plant(Entities.Cactus)
 					move(East)
+					tw = 0
+					if get_time() > 6.0:
+						if use_item(Items.Water, 4):
+							tw = 1
 					plant(Entities.Cactus)
 					tl = get_time()
+					if tw:
+						tl = tl - 0.0988
 					if measure() < measure(West):
 						swap(West)
 					xcas(South, 0)
@@ -4955,8 +4965,14 @@ def w0():
 				move(North)
 				plant(Entities.Cactus)
 				move(West)
+				tw = 0
+				if get_time() > 6.0:
+					if use_item(Items.Water, 4):
+						tw = 1
 				plant(Entities.Cactus)
 				tl = get_time()
+				if tw:
+					tl = tl - 0.0988
 				if measure() > measure(East):
 					swap(East)
 				xcas(North, 1)
@@ -5256,8 +5272,14 @@ def w0():
 				move(North)
 				plant(Entities.Cactus)
 				move(West)
+				tw = 0
+				if get_time() > 6.0:
+					if use_item(Items.Water, 4):
+						tw = 1
 				plant(Entities.Cactus)
 				tl = get_time()
+				if tw:
+					tl = tl - 0.0988
 				if measure() > measure(East):
 					swap(East)
 				xcas(North, 1)
@@ -6889,8 +6911,14 @@ def w0():
 					move(East)
 					plant(Entities.Cactus)
 					move(South)
+					tw = 0
+					if get_time() > 6.0:
+						if use_item(Items.Water, 4):
+							tw = 1
 					plant(Entities.Cactus)
 					tl = get_time()
+					if tw:
+						tl = tl - 0.0988
 					DL = tl + 0.9676
 					if DL < hb + 2.6:
 						DL = hb + 2.6
@@ -9881,8 +9909,14 @@ def w0():
 			move(East)
 			plant(Entities.Cactus)
 			move(South)
+			tw = 0
+			if get_time() > 6.0:
+				if use_item(Items.Water, 4):
+					tw = 1
 			plant(Entities.Cactus)
 			tl = get_time()
+			if tw:
+				tl = tl - 0.0988
 			xcas(East, 1)
 			move(North)
 			wk = [0, 1, 2, 3, 4]
@@ -10503,8 +10537,14 @@ def w0():
 		move(West)
 		plant(Entities.Cactus)
 		move(North)
+		tw = 0
+		if get_time() > 6.0:
+			if use_item(Items.Water, 4):
+				tw = 1
 		plant(Entities.Cactus)
 		tl = get_time()
+		if tw:
+			tl = tl - 0.0988
 		DL = tl + 0.9676
 		if DL < hb + 2.6:
 			DL = hb + 2.6
@@ -11329,8 +11369,14 @@ def w0():
 			move(North)
 			plant(Entities.Cactus)
 			move(West)
+			tw = 0
+			if get_time() > 6.0:
+				if use_item(Items.Water, 4):
+					tw = 1
 			plant(Entities.Cactus)
 			tl = get_time()
+			if tw:
+				tl = tl - 0.0988
 			xcas(North, 1)
 			move(East)
 			wk = [0, 1, 2, 3]
@@ -13003,6 +13049,9 @@ def w0():
 			swap(South)
 			plant(Entities.Cactus)
 			tl = get_time()
+			if tl > 6.0:
+				if use_item(Items.Water, 4):
+					tl = get_time() - 0.0988
 			move(South)
 			xcas(East, 1)
 			move(North)
@@ -13737,8 +13786,14 @@ def w0():
 		move(East)
 		plant(Entities.Cactus)
 		move(South)
+		tw = 0
+		if get_time() > 6.0:
+			if use_item(Items.Water, 4):
+				tw = 1
 		plant(Entities.Cactus)
 		tl = get_time()
+		if tw:
+			tl = tl - 0.0988
 		DL = tl + 0.9676
 		if DL < hb + 2.6:
 			DL = hb + 2.6
@@ -14292,8 +14347,14 @@ def w0():
 			move(West)
 			plant(Entities.Cactus)
 			move(West)
+			tw = 0
+			if get_time() > 6.0:
+				if use_item(Items.Water, 4):
+					tw = 1
 			plant(Entities.Cactus)
 			tl = get_time()
+			if tw:
+				tl = tl - 0.0988
 			xcas(North, 1)
 			move(East)
 			move(East)
@@ -15002,8 +15063,14 @@ def w0():
 		move(West)
 		plant(Entities.Cactus)
 		move(North)
+		tw = 0
+		if get_time() > 6.0:
+			if use_item(Items.Water, 4):
+				tw = 1
 		plant(Entities.Cactus)
 		tl = get_time()
+		if tw:
+			tl = tl - 0.0988
 		DL = tl + 0.9676
 		if DL < hb + 2.6:
 			DL = hb + 2.6
@@ -18517,8 +18584,14 @@ def w0():
 		move(South)
 		plant(Entities.Cactus)
 		move(East)
+		tw = 0
+		if get_time() > 6.0:
+			if use_item(Items.Water, 4):
+				tw = 1
 		plant(Entities.Cactus)
 		tl = get_time()
+		if tw:
+			tl = tl - 0.0988
 		xcas(South, 0)
 		move(West)
 		wk = [3, 2, 1, 0]
@@ -20040,8 +20113,6 @@ def w0():
 	plant(Entities.Cactus)
 	move(East)
 	plant(Entities.Cactus)
-	swap(East)
-	plant(Entities.Cactus)
 	move(North)
 	plant(Entities.Cactus)
 	move(West)
@@ -20156,15 +20227,9 @@ def w0():
 		ja = measure(North)
 		while ja == None:
 			ja = measure(North)
-		jb = measure(East)
-		while jb == None:
-			jb = measure(East)
-		if ja >= v <= jb:
+		if ja >= v:
 			break
-		if jb < ja:
-			swap(East)
-		else:
-			swap(North)
+		swap(North)
 		while True:
 			v = measure()
 			ja = measure(West)
@@ -20176,13 +20241,9 @@ def w0():
 					q1 = True
 				v = measure()
 			ja = measure(North)
-			jb = measure(East)
-			if ja >= v <= jb:
+			if ja >= v:
 				break
-			if jb < ja:
-				swap(East)
-			else:
-				swap(North)
+			swap(North)
 		break
 	q1 = False
 	move(West)
@@ -20367,13 +20428,9 @@ def w0():
 						q1 = True
 					v = measure()
 				ja = measure(North)
-				jb = measure(East)
-				if ja >= v <= jb:
+				if ja >= v:
 					break
-				if jb < ja:
-					swap(East)
-				else:
-					swap(North)
+				swap(North)
 		else:
 			q3 = False
 			if cur == 0:
