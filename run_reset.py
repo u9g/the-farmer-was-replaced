@@ -3215,9 +3215,12 @@ FALLS = 0
 NBLK = 0
 RDIR = []
 RPOS = []
-NMODES = 3
+NMODES = 40
 JMAX = 3
 SKIP = True
+TB = None
+DV = None
+CH = None
 
 
 def dir_to(a, b):
@@ -3235,6 +3238,25 @@ def mk_path(j, m, N):
 	# apple block, detour into the skipped area at column 2 + 2m), y relative to the segment
 	W = N - 1
 	p = []
+	if j == 0 and m >= 3:
+		# a route that reaches some of the block's cells early (found offline: the shortest way
+		# to each cell that still leaves a way through the rest, and the routes a search made
+		# from them most often when the apple came up inside the block)
+		ws = ['ENWNEESSEEEEEEEEEEEENWWWWWWWWWWWNEEEEEEEEEEENWWWWWWWWWWWWWW', 'EENWWNEEESSEEEEEEEEEEENWWWWWWWWWWNEEEEEEEEEENWWWWWWWWWWWWWW', 'EENNESSEEEEEEEEEEENWWWWWWWWWWNEEEEEEEEEENWWWWWWWWWWWWWSSWNN', 'EEENWWWNEEEESSEEEEEEEEEENWWWWWWWWWNEEEEEEEEENWWWWWWWWWWWWWW', 'EEENNESSEEEEEEEEEENWWWWWWWWWNEEEEEEEEENWWWWWWWWWWWWWSESWWNN', 'EEEENWWWWNEEEEESSEEEEEEEEENWWWWWWWWNEEEEEEEENWWWWWWWWWWWWWW', 'EEEENNESSEEEEEEEEENWWWWWWWWNEEEEEEEENWWWWWWWWWWWWWSEESWWWNN', 'EEEEENWWWWWNEEEEEESSEEEEEEEENWWWWWWWNEEEEEEENWWWWWWWWWWWWWW', 'EEEEENNESSEEEEEEEENWWWWWWWNEEEEEEENWWWWWWWWWWWWWSEEESWWWWNN', 'EEEEEENWWWWWWNEEEEEEESSEEEEEEENWWWWWWNEEEEEENWWWWWWWWWWWWWW', 'EEEEEENNESSEEEEEEENWWWWWWNEEEEEENWWWWWWWWWWWWWSEEEESWWWWWNN', 'EEEEEEENWWWWWWWNEEEEEEEESSEEEEEENWWWWWNEEEEENWWWWWWWWWWWWWW', 'EEEEEEENNESSEEEEEENWWWWWNEEEEENWWWWWWWWWWWWWSEEEEESWWWWWWNN', 'EEEEEEEENWWWWWWWWNEEEEEEEEESSEEEEENWWWWNEEEENWWWWWWWWWWWWWW', 'EEEEEEEENNESSEEEEENWWWWNEEEENWWWWWWWWWWWWWSEEEEEESWWWWWWWNN', 'EEEEEEEEENWWWWWWWWWNEEEEEEEEEESSEEEENWWWNEEENWWWWWWWWWWWWWW', 'EEEEEEEEENNESSEEEENWWWNEEENWWWWWWWWWWWWWSEEEEEEESWWWWWWWWNN', 'EEEEEEEEEEEEEENNNWWWWWWWWWWWWWSEEEEEEEEEEEESWWWWWWWWWWWWWNN', 'EEEEEEEEEENWWWWWWWWWWNEEEEEEEEEEESSEEENWWNEENWWWWWWWWWWWWWW', 'EEEEEEEEEENNESSEEENWWNEENWWWWWWWWWWWWWSEEEEEEEESWWWWWWWWWNN', 'EEEEEEEEEEENWWWWWWWWWWWNEEEEEEEEEEEESSEENWNENWWWWWWWWWWWWWW', 'EEEEEEEEEEENNESSEENWNENWWWWWWWWWWWWWSEEEEEEEEESWWWWWWWWWWNN', 'EEEEEEEEEEEENWWWWWWWWWWWWNEEEEEEEEEEEEESSENNNWWWWWWWWWWWWWW', 'EEEEEEEEEEEENNESSENNNWWWWWWWWWWWWWSEEEEEEEEEESWWWWWWWWWWWNN', 'EEEEEEEEEEEENESENNNWSWNWWWWWWWWWWWSEEEEEEEEEESWWWWWWWWWWWNN', 'EEEEEEEEEEEEEENNNWWWWWWWWWSEEEEEEEESWWWWWWWWWWWWWNEEEENWWWW', 'EEEEEEEEEEEEEENNNWWWWWWWWWWWWSEEEEEEEEEEESWWWWWWWWWWWWWNENW', 'EEEEEEEEEEEEEENNNWWWWWWWWSEEEEEEESWWWWWWWWWWWWWNEEEEENWWWWW', 'EEEEEEEEEEEEEENNNWSSWWWWWWWWWWWWWNEEEEEEEEEEEENWWWWWWWWWWWW', 'EEEEEEEEEEEEEENNNWWWWWWWWWWSEEEEEEEEESWWWWWWWWWWWWWNEEENWWW', 'EEEEEEEEEEEEEENNNWWWWSEEESWWWWWWWWWWWWWNEEEEEEEEENWWWWWWWWW', 'EEEEEEEEEEEEEENNNWWWWWWWWWWWSEEEEEEEEEESWWWWWWWWWWWWWNEENWW', 'EENNEEEEEEEEEEESWWWWWWWWWWSEEEEEEEEEEENNNWWWWWWWWWWWWWSSWNN', 'NNESSEEEEEEEEEEEEENWWWWWWWWWWWWNEEEEEEEEEEEENWWWWWWWWWWWWWW', 'EEEEEEEEEEEEEENNNWWWSEESWWWWWWWWWWWWWNEEEEEEEEEENWWWWWWWWWW', 'NNEEEEEEEEEEEEESWWWWWWWWWWWWSEEEEEEEEEEEEENNNWWWWWWWWWWWWWW', 'EEEEEEEEEEEEEENNNWWWWWWWSEEEEEESWWWWWWWWWWWWWNEEEEEENWWWWWW']
+		x = 1
+		y = 0
+		p.append((x, y))
+		for c in ws[m - 3]:
+			if c == "E":
+				x += 1
+			elif c == "W":
+				x -= 1
+			elif c == "N":
+				y += 1
+			else:
+				y -= 1
+			p.append((x, y))
+		return p
 	if j == 0:
 		if m == 0:
 			for y in range(4):
@@ -3331,7 +3353,18 @@ def block_setup(N):
 	global RDIR
 	global RPOS
 	global BGB
+	global TB
+	global DV
+	global CH
 	NBLK = N // 4
+	# the block routes form a tree (routes that start alike share a branch). DV[m]: pairs
+	# DV[m][i]: the branch route m is on at its cell i; TB[branch][x * 4 + y]:
+	# the route of that branch that reaches cell (x, y) of the block soonest (a letter)
+	TB = ['AAAAACCAADCUAEFUAGFUAIHUAKJUAMLUAONUAQPUASRUAVTUAXWUAZYUAbaBAABB', 'AAAAADDAADDUAEFUAGFUAIHUAKJUAMLUAONUAQPUASRUAVTUAXWUAZYUAbaBAABB', 'AAAAAEEAAEEUAEFUAGFUAIHUAKJUAMLUAONUAQPUASRUAVTUAXWUAZYUAbaBAABB', 'AAAAAGGAAGGUAGGUAGHUAIHUAKJUAMLUAONUAQPUASRUAVTUAXWUAZYUAbaBAABB', 'AAAAAIIAAIIUAIIUAIIUAIJUAKJUAMLUAONUAQPUASRUAVTUAXWUAZYUAbaBAABB', 'AAAAAKKAAKKUAKKUAKKUAKKUAKLUAMLUAONUAQPUASRUAVTUAXWUAZYUAbaBAABB', 'AAAAAMMAAMMUAMMUAMMUAMMUAMMUAMNUAONUAQPUASRUAVTUAXWUAZYUAbaBAABB', 'AAAAAOOAAOOUAOOUAOOUAOOUAOOUAOOUAOPUAQPUASRUAVTUAXWUAZYUAbaBAABB', 'AAAAAQQAAQQUAQQUAQQUAQQUAQQUAQQUAQQUAQRUASRUAVTUAXWUAZYUAbaBAABB', 'AAAAASSAASSUASSUASSUASSUASSUASSUASnUASnUASTUAVTUAXWUAZYUAbaBAABB', 'AAAAAVVAAVVUAVVUAVVUAVVUAVVUAVeUAVnUAVnUAVnUAVWUAXWUAZYUAbaBAABB', 'AAAAAXXAAXXUAXXUAXXUAXXUAXcUAXeUAXnUAXnUAXnUAXhUAXYUAZYUAbaBAABB', 'AAAAAZZAAZZUAZZUAZZUAZgUAZcUAZeUAZnUAZnUAZnUAZhUAZlUAZaUAbaBAABB', 'AAAAAAAAAAAUAAdUAAiUAAgUAAcUAAeUAAnUAAnUAAnUAAhUAAlUAABUAABBAABB', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'AAAABffBBfUUBfdUBfiUBfgUBfcUBfeUBfnUBfnUBfnUBfhUBflUBBBUBBBBBBBB', 'AAAABffBBffBBffBBffBBffBBffBBfBBBfBBBfBBBfBBBfBBBfBBBBBBBBBBBBBB', 'AAAABBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', 'AAAACCCCCCCCCCmCkCmCkCmCkCmCkCmCkCmCkmmCkmmCkmmCkmmCkmmCkmmCkkCC', 'AAAACCCCCCCCCCCCkCCCkCCCkCCCkCCCkCCCkCCCkkCCkkCCkkCCkkCCkkCCkkCC', 'AAAACCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC', 'AAAADDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD', 'AAAAEEEEEEEFEEFFFFFFFjjFFjjFFjjFFjjFFjjFFjjFFjjFFjjFFjjFFjjFFFFF', 'AAAAEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE', 'AAAAFFFFFFFFFFFFFFFFFjjFFjjFFjjFFjjFFjjFFjjFFjjFFjjFFjjFFjjFFFFF', 'AAAAFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF', 'AAAAGGGGGGGHGGGHGGHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', 'AAAAGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG', 'AAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH', 'AAAAIIIIIIIJIIIJIIIJIIJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ', 'AAAAIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII', 'AAAAJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ', 'AAAAKKKKKKKLKKKLKKKLKKKLKKLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL', 'AAAAKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK', 'AAAALLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL', 'AAAAMMMMMMMNMMMNMMMNMMMNMMMNMMNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN', 'AAAAMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM', 'AAAANNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN', 'AAAAOOOOOOOPOOOPOOOPOOOPOOOPOOOPOOPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP', 'AAAAOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO', 'AAAAPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP', 'AAAAQQQQQQQRQQQRQQQRQQQRQQQRQQQRQQQRQQRRRRRRRRRRRRRRRRRRRRRRRRRR', 'AAAAQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ', 'AAAARRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR', 'AAAASSSSSSSTSSSTSSSTSSSTSSSTSSSTSSSTSSSTSSTTTTTTTTTTTTTTTTTTTTTT', 'AAAASSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS', 'AAAATTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT', 'AAAAUllUUlUUUldUUliUUlgUUlcUUleUUlnUUlnUUlnUUlhUUllUUllUUllUUUUU', 'AAAAUhhUUhUUUhdUUhiUUhgUUhcUUheUUhnUUhnUUhnUUhhUUhhUUhhUUhhUUUUU', 'AAAAUnnUUnUUUndUUniUUngUUncUUneUUnnUUnnUUnnUUnnUUnnUUnnUUnnUUUUU', 'AAAAUeeUUeUUUedUUeiUUegUUecUUeeUUeeUUeeUUeeUUeeUUeeUUeeUUeeUUUUU', 'AAAAUccUUcUUUcdUUciUUcgUUccUUccUUccUUccUUccUUccUUccUUccUUccUUUUU', 'AAAAUggUUgUUUgdUUgiUUggUUggUUggUUggUUggUUggUUggUUggUUggUUggUUUUU', 'AAAAUiiUUiUUUidUUiiUUiiUUiiUUiiUUiiUUiiUUiiUUiiUUiiUUiiUUiiUUUUU', 'AAAAUddUUdUUUddUUddUUddUUddUUddUUddUUddUUddUUddUUddUUddUUddUUUUU', 'AAAAUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU', 'AAAAVVVVVVVWVVVWVVVWVVVWVVVWVVVWVVVWVVVWVVVWVVWWWWWWWWWWWWWWWWWW', 'AAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV', 'AAAAWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW', 'AAAAXXXXXXXYXXXYXXXYXXXYXXXYXXXYXXXYXXXYXXXYXXXYXXYYYYYYYYYYYYYY', 'AAAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', 'AAAAYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY', 'AAAAZZZZZZZaZZZaZZZaZZZaZZZaZZZaZZZaZZZaZZZaZZZaZZZaZZaabbabbbbb', 'AAAAZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ', 'AAAAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'AAAAbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'AAAAcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc', 'AAAAdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', 'AAAAeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'AAAAffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 'AAAAgggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg', 'AAAAhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh', 'AAAAiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii', 'AAAAjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj', 'AAAAkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk', 'AAAAllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll', 'AAAAmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm', 'AAAAnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn']
+	DV = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 16, 16, 16, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17], [0, 18, 18, 18, 19, 19, 19, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20], [0, 1, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21], [0, 1, 2, 22, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23], [0, 1, 2, 22, 24, 24, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25], [0, 1, 2, 3, 26, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27], [0, 1, 2, 3, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28], [0, 1, 2, 3, 4, 29, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30], [0, 1, 2, 3, 4, 29, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31], [0, 1, 2, 3, 4, 5, 32, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33, 33], [0, 1, 2, 3, 4, 5, 32, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34], [0, 1, 2, 3, 4, 5, 6, 35, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36], [0, 1, 2, 3, 4, 5, 6, 35, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37], [0, 1, 2, 3, 4, 5, 6, 7, 38, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39], [0, 1, 2, 3, 4, 5, 6, 7, 38, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40], [0, 1, 2, 3, 4, 5, 6, 7, 8, 41, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42], [0, 1, 2, 3, 4, 5, 6, 7, 8, 41, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43, 43], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 44, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 44, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 47, 47, 48, 49, 49, 49, 50, 51, 52, 53, 54, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 56, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 56, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 59, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 59, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 62, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 62, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 62, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 47, 47, 48, 49, 49, 49, 50, 51, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 47, 47, 48, 49, 49, 49, 50, 51, 52, 53, 54, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 47, 47, 48, 49, 49, 49, 50, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 16, 16, 16, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 47, 47, 48, 49, 49, 49, 50, 51, 52, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 47, 47, 48, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71, 71], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 47, 47, 48, 49, 49, 49, 50, 51, 52, 53, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72], [0, 1, 2, 22, 24, 24, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73, 73], [0, 18, 18, 18, 19, 19, 19, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74, 74], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 47, 47, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75], [0, 18, 18, 18, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 15, 15, 15, 47, 47, 48, 49, 49, 49, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77]]
+	CH = {}
+	for q in range(40):
+		CH["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn"[q]] = q
 	tasks = []
 	RDIR = []
 	RPOS = []
@@ -3402,6 +3435,7 @@ SD2 = []
 SW2 = []
 ST2 = []
 ST0 = []
+G2 = None
 BGB = []
 BGT = None
 CX = [1, 1, -1, -1]
@@ -3509,7 +3543,18 @@ def cyc_tables(a, b):
 			w2.append(0)
 			t2.append(0)
 		t0.append((i + 1) % S)
-	return [ah, wy, to, nx, d1, w1, t1, d2, w2, t2, t0]
+	# g[i]: the least d2[i + r] + r, so fewer than g[i] cycle steps from i never meet a shortcut
+	g = []
+	for i in range(S):
+		g.append(0)
+	m = 1000000
+	for q in range(2 * S - 1, -1, -1):
+		i = q % S
+		m += 1
+		if d2[i] < m:
+			m = d2[i]
+		g[i] = m
+	return [ah, wy, to, nx, d1, w1, t1, d2, w2, t2, t0, g]
 
 
 def get_tables():
@@ -3526,6 +3571,7 @@ def get_tables():
 	global SW2
 	global ST2
 	global ST0
+	global G2
 	if BGT != None:
 		r = wait_for(BGT)
 		BGT = None
@@ -3540,6 +3586,7 @@ def get_tables():
 		SW2 = r[8]
 		ST2 = r[9]
 		ST0 = r[10]
+		G2 = r[11]
 		if HALVES:
 			WALK = []
 			for i in range(2 * SS):
@@ -4002,11 +4049,17 @@ def leg(ch, ca, t, k):
 		e = -1
 		fb = -1
 		mk = NOM
-		for d in ORD[s]:
+		o = ORD[s]
+		lp = len(cells) > 2 * k + 40
+		for d in o:
 			c = nbs[d]
 			if occ[c] < low and bad[c] != t:
 				if fb < 0:
 					fb = d
+					if lp:
+						# a long way round: the snake may be going round after its own tail
+						# for ever; take the first free way towards the apple
+						break
 				r = chk(c, low, need)
 				if r != None:
 					e = d
@@ -4113,7 +4166,17 @@ def helper(w, x, t, k, p):
 	nxt = measure()
 	y = IDX[nxt[0]][nxt[1]]
 	if y in r[0]:
-		return [None, None, None, None, None, bad]
+		# the snake may step on that cell before it gets here, and the game then picks the
+		# next apple again: wait for that (as long as the snake's walk here can take)
+		y0 = y
+		until = get_time() + len(r[0]) * 0.07
+		while y == y0 and get_time() < until:
+			if num_items(Items.Bone) != b0 or get_entity_type() != Entities.Apple:
+				return [None, None, None, None, None, bad]
+			nxt = measure()
+			y = IDX[nxt[0]][nxt[1]]
+		if y in r[0]:
+			return [None, None, None, None, None, bad]
 	r2 = leg(x, y, t, k + 1)
 	return [r2[0], r2[1], r2[2], h, nxt, bad]
 
@@ -4365,6 +4428,14 @@ def play():
 			done = True
 			break
 		while L > 0:
+			if L < G2[ch]:
+				# no shortcut fits on any of the next L cells
+				for q in range(L):
+					move(NEXT[ch])
+					ch = ST0[ch]
+					t += 1
+					hist[t % S] = ch
+				break
 			if SD2[ch] > L:
 				# SD2 is the shorter shortcut: none fits, the next cell on the cycle
 				move(NEXT[ch])
@@ -4435,6 +4506,7 @@ def play():
 			seg = y // 4
 			i = RPOS[0][0][x * 4 + y % 4]
 		at = ch == ca
+		fr = False
 		while True:
 			if at:
 				if last or k + 1 >= DINO_KT:
@@ -4464,6 +4536,14 @@ def play():
 			else:
 				sa = sst[ay // 4]
 				ia = RPOS[sj[sa]][sm[sa]][ax * 4 * (sj[sa] + 1) + ay - 4 * sa]
+				if fr and sa == seg and ia > i and sj[seg] == 0:
+					# the apple is further on in this block, entered empty: the route of this
+					# branch of the tree that gets to it soonest
+					la = ax * 4 + ay - 4 * seg
+					m = CH[TB[DV[sm[seg]][i]][la]]
+					if RPOS[0][m][la] < ia:
+						sm[seg] = m
+						ia = RPOS[0][m][la]
 			while seg != sa or i > ia:
 				if seg == nb:
 					for q in range(i, N - 1):
@@ -4491,6 +4571,7 @@ def play():
 						blast[b] = t - 1
 					seg = e + 1
 				i = 0
+				fr = False
 				if seg < nb and ax > 0:
 					ab = ay // 4
 					jn = ab - seg
@@ -4513,14 +4594,8 @@ def play():
 								for b in range(seg, ab + 1):
 									sst[b] = seg
 							elif jn == 0:
-								la = ax * 4 + ry
-								bm = 0
-								bi = RPOS[0][0][la]
-								for m in range(1, NMODES):
-									if RPOS[0][m][la] < bi:
-										bi = RPOS[0][m][la]
-										bm = m
-								sm[seg] = bm
+								sm[seg] = CH[TB[0][ax * 4 + ry]]
+							fr = True
 							sa = sst[ab]
 							ia = RPOS[sj[sa]][sm[sa]][ax * 4 * (sj[sa] + 1) + ay - 4 * sa]
 			if seg == nb:
