@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 SIM = REPO + '/.claude/skills/tfwr-sim/tfwr_sim.rs'
 PROBE = HERE + '/work/probe/run_probe.py'
 BASE = dict(plant=1, speed=4, carrots=3, trees=3, grass=3, watering=3, sunflowers=1, fertilizer=1)
-GIVE = dict(carrot=1e6, wood=1e6, hay=1e6, power=1e6, gold=1e6, bone=2e6, weird_substance=1e5, fertilizer=1000, water=1000)
+GIVE = dict(carrot=1e6, wood=1e6, hay=1e6, power=1e6, gold=1e6, bone=2e6, weird_substance=1e5)
 jobs = []
 for ex, mf, pk in itertools.product([4, 5, 6], [0, 1, 2], [1, 2, 3]):
     jobs.append(('pumpkin', dict(expand=ex, megafarm=mf, pumpkins=pk), {'cells': [36, 64, 144][ex - 4] * 5}))

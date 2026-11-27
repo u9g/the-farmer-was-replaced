@@ -6,15 +6,14 @@
 "megafarm": 0,
 "pumpkins": 1
 },
-31.64,
+55.49,
 {
 "hay": 136.0,
-"carrot": -264.0,
-"pumpkin": 1284.0,
-"weird": 12.0,
-"power": -41.56,
-"water": -110.0,
-"fert": -1.0
+"carrot": -277.0,
+"pumpkin": 1287.0,
+"weird": 9.0,
+"power": -69.37,
+"water": 1.0
 }
 ],
 [
@@ -24,15 +23,14 @@
 "megafarm": 0,
 "pumpkins": 2
 },
-31.0,
+47.51,
 {
 "hay": 136.0,
-"carrot": -536.0,
-"pumpkin": 2562.0,
-"weird": 30.0,
-"power": -41.29,
-"water": -114.0,
-"fert": -4.0
+"carrot": -546.0,
+"pumpkin": 2574.0,
+"weird": 18.0,
+"power": -61.47,
+"water": 1.0
 }
 ],
 [
@@ -42,15 +40,13 @@
 "megafarm": 0,
 "pumpkins": 3
 },
-32.09,
+47.16,
 {
 "hay": 136.0,
-"carrot": -1100.0,
-"pumpkin": 5112.0,
-"weird": 72.0,
-"power": -41.41,
-"water": -110.0,
-"fert": -5.0
+"carrot": -1044.0,
+"pumpkin": 5136.0,
+"weird": 48.0,
+"power": -60.74
 }
 ],
 [
@@ -60,69 +56,63 @@
 "megafarm": 1,
 "pumpkins": 1
 },
-29.91,
+48.83,
 {
 "hay": 136.0,
-"carrot": -253.0,
-"pumpkin": 1281.0,
-"weird": 15.0,
-"power": -39.29,
-"water": -103.0,
-"fert": -3.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 4,
-"megafarm": 1,
-"pumpkins": 2
-},
-30.57,
-{
-"hay": 136.0,
-"carrot": -508.0,
-"pumpkin": 2556.0,
-"weird": 36.0,
-"power": -39.57,
-"water": -111.0,
-"fert": -3.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 4,
-"megafarm": 1,
-"pumpkins": 3
-},
-31.74,
-{
-"hay": 136.0,
-"carrot": -1092.0,
-"pumpkin": 5052.0,
-"weird": 132.0,
-"power": -41.14,
-"water": -108.0,
-"fert": -9.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 4,
-"megafarm": 2,
-"pumpkins": 1
-},
-20.82,
-{
-"hay": 128.0,
 "carrot": -267.0,
-"pumpkin": 1221.0,
-"weird": 75.0,
-"power": -55.37,
-"water": -106.0,
-"fert": -29.0
+"pumpkin": 1290.0,
+"weird": 6.0,
+"power": -63.61
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 1,
+"pumpkins": 2
+},
+53.11,
+{
+"hay": 136.0,
+"carrot": -560.0,
+"pumpkin": 2574.0,
+"weird": 18.0,
+"power": -66.21,
+"water": 1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 1,
+"pumpkins": 3
+},
+44.38,
+{
+"hay": 136.0,
+"carrot": -1012.0,
+"pumpkin": 5136.0,
+"weird": 48.0,
+"power": -58.34
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 2,
+"pumpkins": 1
+},
+46.48,
+{
+"hay": 124.0,
+"carrot": -263.0,
+"pumpkin": 1287.0,
+"weird": 9.0,
+"power": -118.4,
+"water": 1.0
 }
 ],
 [
@@ -132,15 +122,14 @@
 "megafarm": 2,
 "pumpkins": 2
 },
-21.41,
+45.78,
 {
-"hay": 128.0,
-"carrot": -522.0,
-"pumpkin": 2484.0,
-"weird": 108.0,
-"power": -55.14,
-"water": -105.0,
-"fert": -19.0
+"hay": 124.0,
+"carrot": -552.0,
+"pumpkin": 2568.0,
+"weird": 24.0,
+"power": -120.64,
+"water": 1.0
 }
 ],
 [
@@ -150,15 +139,13 @@
 "megafarm": 2,
 "pumpkins": 3
 },
-21.84,
+43.88,
 {
-"hay": 128.0,
-"carrot": -1048.0,
-"pumpkin": 4968.0,
-"weird": 216.0,
-"power": -57.57,
-"water": -100.0,
-"fert": -23.0
+"hay": 124.0,
+"carrot": -1116.0,
+"pumpkin": 5160.0,
+"weird": 24.0,
+"power": -116.13
 }
 ],
 [
@@ -168,283 +155,271 @@
 "megafarm": 0,
 "pumpkins": 1
 },
-53.25,
+68.71,
 {
 "hay": 252.0,
-"carrot": -477.0,
+"carrot": -488.0,
+"pumpkin": 2289.0,
+"weird": 15.0,
+"power": -90.95,
+"water": 1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 0,
+"pumpkins": 2
+},
+67.71,
+{
+"hay": 252.0,
+"carrot": -962.0,
+"pumpkin": 4584.0,
+"weird": 24.0,
+"power": -83.3,
+"water": 1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 0,
+"pumpkins": 3
+},
+66.74,
+{
+"hay": 252.0,
+"carrot": -2004.0,
+"pumpkin": 9168.0,
+"weird": 48.0,
+"power": -89.62
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 1,
+"pumpkins": 1
+},
+67.96,
+{
+"hay": 252.0,
+"carrot": -483.0,
 "pumpkin": 2292.0,
 "weird": 12.0,
-"power": -70.25,
-"water": -197.0,
-"fert": -1.0
+"power": -84.0,
+"water": 1.0
 }
 ],
 [
 "pumpkin",
 {
 "expand": 5,
+"megafarm": 1,
+"pumpkins": 2
+},
+67.11,
+{
+"hay": 252.0,
+"carrot": -960.0,
+"pumpkin": 4584.0,
+"weird": 24.0,
+"power": -86.73,
+"water": 1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 1,
+"pumpkins": 3
+},
+69.49,
+{
+"hay": 252.0,
+"carrot": -1976.0,
+"pumpkin": 9168.0,
+"weird": 48.0,
+"power": -92.86
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 2,
+"pumpkins": 1
+},
+53.69,
+{
+"hay": 244.0,
+"carrot": -473.0,
+"pumpkin": 2295.0,
+"weird": 9.0,
+"power": -140.18,
+"water": 1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 2,
+"pumpkins": 2
+},
+53.26,
+{
+"hay": 244.0,
+"carrot": -948.0,
+"pumpkin": 4584.0,
+"weird": 24.0,
+"power": -140.28,
+"water": 1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 2,
+"pumpkins": 3
+},
+60.12,
+{
+"hay": 244.0,
+"carrot": -1976.0,
+"pumpkin": 9156.0,
+"weird": 60.0,
+"power": -156.8,
+"water": 1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 0,
+"pumpkins": 1
+},
+119.03,
+{
+"hay": 576.0,
+"carrot": -1041.0,
+"pumpkin": 5163.0,
+"weird": 21.0,
+"power": -158.85,
+"water": 1.0,
+"fert": 1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
 "megafarm": 0,
 "pumpkins": 2
 },
-54.86,
+130.01,
 {
-"hay": 252.0,
-"carrot": -946.0,
-"pumpkin": 4590.0,
-"weird": 18.0,
-"power": -71.2,
-"water": -198.0,
+"hay": 576.0,
+"carrot": -2168.0,
+"pumpkin": 10320.0,
+"weird": 48.0,
+"power": -171.86,
+"water": 2.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 0,
+"pumpkins": 3
+},
+127.67,
+{
+"hay": 576.0,
+"carrot": -4464.0,
+"pumpkin": 20640.0,
+"weird": 96.0,
+"power": -167.62,
+"water": 1.0,
+"fert": 3.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 1,
+"pumpkins": 1
+},
+123.16,
+{
+"hay": 576.0,
+"carrot": -1080.0,
+"pumpkin": 5163.0,
+"weird": 21.0,
+"power": -161.0,
+"water": 1.0,
+"fert": 3.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 1,
+"pumpkins": 2
+},
+126.09,
+{
+"hay": 576.0,
+"carrot": -2198.0,
+"pumpkin": 10302.0,
+"weird": 66.0,
+"power": -166.29,
+"water": 1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 1,
+"pumpkins": 3
+},
+122.28,
+{
+"hay": 576.0,
+"carrot": -4336.0,
+"pumpkin": 20616.0,
+"weird": 120.0,
+"power": -160.5,
+"water": 1.0,
 "fert": 2.0
 }
 ],
 [
 "pumpkin",
 {
-"expand": 5,
-"megafarm": 0,
-"pumpkins": 3
-},
-55.47,
-{
-"hay": 252.0,
-"carrot": -1952.0,
-"pumpkin": 9168.0,
-"weird": 48.0,
-"power": -72.37,
-"water": -204.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 5,
-"megafarm": 1,
-"pumpkins": 1
-},
-55.63,
-{
-"hay": 252.0,
-"carrot": -491.0,
-"pumpkin": 2289.0,
-"weird": 15.0,
-"power": -73.05,
-"water": -201.0,
-"fert": -4.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 5,
-"megafarm": 1,
-"pumpkins": 2
-},
-56.73,
-{
-"hay": 252.0,
-"carrot": -990.0,
-"pumpkin": 4566.0,
-"weird": 42.0,
-"power": -75.55,
-"water": -206.0,
-"fert": -3.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 5,
-"megafarm": 1,
-"pumpkins": 3
-},
-55.92,
-{
-"hay": 252.0,
-"carrot": -1972.0,
-"pumpkin": 9132.0,
-"weird": 84.0,
-"power": -73.89,
-"water": -202.0,
-"fert": -7.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 5,
+"expand": 6,
 "megafarm": 2,
 "pumpkins": 1
 },
-29.54,
-{
-"hay": 244.0,
-"carrot": -472.0,
-"pumpkin": 2262.0,
-"weird": 42.0,
-"power": -78.29,
-"water": -190.0,
-"fert": -15.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 5,
-"megafarm": 2,
-"pumpkins": 2
-},
-27.37,
-{
-"hay": 244.0,
-"carrot": -946.0,
-"pumpkin": 4530.0,
-"weird": 78.0,
-"power": -72.0,
-"water": -193.0,
-"fert": -11.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 5,
-"megafarm": 2,
-"pumpkins": 3
-},
-29.46,
-{
-"hay": 244.0,
-"carrot": -1920.0,
-"pumpkin": 9084.0,
-"weird": 132.0,
-"power": -76.43,
-"water": -205.0,
-"fert": -12.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 6,
-"megafarm": 0,
-"pumpkins": 1
-},
-123.29,
+84.76,
 {
 "hay": 576.0,
-"carrot": -1076.0,
-"pumpkin": 5172.0,
-"weird": 12.0,
-"power": -165.87,
-"water": -511.0,
-"fert": 8.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 6,
-"megafarm": 0,
-"pumpkins": 2
-},
-129.89,
-{
-"hay": 576.0,
-"carrot": -2220.0,
-"pumpkin": 10362.0,
-"weird": 6.0,
-"power": -174.88,
-"water": -547.0,
-"fert": 11.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 6,
-"megafarm": 0,
-"pumpkins": 3
-},
-125.39,
-{
-"hay": 576.0,
-"carrot": -4256.0,
-"pumpkin": 20652.0,
-"weird": 84.0,
-"power": -166.24,
-"water": -496.0,
-"fert": 4.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 6,
-"megafarm": 1,
-"pumpkins": 1
-},
-108.06,
-{
-"hay": 576.0,
-"carrot": -901.0,
-"pumpkin": 4320.0,
-"power": -145.53,
-"water": -476.0,
-"fert": 10.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 6,
-"megafarm": 1,
-"pumpkins": 2
-},
-127.74,
-{
-"hay": 576.0,
-"carrot": -2190.0,
-"pumpkin": 10344.0,
+"carrot": -1095.0,
+"pumpkin": 5160.0,
 "weird": 24.0,
-"power": -167.41,
-"water": -538.0,
-"fert": 6.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 6,
-"megafarm": 1,
-"pumpkins": 3
-},
-126.99,
-{
-"hay": 576.0,
-"carrot": -4412.0,
-"pumpkin": 20700.0,
-"weird": 36.0,
-"power": -170.33,
-"water": -554.0,
-"fert": 9.0
-}
-],
-[
-"pumpkin",
-{
-"expand": 6,
-"megafarm": 2,
-"pumpkins": 1
-},
-65.23,
-{
-"hay": 576.0,
-"carrot": -1107.0,
-"pumpkin": 5151.0,
-"weird": 33.0,
-"power": -173.53,
-"water": -484.0,
-"fert": -7.0
+"power": -225.78,
+"water": 2.0
 }
 ],
 [
@@ -454,15 +429,14 @@
 "megafarm": 2,
 "pumpkins": 2
 },
-64.34,
+84.37,
 {
 "hay": 576.0,
-"carrot": -2174.0,
-"pumpkin": 10332.0,
-"weird": 36.0,
-"power": -171.24,
-"water": -476.0,
-"fert": -3.0
+"carrot": -2180.0,
+"pumpkin": 10338.0,
+"weird": 30.0,
+"power": -215.04,
+"water": 1.0
 }
 ],
 [
@@ -472,15 +446,14 @@
 "megafarm": 2,
 "pumpkins": 3
 },
-63.46,
+77.36,
 {
 "hay": 576.0,
-"carrot": -4292.0,
-"pumpkin": 20604.0,
-"weird": 132.0,
-"power": -169.78,
-"water": -461.0,
-"fert": -7.0
+"carrot": -4340.0,
+"pumpkin": 20664.0,
+"weird": 72.0,
+"power": -205.44,
+"water": 1.0
 }
 ],
 [
@@ -489,13 +462,13 @@
 "expand": 4,
 "megafarm": 0
 },
-19.23,
+39.14,
 {
-"hay": 76.0,
-"wood": 1600.0,
-"weird": 1521.0,
-"power": -25.86,
-"water": -29.0
+"hay": 92.0,
+"wood": 2150.0,
+"weird": 1522.0,
+"power": -52.75,
+"fert": 2.0
 }
 ],
 [
@@ -505,13 +478,13 @@
 "megafarm": 0,
 "mazes": 1
 },
-26.41,
+18.43,
 {
 "weird": -246.0,
 "gold": 1476.0,
-"power": -35.18,
-"water": 10.0,
-"fert": 2.0
+"power": -24.53,
+"water": 7.0,
+"fert": 1.0
 }
 ],
 [
@@ -520,13 +493,13 @@
 "expand": 4,
 "megafarm": 1
 },
-19.6,
+33.11,
 {
 "hay": 76.0,
-"wood": 1600.0,
-"weird": 1517.0,
-"power": -26.39,
-"water": -29.0
+"wood": 2220.0,
+"weird": 1515.0,
+"power": -44.69,
+"fert": 2.0
 }
 ],
 [
@@ -536,13 +509,13 @@
 "megafarm": 1,
 "mazes": 1
 },
-28.47,
+19.38,
 {
 "weird": -246.0,
 "gold": 1476.0,
-"power": -38.06,
-"water": 11.0,
-"fert": 2.0
+"power": -25.74,
+"water": 7.0,
+"fert": 1.0
 }
 ],
 [
@@ -551,13 +524,13 @@
 "expand": 4,
 "megafarm": 2
 },
-18.46,
+37.18,
 {
-"hay": 52.0,
-"wood": 1630.0,
-"weird": 1540.0,
-"power": -49.37,
-"water": -29.0
+"hay": 84.0,
+"wood": 2320.0,
+"weird": 1553.0,
+"power": -99.66,
+"fert": 2.0
 }
 ],
 [
@@ -567,12 +540,12 @@
 "megafarm": 2,
 "mazes": 1
 },
-11.28,
+13.76,
 {
 "weird": -246.0,
 "gold": 1476.0,
-"power": -29.58,
-"water": 4.0,
+"power": -36.55,
+"water": 5.0,
 "fert": 1.0
 }
 ],
@@ -582,13 +555,13 @@
 "expand": 5,
 "megafarm": 0
 },
-17.65,
+33.7,
 {
 "hay": 148.0,
-"wood": 1700.0,
-"weird": 1607.0,
-"power": -23.88,
-"water": -57.0
+"wood": 2150.0,
+"weird": 1510.0,
+"power": -45.51,
+"fert": 2.0
 }
 ],
 [
@@ -598,11 +571,11 @@
 "megafarm": 0,
 "mazes": 1
 },
-29.29,
+28.53,
 {
 "weird": -328.0,
 "gold": 2624.0,
-"power": -39.52,
+"power": -37.94,
 "water": 11.0,
 "fert": 2.0
 }
@@ -613,13 +586,13 @@
 "expand": 5,
 "megafarm": 1
 },
-15.74,
+28.22,
 {
-"hay": 164.0,
-"wood": 1600.0,
+"hay": 116.0,
+"wood": 2360.0,
 "weird": 1521.0,
-"power": -21.13,
-"water": -58.0
+"power": -37.84,
+"fert": 1.0
 }
 ],
 [
@@ -629,12 +602,12 @@
 "megafarm": 1,
 "mazes": 1
 },
-24.54,
+26.42,
 {
 "weird": -328.0,
 "gold": 2624.0,
-"power": -32.48,
-"water": 9.0,
+"power": -35.28,
+"water": 10.0,
 "fert": 2.0
 }
 ],
@@ -644,13 +617,13 @@
 "expand": 5,
 "megafarm": 2
 },
-11.96,
+30.45,
 {
-"hay": 108.0,
-"wood": 1640.0,
-"weird": 1561.0,
-"power": -31.31,
-"water": -60.0
+"hay": 156.0,
+"wood": 2790.0,
+"weird": 1602.0,
+"power": -80.78,
+"fert": 2.0
 }
 ],
 [
@@ -660,11 +633,11 @@
 "megafarm": 2,
 "mazes": 1
 },
-15.96,
+15.86,
 {
 "weird": -328.0,
 "gold": 2624.0,
-"power": -42.42,
+"power": -42.29,
 "water": 6.0,
 "fert": 1.0
 }
@@ -675,13 +648,12 @@
 "expand": 6,
 "megafarm": 0
 },
-25.64,
+23.19,
 {
-"hay": 356.0,
-"wood": 1680.0,
-"weird": 1573.0,
-"power": -34.67,
-"water": -134.0,
+"hay": 308.0,
+"wood": 2590.0,
+"weird": 1576.0,
+"power": -31.11,
 "fert": 1.0
 }
 ],
@@ -692,14 +664,14 @@
 "megafarm": 0,
 "mazes": 1
 },
-70.73,
+52.78,
 {
 "hay": 4.0,
 "weird": -492.0,
 "gold": 5904.0,
-"power": -95.3,
-"water": 28.0,
-"fert": 7.0
+"power": -70.14,
+"water": 21.0,
+"fert": 5.0
 }
 ],
 [
@@ -708,13 +680,12 @@
 "expand": 6,
 "megafarm": 1
 },
-22.56,
+24.56,
 {
-"hay": 340.0,
-"wood": 1720.0,
-"weird": 1637.0,
-"power": -30.26,
-"water": -135.0,
+"hay": 372.0,
+"wood": 2470.0,
+"weird": 1722.0,
+"power": -32.76,
 "fert": 1.0
 }
 ],
@@ -725,14 +696,14 @@
 "megafarm": 1,
 "mazes": 1
 },
-54.02,
+47.19,
 {
 "hay": 4.0,
 "weird": -492.0,
 "gold": 5904.0,
-"power": -72.96,
-"water": 21.0,
-"fert": 5.0
+"power": -63.45,
+"water": 18.0,
+"fert": 4.0
 }
 ],
 [
@@ -741,13 +712,13 @@
 "expand": 6,
 "megafarm": 2
 },
-13.41,
+20.28,
 {
-"hay": 288.0,
-"wood": 1940.0,
-"weird": 1831.0,
-"power": -36.12,
-"water": -136.0
+"hay": 320.0,
+"wood": 3150.0,
+"weird": 1620.0,
+"power": -54.22,
+"fert": 1.0
 }
 ],
 [
@@ -757,14 +728,14 @@
 "megafarm": 2,
 "mazes": 1
 },
-28.87,
+33.6,
 {
 "hay": 4.0,
 "weird": -492.0,
 "gold": 5904.0,
-"power": -76.52,
-"water": 11.0,
-"fert": 2.0
+"power": -89.6,
+"water": 13.0,
+"fert": 3.0
 }
 ]
 ]

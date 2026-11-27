@@ -16,11 +16,14 @@ def run_sched(sc):
 		need = {}
 		for p in e[2]:
 			if p[0] == Items.Hay or p[0] == Items.Wood or p[0] == Items.Carrot:
-				need[p[0]] = num_items(p[0]) + p[1]
+				need[p[0]] = p[1]
 		for p in e[2]:
 			if p[0] == Items.Power:
-				goal = num_items(p[0]) + p[1]
+				goal = p[1]
 				while num_items(Items.Power) < goal:
+					c = get_world_size() * get_world_size()
+					if num_items(Items.Carrot) < c:
+						mixed_round(({Items.Carrot: c * 2}, {Items.Carrot: c * 2}))
 					power_round()
 		if len(need) > 0:
 			power_check()
@@ -34,7 +37,7 @@ def run_sched(sc):
 				mixed_round((need, need))
 		for p in e[2]:
 			if p[0] == Items.Weird_Substance or p[0] == Items.Pumpkin or p[0] == Items.Gold:
-				goal = num_items(p[0]) + p[1]
+				goal = p[1]
 				while num_items(p[0]) < goal:
 					farm(p[0], goal)
 		while num_unlocked(u) < e[1]:
@@ -59,7 +62,7 @@ for which in sys.argv[2:]:
     use = sc if which == 'best' else sc0
     rows = []
     for u, acts, _ in use:
-        ps = ['[Items.%s, %d]' % (IT[k], round(acts[k])) for k in ORDER if acts.get(k, 0) >= 20]
+        ps = ['[Items.%s, %d]' % (IT[k], round(acts[k])) for k in ORDER if acts.get(k, 0) >= 1]
         rows.append('\t[Unlocks.%s, %d, [%s]],' % (CAP[u[0]], u[1], ', '.join(ps)))
     order = best if which == 'best' else None
     body = src[:tail]

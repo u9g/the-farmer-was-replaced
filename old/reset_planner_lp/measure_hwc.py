@@ -19,7 +19,7 @@ def run(j):
     if s.get('megafarm'): s['mazes'] = 1; s['fertilizer'] = 1
     mult = 10 if st['polyculture'] else 1.8
     amt = int(CELLS[st['expand']] * (6 if item != 'carrot' else 3) * mult * 2 ** st['megafarm'] * (1.5 ** st['speed']) / 2) + 20
-    give = dict(carrot=1e6, wood=1e6, hay=1e6, water=1e4, gold=1e6, bone=2e6)
+    give = dict(carrot=1e6, wood=1e6, hay=1e6, gold=1e6, bone=2e6)
     give[item] = 0
     args = ['cargo', '+nightly', '-Zscript', SIM, PROBE + '@PITEM=Items.' + item.capitalize() + '@PAMT=' + str(amt),
             '--leaderboard', 'fastest_reset', '--seeds', '1', '--jobs', '1']

@@ -10,12 +10,28 @@ probe = '''
 PITEM = Items.Pumpkin
 PAMT = 3000
 PPOWER = 0
+PMIX = []
 ITS = [Items.Hay, Items.Wood, Items.Carrot, Items.Pumpkin, Items.Cactus, Items.Weird_Substance, Items.Gold, Items.Bone, Items.Power, Items.Water, Items.Fertilizer]
 NAMES = ["hay", "wood", "carrot", "pumpkin", "cactus", "weird", "gold", "bone", "power", "water", "fert"]
 b0 = []
 for it in ITS:
 	b0.append(num_items(it))
 tp = get_time()
+if len(PMIX) > 0:
+	need = {}
+	mi = [Items.Hay, Items.Wood, Items.Carrot]
+	for q in range(3):
+		if PMIX[q] > 0:
+			need[mi[q]] = num_items(mi[q]) + PAMT * PMIX[q]
+	while True:
+		short = False
+		for it in need:
+			if num_items(it) < need[it]:
+				short = True
+		if not short:
+			break
+		mixed_round((need, need))
+	PAMT = 0
 goal = num_items(PITEM) + PAMT
 while num_items(PITEM) < goal:
 	if PITEM == Items.Power:

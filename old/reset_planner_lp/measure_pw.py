@@ -12,7 +12,7 @@ def run(j):
     if mf: s.update(megafarm=mf, mazes=1, fertilizer=1)
     args = ['cargo', '+nightly', '-Zscript', SIM, PROBE + '@PITEM=Items.Power@PAMT=300', '--leaderboard', 'fastest_reset', '--seeds', '1', '--jobs', '1']
     for k, v in s.items(): args += ['--set', f'{k}={v}']
-    for k, v in dict(carrot=1e5, wood=1e5, hay=1e5, water=1e4).items(): args += ['--give', f'{k}={v}']
+    for k, v in dict(carrot=1e5, wood=1e5, hay=1e5).items(): args += ['--give', f'{k}={v}']
     out = subprocess.run(args, capture_output=True, text=True, timeout=600).stdout
     m = re.search(r'PROBE dt ([\d.]+)(.*)', out)
     if not m: return (j, None, out[-200:])
