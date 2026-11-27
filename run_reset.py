@@ -329,9 +329,10 @@ def tend_mixed(cdef):
 					WANT[cp] = (comp[0], pos)
 					REQ[pos] = cp
 					return
-				if WANT[cp][0] == comp[0]:
-					REQ[pos] = cp
-					return
+				# taken: the newest plant holds the cell (for its type)
+				WANT[cp] = (comp[0], pos)
+				REQ[pos] = cp
+				return
 			if r == k - 1:
 				return
 			harvest()
