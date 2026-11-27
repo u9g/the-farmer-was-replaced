@@ -1,0 +1,1 @@
+leaderboard_run(Leaderboards.Maze, "run_maze", 256)
