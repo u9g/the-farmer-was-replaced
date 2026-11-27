@@ -1,6 +1,6 @@
 ---
 name: cactus-diag
-description: Find where a cactus leaderboard run (two sorted harvests, many drones) loses time. Traces every action of every drone with a diagnostic copy of the tfwr simulator and reports which drone and routine set each harvest time, what its tail spent its time on, whether a harvest waited on growth or on fixes, when each chunk's drone is done over many seeds (which chunks are late every run, which only vary), per-junction settle times, and cells two drones swapped close together. Use before changing cactus_lb_entry.py or its generators, to pick a target.
+description: Find where a cactus leaderboard run (two sorted harvests, many drones) loses time, including head-of-line tools (which drone every other waits for, and what its chain spent time on) and a linter for repeated or unnecessary work (detour walks, undone or useless swaps, visits whose values were already known). Traces every action of every drone with a diagnostic copy of the tfwr simulator and reports which drone and routine set each harvest time, what its tail spent its time on, whether a harvest waited on growth or on fixes, when each chunk's drone is done over many seeds (which chunks are late every run, which only vary), per-junction settle times, and cells two drones swapped close together. Use before changing cactus_lb_entry.py or its generators, to pick a target.
 ---
 
 # Cactus run diagnostics
@@ -63,6 +63,53 @@ Start here. On the g3 entry it showed three chunks done 1 s before the rest and 
 and in a balanced plan the two end chunks stuck 0.35 s behind a neighbour's last plant, which
 `--summary` (slowest drone minus mean) reports as a single number. `old/cactus_lb_g5/calib.py`
 does the same comparison against the planner's own figures.
+
+## Head-of-line tools: the work every other drone waits for
+
+Totals over all drones mostly show work that runs while a drone would be waiting anyway. A
+harvest waits only for the drone that finishes last, so these tools look at that drone. Each drone
+in a round finishes at max(its done time, its last plant + 0.968 s growth). In round A the done
+time is its done signal, the `use_item(Items.Water)` (or harvest) after `wait_until`; the moves
+after it are pre-travel to round B, which the harvest does not wait for. In round B it is the
+drone's last action. All four tools read the same traces as `cactus_diag.py`.
+
+- `hol_split.py TRACES...`: the five latest drones of each round, with their finish time, arrival,
+  planting-phase action counts, and how far the tail ran past the growth wait. The gaps between
+  them are the most that trimming any one drone can save.
+- `hol_chain.py ENTRY.py TRACES...`: which drone is head of line in how many runs, and its chain
+  time (start of the round to last plant, or to the tail end when the tail outlasts growth) by
+  function, action kind and line.
+- `hol_tail.py ENTRY.py N TRACES...`: what the N latest drones did after their growth wait
+  ended, which is the only tail work the harvest waits for.
+- `cactlint.py ENTRY.py TRACES... [--top N]`: a linter for repeated or unnecessary work. It
+  checks the source for move runs a shorter run would cover (cancelling moves, or the long way
+  round the 32-wide torus) and for back-to-back swaps that undo each other. It then replays every
+  drone's cells and values from the traces and flags:
+  - walks longer than the torus distance between two side effects (D1) or two work actions (D2);
+  - swaps of equal values (D3), swaps undone later (D4), and swaps that move both cacti away from
+    every cell their value ends in (D5);
+  - double tills (D6) and water on a cactus that is swapped away (D7);
+  - moves after a drone's last work (D8) and repeated reads (D9);
+  - read-only visits whose every value the drone already knew, unchanged since (D10). D10u is
+    the same visit with a value another drone changed since, where a value cache would be wrong;
+  - read-only visits whose reads could be made from the stop before or after (D11);
+  - walks onto a cell only to swap back toward where the drone came from (D12).
+
+  Each finding is reported three ways: actions per run over all drones; head-of-line ms, meaning
+  waste on the drone the harvest waits for, capped by its lead over the next drone and by its
+  growth wait; and the harvest saved if the pattern were removed on every drone at once.
+
+On the post8 entry (7.057 s, 128 seeds):
+- **Lead of the head drone over the next:** round A 8 ms (10 ms to the 3rd), round B 28 ms.
+- **Who is head of line:** in round A, `w16` (the spawn-tree root, which spawns three drones
+  before it moves and arrives last at 1.01 s) in 81 of 128 runs. In round B, a different owner
+  drone each run, usually ending in `fsSW_NE` or `own`.
+- **Linter results:** no static findings, no equal or undone swaps, no double tills. Over all
+  drones there are 69 detour moves per run (D2), 39 moves after the last work (D8) and 28 visits
+  that could be skipped (D10, never wrong on any seed). Only 2-4 ms of harvest time comes from
+  each of these patterns even if it were removed on every drone, because nearly all of it happens
+  inside a growth wait.
+- The chain everyone waits for is floor work: moves, plants and tills along the planting walk.
 
 ## Findings for the shipped entry (g5, 7.44 s), 48 seeds
 
