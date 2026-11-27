@@ -209,22 +209,22 @@ def pk_West_South_None_1_0():
 
 
 def hlp(FS, MS, RS, j, lo, e):
-	while j < e:
+	while j < lo:
 		for d in MS[j]:
 			move(d)
 		j += 1
-	while j >= lo:
+	while j <= e:
 		FS[j]()
-		if j > lo:
-			for d in RS[j - 1]:
+		if j < e:
+			for d in MS[j]:
 				move(d)
-		j -= 1
+		j += 1
 
 
-def own(FS, MS, RS, j, e):
+def own(FS, MS, RS, j, e, DL):
 	SP = (0, 0, 0, 2, 3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 10, 11, 12, 13, 13, 14, 15, 16, 16, 17, 18, 19, 20, 20, 21, 22)
 	while j <= e:
-		if e - j >= 2:
+		if e - j >= 2 and get_time() + 0.09 * (e - j + 1) > DL:
 			a = SP[e - j + 1]
 			h = spawn_drone(hlp, FS, MS, RS, j, j + a, e)
 			if h:
@@ -6766,47 +6766,50 @@ def w0():
 			pk_West_South_East_1_1()
 			pk_West_South_None_1_0()
 			tl = get_time()
+			DL = tl + 0.9676
+			if DL < hb + 2.6:
+				DL = hb + 2.6
 			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 			TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
 			TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+			h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
 			if h:
-				own(TFS, TMS, TRS, 0, 5)
+				own(TFS, TMS, TRS, 0, 5, DL)
 			else:
 				fsSW_NE()
 				move(West)
 				move(North)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+				h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
 				if h:
-					own(TFS, TMS, TRS, 1, 5)
+					own(TFS, TMS, TRS, 1, 5, DL)
 				else:
 					fSW_NE()
 					move(West)
 					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+					h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
 					if h:
-						own(TFS, TMS, TRS, 2, 5)
+						own(TFS, TMS, TRS, 2, 5, DL)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+						h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
 						if h:
-							own(TFS, TMS, TRS, 3, 6)
+							own(TFS, TMS, TRS, 3, 6, DL)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+							h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
 							if h:
-								own(TFS, TMS, TRS, 4, 6)
+								own(TFS, TMS, TRS, 4, 6, DL)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+								h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
 								if h:
-									own(TFS, TMS, TRS, 5, 6)
+									own(TFS, TMS, TRS, 5, 6, DL)
 								else:
 									fSW_NE()
 									move(West)
@@ -6972,47 +6975,50 @@ def w0():
 					move(South)
 					plant(Entities.Cactus)
 					tl = get_time()
+					DL = tl + 0.9676
+					if DL < hb + 2.6:
+						DL = hb + 2.6
 					TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 					TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
 					TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-					h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+					h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
 					if h:
-						own(TFS, TMS, TRS, 0, 5)
+						own(TFS, TMS, TRS, 0, 5, DL)
 					else:
 						fsSW_NE()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+						h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
 						if h:
-							own(TFS, TMS, TRS, 1, 5)
+							own(TFS, TMS, TRS, 1, 5, DL)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+							h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
 							if h:
-								own(TFS, TMS, TRS, 2, 5)
+								own(TFS, TMS, TRS, 2, 5, DL)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+								h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
 								if h:
-									own(TFS, TMS, TRS, 3, 6)
+									own(TFS, TMS, TRS, 3, 6, DL)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+									h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
 									if h:
-										own(TFS, TMS, TRS, 4, 6)
+										own(TFS, TMS, TRS, 4, 6, DL)
 									else:
 										fSW_NE()
 										move(West)
 										move(North)
-										h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+										h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
 										if h:
-											own(TFS, TMS, TRS, 5, 6)
+											own(TFS, TMS, TRS, 5, 6, DL)
 										else:
 											fSW_NE()
 											move(West)
@@ -8781,54 +8787,57 @@ def w0():
 					tl = get_time()
 					if tw:
 						tl = tw
+					DL = tl + 0.9676
+					if DL < hb + 2.6:
+						DL = hb + 2.6
 					TFS = (fsSW_N, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 					TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
 					TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-					h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+					h = get_time() + 0.8100 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
 					if h:
-						own(TFS, TMS, TRS, 0, 6)
+						own(TFS, TMS, TRS, 0, 6, DL)
 					else:
 						fsSW_N()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+						h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
 						if h:
-							own(TFS, TMS, TRS, 1, 6)
+							own(TFS, TMS, TRS, 1, 6, DL)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+							h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
 							if h:
-								own(TFS, TMS, TRS, 2, 6)
+								own(TFS, TMS, TRS, 2, 6, DL)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+								h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
 								if h:
-									own(TFS, TMS, TRS, 3, 6)
+									own(TFS, TMS, TRS, 3, 6, DL)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+									h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
 									if h:
-										own(TFS, TMS, TRS, 4, 7)
+										own(TFS, TMS, TRS, 4, 7, DL)
 									else:
 										fSW_NE()
 										move(West)
 										move(North)
-										h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+										h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
 										if h:
-											own(TFS, TMS, TRS, 5, 7)
+											own(TFS, TMS, TRS, 5, 7, DL)
 										else:
 											fSW_NE()
 											move(West)
 											move(North)
-											h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+											h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
 											if h:
-												own(TFS, TMS, TRS, 6, 7)
+												own(TFS, TMS, TRS, 6, 7, DL)
 											else:
 												fSW_NE()
 												move(West)
@@ -9007,47 +9016,50 @@ def w0():
 				tl = get_time()
 				if use_item(Items.Water, 4):
 					tl = get_time() - 0.0988
+				DL = tl + 0.9676
+				if DL < hb + 2.6:
+					DL = hb + 2.6
 				TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 				TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
 				TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-				h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+				h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
 				if h:
-					own(TFS, TMS, TRS, 0, 5)
+					own(TFS, TMS, TRS, 0, 5, DL)
 				else:
 					fsSW_NE()
 					move(West)
 					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+					h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
 					if h:
-						own(TFS, TMS, TRS, 1, 5)
+						own(TFS, TMS, TRS, 1, 5, DL)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+						h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
 						if h:
-							own(TFS, TMS, TRS, 2, 5)
+							own(TFS, TMS, TRS, 2, 5, DL)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+							h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
 							if h:
-								own(TFS, TMS, TRS, 3, 6)
+								own(TFS, TMS, TRS, 3, 6, DL)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+								h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
 								if h:
-									own(TFS, TMS, TRS, 4, 6)
+									own(TFS, TMS, TRS, 4, 6, DL)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+									h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
 									if h:
-										own(TFS, TMS, TRS, 5, 6)
+										own(TFS, TMS, TRS, 5, 6, DL)
 									else:
 										fSW_NE()
 										move(West)
@@ -9689,54 +9701,57 @@ def w0():
 			tl = get_time()
 			if tw:
 				tl = tw
+			DL = tl + 0.9676
+			if DL < hb + 2.6:
+				DL = hb + 2.6
 			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsS_NE)
 			TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
 			TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+			h = get_time() + 0.8100 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
 			if h:
-				own(TFS, TMS, TRS, 0, 6)
+				own(TFS, TMS, TRS, 0, 6, DL)
 			else:
 				fsSW_NE()
 				move(West)
 				move(North)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+				h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
 				if h:
-					own(TFS, TMS, TRS, 1, 6)
+					own(TFS, TMS, TRS, 1, 6, DL)
 				else:
 					fSW_NE()
 					move(West)
 					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+					h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
 					if h:
-						own(TFS, TMS, TRS, 2, 6)
+						own(TFS, TMS, TRS, 2, 6, DL)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+						h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
 						if h:
-							own(TFS, TMS, TRS, 3, 6)
+							own(TFS, TMS, TRS, 3, 6, DL)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+							h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
 							if h:
-								own(TFS, TMS, TRS, 4, 7)
+								own(TFS, TMS, TRS, 4, 7, DL)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+								h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
 								if h:
-									own(TFS, TMS, TRS, 5, 7)
+									own(TFS, TMS, TRS, 5, 7, DL)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+									h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
 									if h:
-										own(TFS, TMS, TRS, 6, 7)
+										own(TFS, TMS, TRS, 6, 7, DL)
 									else:
 										fSW_NE()
 										move(West)
@@ -10546,54 +10561,57 @@ def w0():
 		move(North)
 		plant(Entities.Cactus)
 		tl = get_time()
+		DL = tl + 0.9676
+		if DL < hb + 2.6:
+			DL = hb + 2.6
 		TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 		TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
 		TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-		h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+		h = get_time() + 0.8100 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
 		if h:
-			own(TFS, TMS, TRS, 0, 6)
+			own(TFS, TMS, TRS, 0, 6, DL)
 		else:
 			fsSW_NE()
 			move(East)
 			move(South)
-			h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+			h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
 			if h:
-				own(TFS, TMS, TRS, 1, 6)
+				own(TFS, TMS, TRS, 1, 6, DL)
 			else:
 				fSW_NE()
 				move(East)
 				move(South)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+				h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
 				if h:
-					own(TFS, TMS, TRS, 2, 6)
+					own(TFS, TMS, TRS, 2, 6, DL)
 				else:
 					fSW_NE()
 					move(East)
 					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+					h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
 					if h:
-						own(TFS, TMS, TRS, 3, 6)
+						own(TFS, TMS, TRS, 3, 6, DL)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+						h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
 						if h:
-							own(TFS, TMS, TRS, 4, 7)
+							own(TFS, TMS, TRS, 4, 7, DL)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+							h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
 							if h:
-								own(TFS, TMS, TRS, 5, 7)
+								own(TFS, TMS, TRS, 5, 7, DL)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+								h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
 								if h:
-									own(TFS, TMS, TRS, 6, 7)
+									own(TFS, TMS, TRS, 6, 7, DL)
 								else:
 									fSW_NE()
 									move(East)
@@ -10777,47 +10795,50 @@ def w0():
 				if tw:
 					tl = tw
 				move(East)
+				DL = tl + 0.9676
+				if DL < hb + 2.6:
+					DL = hb + 2.6
 				TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 				TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
 				TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-				h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+				h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
 				if h:
-					own(TFS, TMS, TRS, 0, 5)
+					own(TFS, TMS, TRS, 0, 5, DL)
 				else:
 					fsSW_NE()
 					move(East)
 					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+					h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
 					if h:
-						own(TFS, TMS, TRS, 1, 5)
+						own(TFS, TMS, TRS, 1, 5, DL)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+						h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
 						if h:
-							own(TFS, TMS, TRS, 2, 5)
+							own(TFS, TMS, TRS, 2, 5, DL)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+							h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
 							if h:
-								own(TFS, TMS, TRS, 3, 6)
+								own(TFS, TMS, TRS, 3, 6, DL)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+								h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
 								if h:
-									own(TFS, TMS, TRS, 4, 6)
+									own(TFS, TMS, TRS, 4, 6, DL)
 								else:
 									fSW_NE()
 									move(East)
 									move(South)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+									h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
 									if h:
-										own(TFS, TMS, TRS, 5, 6)
+										own(TFS, TMS, TRS, 5, 6, DL)
 									else:
 										fSW_NE()
 										move(East)
@@ -12214,54 +12235,57 @@ def w0():
 			tl = get_time()
 			if use_item(Items.Fertilizer):
 				tl = get_time() - 0.0988
+			DL = tl + 0.9676
+			if DL < hb + 2.6:
+				DL = hb + 2.6
 			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 			TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
 			TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+			h = get_time() + 0.8100 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
 			if h:
-				own(TFS, TMS, TRS, 0, 6)
+				own(TFS, TMS, TRS, 0, 6, DL)
 			else:
 				fsSW_NE()
 				move(East)
 				move(South)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+				h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
 				if h:
-					own(TFS, TMS, TRS, 1, 6)
+					own(TFS, TMS, TRS, 1, 6, DL)
 				else:
 					fSW_NE()
 					move(East)
 					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+					h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
 					if h:
-						own(TFS, TMS, TRS, 2, 6)
+						own(TFS, TMS, TRS, 2, 6, DL)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+						h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
 						if h:
-							own(TFS, TMS, TRS, 3, 6)
+							own(TFS, TMS, TRS, 3, 6, DL)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+							h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
 							if h:
-								own(TFS, TMS, TRS, 4, 7)
+								own(TFS, TMS, TRS, 4, 7, DL)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+								h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
 								if h:
-									own(TFS, TMS, TRS, 5, 7)
+									own(TFS, TMS, TRS, 5, 7, DL)
 								else:
 									fSW_NE()
 									move(East)
 									move(South)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+									h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
 									if h:
-										own(TFS, TMS, TRS, 6, 7)
+										own(TFS, TMS, TRS, 6, 7, DL)
 									else:
 										fSW_NE()
 										move(East)
@@ -12435,47 +12459,50 @@ def w0():
 		tl = get_time()
 		if use_item(Items.Water, 4):
 			tl = get_time() - 0.0988
+		DL = tl + 0.9676
+		if DL < hb + 2.6:
+			DL = hb + 2.6
 		TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 		TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
 		TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-		h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+		h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
 		if h:
-			own(TFS, TMS, TRS, 0, 5)
+			own(TFS, TMS, TRS, 0, 5, DL)
 		else:
 			fsSW_NE()
 			move(East)
 			move(South)
-			h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+			h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
 			if h:
-				own(TFS, TMS, TRS, 1, 5)
+				own(TFS, TMS, TRS, 1, 5, DL)
 			else:
 				fSW_NE()
 				move(East)
 				move(South)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+				h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
 				if h:
-					own(TFS, TMS, TRS, 2, 5)
+					own(TFS, TMS, TRS, 2, 5, DL)
 				else:
 					fSW_NE()
 					move(East)
 					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+					h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
 					if h:
-						own(TFS, TMS, TRS, 3, 6)
+						own(TFS, TMS, TRS, 3, 6, DL)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+						h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
 						if h:
-							own(TFS, TMS, TRS, 4, 6)
+							own(TFS, TMS, TRS, 4, 6, DL)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+							h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
 							if h:
-								own(TFS, TMS, TRS, 5, 6)
+								own(TFS, TMS, TRS, 5, 6, DL)
 							else:
 								fSW_NE()
 								move(East)
@@ -13495,47 +13522,50 @@ def w0():
 			if use_item(Items.Fertilizer):
 				tl = get_time() - 0.0988
 			move(West)
+			DL = tl + 0.9676
+			if DL < hb + 2.6:
+				DL = hb + 2.6
 			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsS_NE)
 			TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
 			TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+			h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
 			if h:
-				own(TFS, TMS, TRS, 0, 5)
+				own(TFS, TMS, TRS, 0, 5, DL)
 			else:
 				fsSW_NE()
 				move(West)
 				move(North)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+				h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
 				if h:
-					own(TFS, TMS, TRS, 1, 5)
+					own(TFS, TMS, TRS, 1, 5, DL)
 				else:
 					fSW_NE()
 					move(West)
 					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+					h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
 					if h:
-						own(TFS, TMS, TRS, 2, 5)
+						own(TFS, TMS, TRS, 2, 5, DL)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+						h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
 						if h:
-							own(TFS, TMS, TRS, 3, 6)
+							own(TFS, TMS, TRS, 3, 6, DL)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+							h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
 							if h:
-								own(TFS, TMS, TRS, 4, 6)
+								own(TFS, TMS, TRS, 4, 6, DL)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+								h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
 								if h:
-									own(TFS, TMS, TRS, 5, 6)
+									own(TFS, TMS, TRS, 5, 6, DL)
 								else:
 									fSW_NE()
 									move(West)
@@ -13705,54 +13735,57 @@ def w0():
 		move(South)
 		plant(Entities.Cactus)
 		tl = get_time()
+		DL = tl + 0.9676
+		if DL < hb + 2.6:
+			DL = hb + 2.6
 		TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 		TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
 		TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-		h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+		h = get_time() + 0.8100 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
 		if h:
-			own(TFS, TMS, TRS, 0, 6)
+			own(TFS, TMS, TRS, 0, 6, DL)
 		else:
 			fsSW_NE()
 			move(West)
 			move(North)
-			h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+			h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
 			if h:
-				own(TFS, TMS, TRS, 1, 6)
+				own(TFS, TMS, TRS, 1, 6, DL)
 			else:
 				fSW_NE()
 				move(West)
 				move(North)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+				h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
 				if h:
-					own(TFS, TMS, TRS, 2, 6)
+					own(TFS, TMS, TRS, 2, 6, DL)
 				else:
 					fSW_NE()
 					move(West)
 					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+					h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
 					if h:
-						own(TFS, TMS, TRS, 3, 6)
+						own(TFS, TMS, TRS, 3, 6, DL)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+						h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
 						if h:
-							own(TFS, TMS, TRS, 4, 7)
+							own(TFS, TMS, TRS, 4, 7, DL)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+							h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
 							if h:
-								own(TFS, TMS, TRS, 5, 7)
+								own(TFS, TMS, TRS, 5, 7, DL)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+								h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
 								if h:
-									own(TFS, TMS, TRS, 6, 7)
+									own(TFS, TMS, TRS, 6, 7, DL)
 								else:
 									fSW_NE()
 									move(West)
@@ -14759,47 +14792,50 @@ def w0():
 			plant(Entities.Cactus)
 			tl = get_time()
 			move(East)
+			DL = tl + 0.9676
+			if DL < hb + 2.6:
+				DL = hb + 2.6
 			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsW_NE)
 			TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
 			TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+			h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
 			if h:
-				own(TFS, TMS, TRS, 0, 5)
+				own(TFS, TMS, TRS, 0, 5, DL)
 			else:
 				fsSW_NE()
 				move(East)
 				move(South)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+				h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
 				if h:
-					own(TFS, TMS, TRS, 1, 5)
+					own(TFS, TMS, TRS, 1, 5, DL)
 				else:
 					fSW_NE()
 					move(East)
 					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+					h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
 					if h:
-						own(TFS, TMS, TRS, 2, 5)
+						own(TFS, TMS, TRS, 2, 5, DL)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+						h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
 						if h:
-							own(TFS, TMS, TRS, 3, 6)
+							own(TFS, TMS, TRS, 3, 6, DL)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+							h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
 							if h:
-								own(TFS, TMS, TRS, 4, 6)
+								own(TFS, TMS, TRS, 4, 6, DL)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+								h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
 								if h:
-									own(TFS, TMS, TRS, 5, 6)
+									own(TFS, TMS, TRS, 5, 6, DL)
 								else:
 									fSW_NE()
 									move(East)
@@ -14952,54 +14988,57 @@ def w0():
 		move(North)
 		plant(Entities.Cactus)
 		tl = get_time()
+		DL = tl + 0.9676
+		if DL < hb + 2.6:
+			DL = hb + 2.6
 		TFS = (fsSW_E, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 		TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
 		TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-		h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+		h = get_time() + 0.8100 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
 		if h:
-			own(TFS, TMS, TRS, 0, 6)
+			own(TFS, TMS, TRS, 0, 6, DL)
 		else:
 			fsSW_E()
 			move(East)
 			move(South)
-			h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+			h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
 			if h:
-				own(TFS, TMS, TRS, 1, 6)
+				own(TFS, TMS, TRS, 1, 6, DL)
 			else:
 				fSW_NE()
 				move(East)
 				move(South)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+				h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
 				if h:
-					own(TFS, TMS, TRS, 2, 6)
+					own(TFS, TMS, TRS, 2, 6, DL)
 				else:
 					fSW_NE()
 					move(East)
 					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+					h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
 					if h:
-						own(TFS, TMS, TRS, 3, 6)
+						own(TFS, TMS, TRS, 3, 6, DL)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+						h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
 						if h:
-							own(TFS, TMS, TRS, 4, 7)
+							own(TFS, TMS, TRS, 4, 7, DL)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+							h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
 							if h:
-								own(TFS, TMS, TRS, 5, 7)
+								own(TFS, TMS, TRS, 5, 7, DL)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+								h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
 								if h:
-									own(TFS, TMS, TRS, 6, 7)
+									own(TFS, TMS, TRS, 6, 7, DL)
 								else:
 									fSW_NE()
 									move(East)
@@ -16001,54 +16040,57 @@ def w0():
 			tl = get_time()
 			if use_item(Items.Fertilizer):
 				tl = get_time() - 0.0988
+			DL = tl + 0.9676
+			if DL < hb + 2.6:
+				DL = hb + 2.6
 			TFS = (fsSW_N, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 			TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
 			TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+			h = get_time() + 0.8100 > DL and spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
 			if h:
-				own(TFS, TMS, TRS, 0, 6)
+				own(TFS, TMS, TRS, 0, 6, DL)
 			else:
 				fsSW_N()
 				move(West)
 				move(North)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+				h = get_time() + 0.7200 > DL and spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
 				if h:
-					own(TFS, TMS, TRS, 1, 6)
+					own(TFS, TMS, TRS, 1, 6, DL)
 				else:
 					fSW_NE()
 					move(West)
 					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+					h = get_time() + 0.6300 > DL and spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
 					if h:
-						own(TFS, TMS, TRS, 2, 6)
+						own(TFS, TMS, TRS, 2, 6, DL)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+						h = get_time() + 0.5400 > DL and spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
 						if h:
-							own(TFS, TMS, TRS, 3, 6)
+							own(TFS, TMS, TRS, 3, 6, DL)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+							h = get_time() + 0.4500 > DL and spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
 							if h:
-								own(TFS, TMS, TRS, 4, 7)
+								own(TFS, TMS, TRS, 4, 7, DL)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+								h = get_time() + 0.3600 > DL and spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
 								if h:
-									own(TFS, TMS, TRS, 5, 7)
+									own(TFS, TMS, TRS, 5, 7, DL)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+									h = get_time() + 0.2700 > DL and spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
 									if h:
-										own(TFS, TMS, TRS, 6, 7)
+										own(TFS, TMS, TRS, 6, 7, DL)
 									else:
 										fSW_NE()
 										move(West)
