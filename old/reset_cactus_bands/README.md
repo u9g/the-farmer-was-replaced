@@ -24,7 +24,9 @@ them are "mixed" (a chain over five diagonals), settled by a small work list. 97
 The old sort also left cells unsorted on some harvests (16x16: 113k to 131k); the bands harvest
 every cell in every round over 16 seeds.
 
-Whole fastest reset, 32 seeds paired: -24.6 s ± 5.6 s (faster on 25 of 32), 32:16 -> 31:51 mean.
+Whole fastest reset, paired by seed: -24.6 s ± 5.6 s on 32 seeds (faster on 25) against 938b0a7
+(32:16 -> 31:51 mean), and -23.7 s ± 5.3 s on 48 seeds (faster on 33) against 9858284, the
+run_reset it was rebased onto (31:03 -> 30:39).
 Cactus rounds take 1:24 instead of 2:17 a run, but a band round plants more cells per cactus
 (2 pumpkins x Cactus multiplier per cell; 0.0116 against 0.0078 pumpkins per cactus at 16x16), so
 pumpkin and carrot rounds take about 26 s more. Weird rounds turn about 86% of the cactus weird
