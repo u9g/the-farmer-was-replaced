@@ -21,6 +21,26 @@ def xcasw(d, up):
 		swap(d)
 
 
+def xcasq(d, up):
+	w = measure(d)
+	while w == None:
+		w = measure(d)
+	if up:
+		if measure() <= w:
+			return
+	elif measure() >= w:
+		return
+	t = get_time() + 0.05
+	while get_time() < t:
+		pass
+	w = measure(d)
+	if up:
+		if measure() > w:
+			swap(d)
+	elif measure() < w:
+		swap(d)
+
+
 def xcas(d, up):
 	w = measure(d)
 	while w == None:
@@ -19971,7 +19991,7 @@ def w0():
 	tl = get_time()
 	if measure() > measure(East):
 		swap(East)
-	xcasw(North, 1)
+	xcasq(North, 1)
 	move(East)
 	if measure() < measure(South):
 		swap(South)
