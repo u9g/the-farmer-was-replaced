@@ -9257,6 +9257,10 @@ struct Sim {
     tweak: Tweak,
     /// --until: the time the --until unlock was bought
     until_at: Option<i64>,
+    /// --fork-at: the unlock and level at which the base script hands over to the measured one,
+    /// and whether it has been bought (the hand-over waits until the main drone is alone)
+    fork_at: Option<(&'static str, i32)>,
+    fork_hit: bool,
     /// --profile: where each drone's time goes (see Prof)
     prof: Option<Box<Prof>>,
 }
@@ -9329,6 +9333,8 @@ impl Sim {
             stat_best: empty_items(),
             tweak: Tweak::none(),
             until_at: None,
+            fork_at: None,
+            fork_hit: false,
             prof: None,
         };
         // GridManager constructor
@@ -9603,6 +9609,11 @@ impl Sim {
                 self.until_at = Some(self.current_time);
             }
         }
+        if let Some((n, l)) = self.fork_at {
+            if n == so.name && level >= l {
+                self.fork_hit = true;
+            }
+        }
         true
     }
 
@@ -9758,6 +9769,11 @@ impl Sim {
         let d = self.new_drone(x, y, self.drones.len() as i32);
         self.drones.push(Some(d));
         Ok(self.drones.len() - 1)
+    }
+
+    /// --fork-at: only the main drone is left (every spawned drone has ended)
+    fn main_alone(&self) -> bool {
+        self.drones.iter().filter(|d| d.is_some()).count() <= 1
     }
 
     fn remove_spawned_drones(&mut self) {
@@ -13687,6 +13703,9 @@ struct Config {
     tweak: Tweak,
     /// --profile: collect a ProfOut
     profile: bool,
+    /// --fork-at: (base script, unlock, level): the base script runs until it has bought that
+    /// level and its spawned drones have ended, then this config's script starts on that farm
+    fork: Option<(std::path::PathBuf, &'static str, i32)>,
 }
 
 struct RunResult {
@@ -13766,7 +13785,20 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     // Execution's constructor registers the main file's code; too much of it stops the run.
     let code_check = register_leaderboard_code(&sh, &name, &tree);
     sh.trees.borrow_mut().push(tree.clone());
-    sim.start_program_execution(tree);
+    // --fork-at: the base script runs first; `tree` waits for the hand-over
+    let mut fork_tree: Option<Rc<Node>> = None;
+    match &cfg.fork {
+        Some((base, n, l)) => {
+            let bname = base.file_stem().and_then(|s| s.to_str()).unwrap_or("base").to_string();
+            let bcode = read_source(base).ok_or_else(|| format!("cannot read {}", base.display()))?;
+            let btree = parse_kept_source(&bname, &bcode)?;
+            sh.trees.borrow_mut().push(btree.clone());
+            sim.fork_at = Some((*n, *l));
+            sim.start_program_execution(btree);
+            fork_tree = Some(tree);
+        }
+        None => sim.start_program_execution(tree),
+    }
     if let Err(e) = code_check {
         sim.error = Some(e);
     }
@@ -13807,8 +13839,20 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
             }
             let goal_time = (sim.current_time + frame).min(limit);
             while !sim.run_next_step(goal_time) {
-                if sim.error.is_some() || sim.finished || sim.until_at.is_some() {
+                if sim.error.is_some() || sim.finished || sim.until_at.is_some() || (sim.fork_hit && fork_tree.is_some() && sim.main_alone()) {
                     break;
+                }
+            }
+            if fork_tree.is_some() && sim.error.is_none() {
+                if sim.fork_hit && sim.main_alone() {
+                    // --fork-at: the base script stops here (as if the player pressed stop) and
+                    // the measured script starts from its top on the same farm, items and time
+                    sim.stop_program_execution();
+                    sim.fork_at = None;
+                    sim.start_program_execution(fork_tree.take().unwrap());
+                    continue;
+                } else if sim.finished {
+                    sim.error = Some("--fork-at: the base script ended before it bought the fork unlock".into());
                 }
             }
             if let Some(t) = sim.until_at {
@@ -14326,6 +14370,7 @@ fn run_profile(base: &Config, first_seed: i32, runs: usize, workers: usize, prof
         leaderboard: base.leaderboard,
         tweak,
         profile,
+        fork: base.fork.clone(),
     };
     let f = 1.0 + step;
     let p = (step * 100.0).round();
@@ -14486,6 +14531,7 @@ const USAGE: &str = "usage: tfwr_sim <script.py>... [--seed N] [--seeds N] [--jo
                 [--save save.json] [--size N] [--drones N] [--set unlock=level] [--give item=n]
                 [--fps N] [--quiet] [--brief] [--leaderboard NAME]
                 [--profile] [--whatif] [--whatif-step F] [--tweak name=factor,...] [--until unlock[=level]]
+                [--fork-at unlock[=level]] [--fork-from base.py]
 
 Runs each script on a fresh farm with the unlocks and items from save.json and reports what it
 produced. Every run simulates one game minute, or longer (up to ten) if the script needs it to
@@ -14512,7 +14558,13 @@ script that infers state from exact counts, such as gold per treasure, can stall
 
 --until megafarm (or --until expand=4) ends a leaderboard run the moment that unlock reaches that
 level and scores the run by that time, to compare changes to one part of a long run (a fastest
-reset's early game) without the noise of everything after it.";
+reset's early game) without the noise of everything after it.
+
+--fork-at megafarm=2 runs --fork-from (default: the first script) until it has bought that level
+and its spawned drones have ended, then stops it and starts each given script from its top on
+that farm: same field, items, unlocks, time, drone position and random state. Every script then
+shares the first part exactly, so a rewrite of the later game (new code anywhere, new farms) is
+compared without the early game's noise. Combine with --until to score only the part between.";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -14535,6 +14587,8 @@ fn main() {
     let mut profile = false;
     let mut whatif = false;
     let mut whatif_step = 0.2;
+    let mut fork_at: Option<(&'static str, i32)> = None;
+    let mut fork_from: Option<String> = None;
     let mut i = 0;
     let fail = |msg: &str| -> ! {
         eprintln!("{}\n\n{}", msg, USAGE);
@@ -14600,6 +14654,20 @@ fn main() {
                     None => fail(&format!("--until: no unlock named {}", n)),
                 }
             }
+            "--fork-at" => {
+                let v = val();
+                let (n, l) = match v.split_once('=') {
+                    Some((n, l)) => (n.to_string(), l.parse::<i32>().unwrap_or_else(|_| fail("--fork-at needs unlock or unlock=level"))),
+                    None => (v.clone(), 1),
+                };
+                let n = n.trim().to_lowercase();
+                let n = n.strip_prefix("unlocks.").unwrap_or(&n).to_string();
+                match unlock_so(&n) {
+                    Some(so) => fork_at = Some((so.name, l)),
+                    None => fail(&format!("--fork-at: no unlock named {}", n)),
+                }
+            }
+            "--fork-from" => fork_from = Some(val()),
             "--profile" => profile = true,
             "--whatif" => whatif = true,
             "--whatif-step" => whatif_step = val().parse().unwrap_or_else(|_| fail("--whatif-step needs a number")),
@@ -14706,7 +14774,7 @@ fn main() {
                 apply_overrides(&mut unlocks, &mut items);
                 let item = item.clone().or_else(|| lb.goal.first().map(|g| g.0.to_string()));
                 let echo = if quiet { Echo::Off } else { Echo::Buffered };
-                return Config { script, item, unlocks, items, world_size: size, max_drones: drones, fps, echo, leaderboard: Some(lb), tweak: tweak.clone(), profile: false };
+                return Config { script, item, unlocks, items, world_size: size, max_drones: drones, fps, echo, leaderboard: Some(lb), tweak: tweak.clone(), profile: false, fork: None };
             }
             let stem = script.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
             let by_name = item_from_stem(&stem);
@@ -14714,9 +14782,25 @@ fn main() {
                 guessed = by_name.clone();
             }
             let item = item.clone().or(by_name).or_else(|| guessed.clone());
-            Config { script, item, unlocks: unlocks.clone(), items: items.clone(), world_size: size, max_drones: drones, fps, echo, leaderboard: None, tweak: tweak.clone(), profile: false }
+            Config { script, item, unlocks: unlocks.clone(), items: items.clone(), world_size: size, max_drones: drones, fps, echo, leaderboard: None, tweak: tweak.clone(), profile: false, fork: None }
         })
         .collect();
+    let mut cfgs = cfgs;
+    if let Some((n, l)) = fork_at {
+        // the base: --fork-from, or else the first script (after a launcher is resolved)
+        let base = match &fork_from {
+            Some(f) => {
+                let p = std::path::PathBuf::from(f);
+                if p.exists() { p } else { std::path::PathBuf::from(".").join(&p) }
+            }
+            None => cfgs[0].script.clone(),
+        };
+        for c in cfgs.iter_mut() {
+            c.fork = Some((base.clone(), n, l));
+        }
+    } else if fork_from.is_some() {
+        fail("--fork-from needs --fork-at");
+    }
 
     let first_seed = seed.unwrap_or_else(|| {
         (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(1) % 1_000_000_007) as i32

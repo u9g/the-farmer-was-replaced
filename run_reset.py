@@ -5694,6 +5694,8 @@ PLAN = [
 	(Unlocks.Leaderboard, 1),
 ]
 
-opening()
+# (skipped when the script is restarted on a farm already past the opening: tfwr-sim --fork-at)
+if num_unlocked(Unlocks.Carrots) == 0:
+	opening()
 run_plan(PLAN)
 log("done")

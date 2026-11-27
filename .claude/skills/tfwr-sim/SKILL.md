@@ -242,6 +242,24 @@ about ±60 s per run, the same runs cut at Megafarm 1 about ±18 s. It works wit
 `--whatif` too. Check a winner on whole runs before keeping it, since a faster early game can
 leave less in stock for later.
 
+To rewrite one part of a long run (a new farm for the mid-game, a different end game), fork it:
+`--fork-at megafarm=2` runs `--fork-from` (default: the first script) until it has bought that
+level and every spawned drone has ended, then stops it, as if the player pressed stop, and starts
+each given script from its top on that farm: same field, items, unlocks, time, drone position and
+random state. Every script then shares the first part exactly, so new code can go anywhere (new
+`def`s, new globals) without making the early game diverge:
+
+```
+cargo +nightly -Zscript <skill folder>/tfwr_sim.rs base.py new.py --leaderboard fastest_reset --fork-at megafarm=4 --fork-from base.py --seed 1 --seeds 32 --brief
+```
+
+The measured script restarts from its top, so it must cope with a farm already part-way through:
+run_reset.py skips `opening()` once Carrots is unlocked and `run_plan` skips what is bought. Put
+the base itself among the scripts as the paired baseline (a copy of the base reads exactly +0).
+Noise after a fork at Megafarm 4 (the last ~6.5 minutes): an unused extra `def` reads
++0.6 ± 0.9 s on 32 seeds, against ±5 s at 48 seeds without the fork. Add `--until` to score only
+the stretch between the fork and that unlock.
+
 `--tweak` applies one such change to any run, to try a what-if by hand: `speed=1.2` (every tick),
 `compute=0.8` (everything but actions; actions keep their time), `grow=0.8` (growth times),
 `power=0.5` (power drains at half the rate; `power=0` never runs out), `cost.gold=0.5` (every
