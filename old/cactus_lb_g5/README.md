@@ -6,7 +6,7 @@ g5: generator for `cactus_lb_entry.py` (Leaderboards.Cactus). 7.445 s over a ful
 g5.py needs scipy and numpy (`pip install scipy numpy`): without scipy it quietly skips the free
 round-B assignment (`linear_sum_assignment`) and the output no longer matches the shipped entry.
 With them the merged command below reproduces the pre-post3 entry byte for byte. The shipped entry
-is that output with post3..post7 applied (post7: `post7/apply.sh`).
+is that output with post3..post8 applied (post7: `post7/apply.sh`, post8: `post8/apply.sh`).
 
 Merged entry (launch tree + round-B routing + tail post-processing), one command:
 

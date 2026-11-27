@@ -30,16 +30,18 @@ def load(path):
 
 
 def func_map(entry):
-    """line number -> enclosing top-level function name"""
+    """line number -> innermost enclosing function name (indent aware)"""
     names = {}
-    cur = "<module>"
+    stk = []
     for i, ln in enumerate(open(entry), 1):
-        m = re.match(r"def (\w+)\(", ln)
-        if m:
-            cur = m.group(1)
-        elif ln and not ln[0].isspace() and ln.strip():
-            cur = "<module>"
-        names[i] = cur
+        if ln.strip():
+            ind = len(ln) - len(ln.lstrip("\t"))
+            while stk and stk[-1][0] >= ind:
+                stk.pop()
+            m = re.match(r"\s*def (\w+)\(", ln)
+            if m:
+                stk.append((ind, m.group(1)))
+        names[i] = stk[-1][1] if stk else "<module>"
     return names
 
 

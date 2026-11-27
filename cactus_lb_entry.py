@@ -237,21 +237,31 @@ def own(FS, MS, RS, j, e):
 
 
 def fS_NE():
-	while True:
-		v = measure()
-		a = measure(South)
-		while a > v:
-			swap(South)
-			v = measure()
-			a = measure(South)
-		a = measure(North)
-		b = measure(East)
-		if a >= v <= b:
-			return
+	v = measure()
+	s = measure(South)
+	if s > v:
+		swap(South)
+		q = s
+		s = v
+		v = q
+	a = measure(North)
+	b = measure(East)
+	while not a >= v <= b:
 		if b < a:
 			swap(East)
+			q = b
+			b = v
+			v = q
 		else:
 			swap(North)
+			q = a
+			a = v
+			v = q
+		if s > v:
+			swap(South)
+			q = s
+			s = v
+			v = q
 
 
 def fsS_NE():
@@ -293,22 +303,37 @@ def fsS_NE():
 
 
 def fSW_E():
-	while True:
-		v = measure()
-		a = measure(South)
-		b = measure(West)
-		while not a <= v >= b:
-			if b > a:
+	v = measure()
+	s = measure(South)
+	w = measure(West)
+	if not s <= v >= w:
+		if w > s:
+			swap(West)
+			q = w
+			w = v
+			v = q
+		else:
+			swap(South)
+			q = s
+			s = v
+			v = q
+	a = measure(East)
+	while a < v:
+		swap(East)
+		q = a
+		a = v
+		v = q
+		if not s <= v >= w:
+			if w > s:
 				swap(West)
+				q = w
+				w = v
+				v = q
 			else:
 				swap(South)
-			v = measure()
-			a = measure(South)
-			b = measure(West)
-		a = measure(East)
-		if a >= v:
-			return
-		swap(East)
+				q = s
+				s = v
+				v = q
 
 
 def fsSW_E():
@@ -392,26 +417,44 @@ def fsSW_N():
 
 
 def fSW_NE():
-	while True:
-		v = measure()
-		a = measure(South)
-		b = measure(West)
-		while not a <= v >= b:
-			if b > a:
-				swap(West)
-			else:
-				swap(South)
-			v = measure()
-			a = measure(South)
-			b = measure(West)
-		a = measure(North)
-		b = measure(East)
-		if a >= v <= b:
-			return
+	v = measure()
+	s = measure(South)
+	w = measure(West)
+	if not s <= v >= w:
+		if w > s:
+			swap(West)
+			q = w
+			w = v
+			v = q
+		else:
+			swap(South)
+			q = s
+			s = v
+			v = q
+	a = measure(North)
+	b = measure(East)
+	while not a >= v <= b:
 		if b < a:
 			swap(East)
+			q = b
+			b = v
+			v = q
 		else:
 			swap(North)
+			q = a
+			a = v
+			v = q
+		if not s <= v >= w:
+			if w > s:
+				swap(West)
+				q = w
+				w = v
+				v = q
+			else:
+				swap(South)
+				q = s
+				s = v
+				v = q
 
 
 def fsSW_NE():
@@ -501,13 +544,13 @@ def fsW_NE():
 
 
 def w0():
-	def w14():
-		def w21():
-			def w26():
-				def w28():
-					move(West)
-					move(South)
-					move(South)
+	def w16():
+		def w24():
+			def w27():
+				move(West)
+				move(South)
+				move(South)
+				def w29():
 					def w30():
 						def w31():
 							till()
@@ -1362,8 +1405,9 @@ def w0():
 							for q in P:
 								for d in q:
 									move(d)
+							hb = 0
 							while num_items(Items.Cactus) <= 0:
-								pass
+								hb = get_time()
 							plant(Entities.Cactus)
 							move(West)
 							plant(Entities.Cactus)
@@ -1777,7 +1821,8 @@ def w0():
 										if ja >= v:
 											break
 										swap(East)
-							wait_until(tl + 0.9676)
+							if tl + 0.9676 > hb + 2.6:
+								wait_until(tl + 0.9676)
 						spawn_drone(w31)
 						move(West)
 						move(West)
@@ -1891,7 +1936,6 @@ def w0():
 						if measure() > measure(North):
 							swap(North)
 						tl = get_time()
-						xcas(East, 1)
 						move(West)
 						move(West)
 						move(West)
@@ -2389,8 +2433,9 @@ def w0():
 						for q in P:
 							for d in q:
 								move(d)
+						hb = 0
 						while num_items(Items.Cactus) <= 0:
-							pass
+							hb = get_time()
 						plant(Entities.Cactus)
 						move(North)
 						plant(Entities.Cactus)
@@ -2805,155 +2850,169 @@ def w0():
 						move(South)
 						if measure() > measure(East):
 							swap(East)
-						wait_until(tl + 0.9676)
+						if tl + 0.9676 > hb + 2.6:
+							wait_until(tl + 0.9676)
 					spawn_drone(w30)
-					def w29():
-						move(West)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(North):
-							swap(North)
-						move(East)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(West):
-							swap(West)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						tl = get_time()
-						xcas(North, 1)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						wk = [0, 1, 2, 3]
-						cur = 0
-						qi = 0
-						qn = 4
-						q0 = True
-						q1 = True
-						q2 = True
-						q3 = True
-						q0 = False
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(South)
+					move(South)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					xcas(North, 1)
+					move(East)
+					till()
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					till()
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					till()
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					till()
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					till()
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					till()
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					till()
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					till()
+					plant(Entities.Cactus)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					move(East)
+					till()
+					plant(Entities.Cactus)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					move(North)
+					move(North)
+					till()
+					plant(Entities.Cactus)
+					move(North)
+					till()
+					plant(Entities.Cactus)
+					move(North)
+					till()
+					plant(Entities.Cactus)
+					move(West)
+					till()
+					plant(Entities.Cactus)
+					if measure() > measure(East):
+						swap(East)
+					move(North)
+					till()
+					plant(Entities.Cactus)
+					if measure() < measure(South):
+						swap(South)
+					tl = get_time()
+					xcasw(West, 0)
+					move(South)
+					move(South)
+					move(South)
+					wk = [0, 1, 2, 3]
+					cur = 0
+					qi = 0
+					qn = 4
+					q0 = True
+					q1 = True
+					q2 = True
+					q3 = True
+					q0 = False
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja == None:
+							ja = measure(South)
+						jb = measure(West)
+						while jb == None:
+							jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(East)
+						while ja == None:
+							ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
 						while True:
 							v = measure()
 							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
 							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
 							if not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
@@ -2962,8 +3021,6 @@ def w0():
 									swap(South)
 									v = measure()
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
 							if ja >= v:
 								break
 							swap(East)
@@ -2971,6 +3028,169 @@ def w0():
 								wk.append(2)
 								qn += 1
 								q2 = True
+						break
+					q1 = False
+					move(East)
+					move(South)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja == None:
+							ja = measure(South)
+						jb = measure(West)
+						while jb == None:
+							jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(North)
+						while ja == None:
+							ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							if not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+									v = measure()
+								else:
+									swap(South)
+									v = measure()
+							ja = measure(North)
+							if ja >= v:
+								break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						break
+					q2 = False
+					move(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja == None:
+							ja = measure(South)
+						jb = measure(West)
+						while jb == None:
+							jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+							else:
+								swap(South)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+						ja = measure(North)
+						while ja == None:
+							ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							if not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+									if not q0:
+										wk.append(0)
+										qn += 1
+										q0 = True
+									v = measure()
+								else:
+									swap(South)
+									if not q1:
+										wk.append(1)
+										qn += 1
+										q1 = True
+									v = measure()
+							ja = measure(North)
+							if ja >= v:
+								break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+						break
+					q3 = False
+					move(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja == None:
+							ja = measure(South)
+						if ja > v:
+							swap(South)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							v = measure()
+						ja = measure(North)
+						while ja == None:
+							ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						while True:
+							v = measure()
+							ja = measure(South)
+							if ja > v:
+								swap(South)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+								v = measure()
+							ja = measure(North)
+							if ja >= v:
+								break
+							swap(North)
+						break
+					cur = 3
+					qi = 4
+					while qi < qn:
+						cx = wk[qi]
+						qi += 1
+						if cx == 0:
+							q0 = False
+							if cur == 1:
+								move(West)
+								move(North)
+							elif cur == 2:
+								move(West)
+							elif cur == 3:
+								move(West)
+								move(South)
+							cur = 0
 							while True:
 								v = measure()
 								ja = measure(South)
@@ -2990,35 +3210,17 @@ def w0():
 									wk.append(2)
 									qn += 1
 									q2 = True
-							break
-						q1 = False
-						move(East)
-						move(South)
-						while True:
-							v = measure()
-							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
-							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									v = measure()
-								else:
-									swap(South)
-									v = measure()
-							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja >= v:
-								break
-							swap(North)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
+						elif cx == 1:
+							q1 = False
+							if cur == 0:
+								move(East)
+								move(South)
+							elif cur == 2:
+								move(South)
+							elif cur == 3:
+								move(South)
+								move(South)
+							cur = 1
 							while True:
 								v = measure()
 								ja = measure(South)
@@ -3038,42 +3240,15 @@ def w0():
 									wk.append(2)
 									qn += 1
 									q2 = True
-							break
-						q2 = False
-						move(North)
-						while True:
-							v = measure()
-							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
-							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									if not q0:
-										wk.append(0)
-										qn += 1
-										q0 = True
-									v = measure()
-								else:
-									swap(South)
-									if not q1:
-										wk.append(1)
-										qn += 1
-										q1 = True
-									v = measure()
-							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja >= v:
-								break
-							swap(North)
-							if not q3:
-								wk.append(3)
-								qn += 1
-								q3 = True
+						elif cx == 2:
+							q2 = False
+							if cur == 0:
+								move(East)
+							elif cur == 1:
+								move(North)
+							elif cur == 3:
+								move(South)
+							cur = 2
 							while True:
 								v = measure()
 								ja = measure(South)
@@ -3101,27 +3276,17 @@ def w0():
 									wk.append(3)
 									qn += 1
 									q3 = True
-							break
-						q3 = False
-						move(North)
-						while True:
-							v = measure()
-							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
-							if ja > v:
-								swap(South)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-								v = measure()
-							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja >= v:
-								break
-							swap(North)
+						else:
+							q3 = False
+							if cur == 0:
+								move(East)
+								move(North)
+							elif cur == 1:
+								move(North)
+								move(North)
+							elif cur == 2:
+								move(North)
+							cur = 3
 							while True:
 								v = measure()
 								ja = measure(South)
@@ -3136,137 +3301,86 @@ def w0():
 								if ja >= v:
 									break
 								swap(North)
-							break
-						cur = 3
-						qi = 4
-						while qi < qn:
-							cx = wk[qi]
-							qi += 1
-							if cx == 0:
-								q0 = False
-								if cur == 1:
+					c = cur
+					e = tl + 0.9345
+					P = []
+					if c == 0:
+						if get_time() < e:
+							move(West)
+							if get_time() < e:
+								move(West)
+								if get_time() < e:
 									move(West)
-									move(North)
-								elif cur == 2:
-									move(West)
-								elif cur == 3:
-									move(West)
-									move(South)
-								cur = 0
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											v = measure()
+									if get_time() < e:
+										move(North)
+										if get_time() < e:
+											move(North)
+											if get_time() < e:
+												move(North)
+												if get_time() < e:
+													move(North)
+													if get_time() < e:
+														move(North)
+													else:
+														P.append((North,))
+												else:
+													P.append((North, North,))
+											else:
+												P.append((North, North, North,))
 										else:
-											swap(South)
-											v = measure()
-									ja = measure(East)
-									if ja >= v:
-										break
-									swap(East)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif cx == 1:
-								q1 = False
-								if cur == 0:
-									move(East)
-									move(South)
-								elif cur == 2:
-									move(South)
-								elif cur == 3:
-									move(South)
-									move(South)
-								cur = 1
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											v = measure()
-										else:
-											swap(South)
-											v = measure()
-									ja = measure(North)
-									if ja >= v:
-										break
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif cx == 2:
-								q2 = False
-								if cur == 0:
-									move(East)
-								elif cur == 1:
-									move(North)
-								elif cur == 3:
-									move(South)
-								cur = 2
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											if not q0:
-												wk.append(0)
-												qn += 1
-												q0 = True
-											v = measure()
-										else:
-											swap(South)
-											if not q1:
-												wk.append(1)
-												qn += 1
-												q1 = True
-											v = measure()
-									ja = measure(North)
-									if ja >= v:
-										break
-									swap(North)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
+											P.append((North, North, North, North,))
+									else:
+										P.append((North, North, North, North, North,))
+								else:
+									P.append((West, North, North, North, North, North,))
 							else:
-								q3 = False
-								if cur == 0:
-									move(East)
-									move(North)
-								elif cur == 1:
-									move(North)
-									move(North)
-								elif cur == 2:
-									move(North)
-								cur = 3
-								while True:
-									v = measure()
-									ja = measure(South)
-									if ja > v:
-										swap(South)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-										v = measure()
-									ja = measure(North)
-									if ja >= v:
-										break
-									swap(North)
-						c = cur
-						e = tl + 0.9345
-						P = []
-						if c == 0:
+								P.append((West, West, North, North, North, North, North,))
+						else:
+							P.append((West, West, West, North, North, North, North, North,))
+					elif c == 1:
+						if get_time() < e:
+							move(West)
+							if get_time() < e:
+								move(West)
+								if get_time() < e:
+									move(West)
+									if get_time() < e:
+										move(West)
+										if get_time() < e:
+											move(North)
+											if get_time() < e:
+												move(North)
+												if get_time() < e:
+													move(North)
+													if get_time() < e:
+														move(North)
+														if get_time() < e:
+															move(North)
+															if get_time() < e:
+																move(North)
+															else:
+																P.append((North,))
+														else:
+															P.append((North, North,))
+													else:
+														P.append((North, North, North,))
+												else:
+													P.append((North, North, North, North,))
+											else:
+												P.append((North, North, North, North, North,))
+										else:
+											P.append((North, North, North, North, North, North,))
+									else:
+										P.append((West, North, North, North, North, North, North,))
+								else:
+									P.append((West, West, North, North, North, North, North, North,))
+							else:
+								P.append((West, West, West, North, North, North, North, North, North,))
+						else:
+							P.append((West, West, West, West, North, North, North, North, North, North,))
+					elif c == 2:
+						if get_time() < e:
+							move(West)
 							if get_time() < e:
 								move(West)
 								if get_time() < e:
@@ -3299,7 +3413,11 @@ def w0():
 									P.append((West, West, North, North, North, North, North,))
 							else:
 								P.append((West, West, West, North, North, North, North, North,))
-						elif c == 1:
+						else:
+							P.append((West, West, West, West, North, North, North, North, North,))
+					elif c == 3:
+						if get_time() < e:
+							move(West)
 							if get_time() < e:
 								move(West)
 								if get_time() < e:
@@ -3307,228 +3425,170 @@ def w0():
 									if get_time() < e:
 										move(West)
 										if get_time() < e:
-											move(West)
+											move(North)
 											if get_time() < e:
 												move(North)
 												if get_time() < e:
 													move(North)
 													if get_time() < e:
 														move(North)
-														if get_time() < e:
-															move(North)
-															if get_time() < e:
-																move(North)
-																if get_time() < e:
-																	move(North)
-																else:
-																	P.append((North,))
-															else:
-																P.append((North, North,))
-														else:
-															P.append((North, North, North,))
 													else:
-														P.append((North, North, North, North,))
+														P.append((North,))
 												else:
-													P.append((North, North, North, North, North,))
+													P.append((North, North,))
 											else:
-												P.append((North, North, North, North, North, North,))
+												P.append((North, North, North,))
 										else:
-											P.append((West, North, North, North, North, North, North,))
+											P.append((North, North, North, North,))
 									else:
-										P.append((West, West, North, North, North, North, North, North,))
+										P.append((West, North, North, North, North,))
 								else:
-									P.append((West, West, West, North, North, North, North, North, North,))
+									P.append((West, West, North, North, North, North,))
 							else:
-								P.append((West, West, West, West, North, North, North, North, North, North,))
-						elif c == 2:
-							if get_time() < e:
-								move(West)
-								if get_time() < e:
-									move(West)
-									if get_time() < e:
-										move(West)
-										if get_time() < e:
-											move(West)
-											if get_time() < e:
-												move(North)
-												if get_time() < e:
-													move(North)
-													if get_time() < e:
-														move(North)
-														if get_time() < e:
-															move(North)
-															if get_time() < e:
-																move(North)
-															else:
-																P.append((North,))
-														else:
-															P.append((North, North,))
-													else:
-														P.append((North, North, North,))
-												else:
-													P.append((North, North, North, North,))
-											else:
-												P.append((North, North, North, North, North,))
-										else:
-											P.append((West, North, North, North, North, North,))
-									else:
-										P.append((West, West, North, North, North, North, North,))
-								else:
-									P.append((West, West, West, North, North, North, North, North,))
-							else:
-								P.append((West, West, West, West, North, North, North, North, North,))
-						elif c == 3:
-							if get_time() < e:
-								move(West)
-								if get_time() < e:
-									move(West)
-									if get_time() < e:
-										move(West)
-										if get_time() < e:
-											move(West)
-											if get_time() < e:
-												move(North)
-												if get_time() < e:
-													move(North)
-													if get_time() < e:
-														move(North)
-														if get_time() < e:
-															move(North)
-														else:
-															P.append((North,))
-													else:
-														P.append((North, North,))
-												else:
-													P.append((North, North, North,))
-											else:
-												P.append((North, North, North, North,))
-										else:
-											P.append((West, North, North, North, North,))
-									else:
-										P.append((West, West, North, North, North, North,))
-								else:
-									P.append((West, West, West, North, North, North, North,))
-							else:
-								P.append((West, West, West, West, North, North, North, North,))
-						wait_until(tl + 0.9676)
-						if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-							if get_entity_type() == Entities.Cactus:
-								harvest()
-							else:
-								use_item(Items.Water)
+								P.append((West, West, West, North, North, North, North,))
+						else:
+							P.append((West, West, West, West, North, North, North, North,))
+					wait_until(tl + 0.9676)
+					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+						if get_entity_type() == Entities.Cactus:
+							harvest()
 						else:
 							use_item(Items.Water)
-						for q in P:
-							for d in q:
-								move(d)
-						while num_items(Items.Cactus) <= 0:
-							pass
+					else:
+						use_item(Items.Water)
+					for q in P:
+						for d in q:
+							move(d)
+					hb = 0
+					while num_items(Items.Cactus) <= 0:
+						hb = get_time()
+					plant(Entities.Cactus)
+					move(East)
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					plant(Entities.Cactus)
+					if measure() > measure(North):
+						swap(North)
+					move(East)
+					plant(Entities.Cactus)
+					if measure() < measure(West):
+						swap(West)
+					move(South)
+					plant(Entities.Cactus)
+					swap(South)
+					plant(Entities.Cactus)
+					move(South)
+					move(South)
+					plant(Entities.Cactus)
+					swap(South)
+					plant(Entities.Cactus)
+					move(West)
+					plant(Entities.Cactus)
+					move(North)
+					plant(Entities.Cactus)
+					move(West)
+					plant(Entities.Cactus)
+					move(North)
+					plant(Entities.Cactus)
+					move(West)
+					plant(Entities.Cactus)
+					move(North)
+					plant(Entities.Cactus)
+					move(West)
+					plant(Entities.Cactus)
+					move(North)
+					plant(Entities.Cactus)
+					move(West)
+					plant(Entities.Cactus)
+					move(North)
+					if use_item(Items.Water, 4):
 						plant(Entities.Cactus)
-						move(East)
+						tw = get_time() - 0.0988
+					else:
 						plant(Entities.Cactus)
-						if measure() < measure(West):
-							swap(West)
-						move(South)
-						plant(Entities.Cactus)
-						if measure() > measure(North):
-							swap(North)
-						move(East)
-						plant(Entities.Cactus)
-						if measure() < measure(West):
-							swap(West)
-						move(South)
-						plant(Entities.Cactus)
-						if measure() > measure(North):
-							swap(North)
-						move(East)
-						plant(Entities.Cactus)
-						if measure() < measure(West):
-							swap(West)
-						move(South)
-						plant(Entities.Cactus)
-						if measure() > measure(North):
-							swap(North)
-						move(East)
-						plant(Entities.Cactus)
-						if measure() < measure(West):
-							swap(West)
-						move(South)
-						plant(Entities.Cactus)
+						tw = 0
+					tl = get_time()
+					if tw:
+						tl = tw
+					if measure() < measure(South):
 						swap(South)
-						plant(Entities.Cactus)
-						move(South)
-						move(South)
-						plant(Entities.Cactus)
+					xcas(West, 0)
+					move(South)
+					if measure() > measure(East):
+						swap(East)
+					move(East)
+					if measure() < measure(South):
 						swap(South)
-						plant(Entities.Cactus)
-						move(West)
-						plant(Entities.Cactus)
-						move(North)
-						plant(Entities.Cactus)
-						move(West)
-						plant(Entities.Cactus)
-						move(North)
-						plant(Entities.Cactus)
-						move(West)
-						plant(Entities.Cactus)
-						move(North)
-						plant(Entities.Cactus)
-						move(West)
-						plant(Entities.Cactus)
-						move(North)
-						plant(Entities.Cactus)
-						move(West)
-						plant(Entities.Cactus)
-						move(North)
-						if use_item(Items.Water, 4):
-							plant(Entities.Cactus)
-							tw = get_time() - 0.0988
-						else:
-							plant(Entities.Cactus)
-							tw = 0
-						tl = get_time()
-						if tw:
-							tl = tw
-						if measure() < measure(South):
-							swap(South)
-						xcas(West, 0)
-						move(South)
-						if measure() > measure(East):
-							swap(East)
-						move(East)
-						if measure() < measure(South):
-							swap(South)
-						move(South)
-						if measure() > measure(East):
-							swap(East)
-						move(East)
-						if measure() < measure(South):
-							swap(South)
-						move(South)
-						if measure() > measure(East):
-							swap(East)
-						move(East)
-						if measure() < measure(South):
-							swap(South)
-						move(East)
-						move(South)
-						wk = [0, 1, 2, 3]
-						cur = 0
-						qi = 0
-						qn = 4
-						q0 = True
-						q1 = True
-						q2 = True
-						q3 = True
-						q0 = False
+					move(South)
+					if measure() > measure(East):
+						swap(East)
+					move(East)
+					if measure() < measure(South):
+						swap(South)
+					move(South)
+					if measure() > measure(East):
+						swap(East)
+					move(East)
+					if measure() < measure(South):
+						swap(South)
+					move(East)
+					move(South)
+					wk = [0, 1, 2, 3]
+					cur = 0
+					qi = 0
+					qn = 4
+					q0 = True
+					q1 = True
+					q2 = True
+					q3 = True
+					q0 = False
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja == None:
+							ja = measure(South)
+						jb = measure(West)
+						while jb == None:
+							jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(East)
+						while ja == None:
+							ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
 						while True:
 							v = measure()
 							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
 							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
 							if not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
@@ -3537,8 +3597,6 @@ def w0():
 									swap(South)
 									v = measure()
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
 							if ja >= v:
 								break
 							swap(East)
@@ -3546,6 +3604,169 @@ def w0():
 								wk.append(2)
 								qn += 1
 								q2 = True
+						break
+					q1 = False
+					move(East)
+					move(South)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja == None:
+							ja = measure(South)
+						jb = measure(West)
+						while jb == None:
+							jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(North)
+						while ja == None:
+							ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							if not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+									v = measure()
+								else:
+									swap(South)
+									v = measure()
+							ja = measure(North)
+							if ja >= v:
+								break
+							swap(North)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						break
+					q2 = False
+					move(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja == None:
+							ja = measure(South)
+						jb = measure(West)
+						while jb == None:
+							jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+							else:
+								swap(South)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+						ja = measure(North)
+						while ja == None:
+							ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+						while True:
+							v = measure()
+							ja = measure(South)
+							jb = measure(West)
+							if not ja <= v >= jb:
+								if jb > ja:
+									swap(West)
+									if not q0:
+										wk.append(0)
+										qn += 1
+										q0 = True
+									v = measure()
+								else:
+									swap(South)
+									if not q1:
+										wk.append(1)
+										qn += 1
+										q1 = True
+									v = measure()
+							ja = measure(North)
+							if ja >= v:
+								break
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+						break
+					q3 = False
+					move(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						while ja == None:
+							ja = measure(South)
+						if ja > v:
+							swap(South)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							v = measure()
+						ja = measure(North)
+						while ja == None:
+							ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						while True:
+							v = measure()
+							ja = measure(South)
+							if ja > v:
+								swap(South)
+								if not q2:
+									wk.append(2)
+									qn += 1
+									q2 = True
+								v = measure()
+							ja = measure(North)
+							if ja >= v:
+								break
+							swap(North)
+						break
+					cur = 3
+					qi = 4
+					while qi < qn:
+						cx = wk[qi]
+						qi += 1
+						if cx == 0:
+							q0 = False
+							if cur == 1:
+								move(West)
+								move(North)
+							elif cur == 2:
+								move(West)
+							elif cur == 3:
+								move(West)
+								move(South)
+							cur = 0
 							while True:
 								v = measure()
 								ja = measure(South)
@@ -3565,35 +3786,17 @@ def w0():
 									wk.append(2)
 									qn += 1
 									q2 = True
-							break
-						q1 = False
-						move(East)
-						move(South)
-						while True:
-							v = measure()
-							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
-							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									v = measure()
-								else:
-									swap(South)
-									v = measure()
-							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja >= v:
-								break
-							swap(North)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
+						elif cx == 1:
+							q1 = False
+							if cur == 0:
+								move(East)
+								move(South)
+							elif cur == 2:
+								move(South)
+							elif cur == 3:
+								move(South)
+								move(South)
+							cur = 1
 							while True:
 								v = measure()
 								ja = measure(South)
@@ -3613,42 +3816,15 @@ def w0():
 									wk.append(2)
 									qn += 1
 									q2 = True
-							break
-						q2 = False
-						move(North)
-						while True:
-							v = measure()
-							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
-							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									if not q0:
-										wk.append(0)
-										qn += 1
-										q0 = True
-									v = measure()
-								else:
-									swap(South)
-									if not q1:
-										wk.append(1)
-										qn += 1
-										q1 = True
-									v = measure()
-							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja >= v:
-								break
-							swap(North)
-							if not q3:
-								wk.append(3)
-								qn += 1
-								q3 = True
+						elif cx == 2:
+							q2 = False
+							if cur == 0:
+								move(East)
+							elif cur == 1:
+								move(North)
+							elif cur == 3:
+								move(South)
+							cur = 2
 							while True:
 								v = measure()
 								ja = measure(South)
@@ -3676,27 +3852,17 @@ def w0():
 									wk.append(3)
 									qn += 1
 									q3 = True
-							break
-						q3 = False
-						move(North)
-						while True:
-							v = measure()
-							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
-							if ja > v:
-								swap(South)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-								v = measure()
-							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
-							if ja >= v:
-								break
-							swap(North)
+						else:
+							q3 = False
+							if cur == 0:
+								move(East)
+								move(North)
+							elif cur == 1:
+								move(North)
+								move(North)
+							elif cur == 2:
+								move(North)
+							cur = 3
 							while True:
 								v = measure()
 								ja = measure(South)
@@ -3711,135 +3877,10 @@ def w0():
 								if ja >= v:
 									break
 								swap(North)
-							break
-						cur = 3
-						qi = 4
-						while qi < qn:
-							cx = wk[qi]
-							qi += 1
-							if cx == 0:
-								q0 = False
-								if cur == 1:
-									move(West)
-									move(North)
-								elif cur == 2:
-									move(West)
-								elif cur == 3:
-									move(West)
-									move(South)
-								cur = 0
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											v = measure()
-										else:
-											swap(South)
-											v = measure()
-									ja = measure(East)
-									if ja >= v:
-										break
-									swap(East)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif cx == 1:
-								q1 = False
-								if cur == 0:
-									move(East)
-									move(South)
-								elif cur == 2:
-									move(South)
-								elif cur == 3:
-									move(South)
-									move(South)
-								cur = 1
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											v = measure()
-										else:
-											swap(South)
-											v = measure()
-									ja = measure(North)
-									if ja >= v:
-										break
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif cx == 2:
-								q2 = False
-								if cur == 0:
-									move(East)
-								elif cur == 1:
-									move(North)
-								elif cur == 3:
-									move(South)
-								cur = 2
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											if not q0:
-												wk.append(0)
-												qn += 1
-												q0 = True
-											v = measure()
-										else:
-											swap(South)
-											if not q1:
-												wk.append(1)
-												qn += 1
-												q1 = True
-											v = measure()
-									ja = measure(North)
-									if ja >= v:
-										break
-									swap(North)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-							else:
-								q3 = False
-								if cur == 0:
-									move(East)
-									move(North)
-								elif cur == 1:
-									move(North)
-									move(North)
-								elif cur == 2:
-									move(North)
-								cur = 3
-								while True:
-									v = measure()
-									ja = measure(South)
-									if ja > v:
-										swap(South)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-										v = measure()
-									ja = measure(North)
-									if ja >= v:
-										break
-									swap(North)
+					if tl + 0.9676 > hb + 2.6:
 						wait_until(tl + 0.9676)
-					spawn_drone(w29)
+				spawn_drone(w29)
+				def w28():
 					move(West)
 					move(West)
 					move(West)
@@ -4356,8 +4397,9 @@ def w0():
 					for q in P:
 						for d in q:
 							move(d)
+					hb = 0
 					while num_items(Items.Cactus) <= 0:
-						pass
+						hb = get_time()
 					plant(Entities.Cactus)
 					move(South)
 					plant(Entities.Cactus)
@@ -4469,138 +4511,156 @@ def w0():
 					move(North)
 					if measure() < measure(West):
 						swap(West)
-					wait_until(tl + 0.9676)
+					if tl + 0.9676 > hb + 2.6:
+						wait_until(tl + 0.9676)
 				spawn_drone(w28)
-				def w27():
-					move(West)
-					move(West)
-					move(West)
-					move(West)
-					move(West)
-					move(West)
-					move(West)
-					move(West)
-					move(West)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					if measure() > measure(North):
-						swap(North)
-					move(East)
-					till()
-					plant(Entities.Cactus)
-					if measure() < measure(West):
-						swap(West)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					if measure() > measure(North):
-						swap(North)
-					move(East)
-					till()
-					plant(Entities.Cactus)
-					if measure() < measure(West):
-						swap(West)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					if measure() > measure(North):
-						swap(North)
-					move(East)
-					till()
-					plant(Entities.Cactus)
-					if measure() < measure(West):
-						swap(West)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					if measure() > measure(North):
-						swap(North)
-					move(East)
-					till()
-					plant(Entities.Cactus)
-					if measure() < measure(West):
-						swap(West)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					if measure() > measure(North):
-						swap(North)
-					move(East)
-					till()
-					plant(Entities.Cactus)
-					if measure() < measure(West):
-						swap(West)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(East)
-					till()
-					plant(Entities.Cactus)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(East)
-					till()
-					plant(Entities.Cactus)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(East)
-					till()
-					plant(Entities.Cactus)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(South)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(North)
-					till()
-					plant(Entities.Cactus)
-					move(West)
-					till()
-					plant(Entities.Cactus)
-					move(North)
-					till()
-					plant(Entities.Cactus)
-					move(West)
-					till()
-					plant(Entities.Cactus)
-					tl = get_time()
-					xcas(North, 1)
-					move(East)
-					wk = [0, 1, 2, 3]
-					cur = 0
-					qi = 0
-					qn = 4
-					q0 = True
-					q1 = True
-					q2 = True
-					q3 = True
-					q0 = False
+				move(West)
+				move(West)
+				move(West)
+				move(West)
+				move(West)
+				move(West)
+				move(West)
+				move(West)
+				move(South)
+				move(South)
+				move(South)
+				move(South)
+				move(South)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				if measure() > measure(North):
+					swap(North)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				if measure() < measure(West):
+					swap(West)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				if measure() > measure(North):
+					swap(North)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				if measure() < measure(West):
+					swap(West)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				if measure() > measure(North):
+					swap(North)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				if measure() < measure(West):
+					swap(West)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				if measure() > measure(North):
+					swap(North)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				if measure() < measure(West):
+					swap(West)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				if measure() > measure(North):
+					swap(North)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				if measure() < measure(West):
+					swap(West)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(West)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(West)
+				till()
+				plant(Entities.Cactus)
+				tl = get_time()
+				xcas(North, 1)
+				move(East)
+				wk = [0, 1, 2, 3]
+				cur = 0
+				qi = 0
+				qn = 4
+				q0 = True
+				q1 = True
+				q2 = True
+				q3 = True
+				q0 = False
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					jb = measure(West)
+					while jb == None:
+						jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(East)
+					while ja == None:
+						ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
 					while True:
 						v = measure()
 						ja = measure(South)
-						while ja == None:
-							ja = measure(South)
 						jb = measure(West)
-						while jb == None:
-							jb = measure(West)
 						if not ja <= v >= jb:
 							if jb > ja:
 								swap(West)
@@ -4609,8 +4669,6 @@ def w0():
 								swap(South)
 								v = measure()
 						ja = measure(East)
-						while ja == None:
-							ja = measure(East)
 						if ja >= v:
 							break
 						swap(East)
@@ -4618,6 +4676,169 @@ def w0():
 							wk.append(2)
 							qn += 1
 							q2 = True
+					break
+				q1 = False
+				move(East)
+				move(South)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					jb = measure(West)
+					while jb == None:
+						jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(North)
+					while ja == None:
+						ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					break
+				q2 = False
+				move(North)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					jb = measure(West)
+					while jb == None:
+						jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+						else:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+					ja = measure(North)
+					while ja == None:
+						ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+							else:
+								swap(South)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					break
+				q3 = False
+				move(North)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					if ja > v:
+						swap(South)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						v = measure()
+					ja = measure(North)
+					while ja == None:
+						ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+					while True:
+						v = measure()
+						ja = measure(South)
+						if ja > v:
+							swap(South)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+					break
+				cur = 3
+				qi = 4
+				while qi < qn:
+					cx = wk[qi]
+					qi += 1
+					if cx == 0:
+						q0 = False
+						if cur == 1:
+							move(West)
+							move(North)
+						elif cur == 2:
+							move(West)
+						elif cur == 3:
+							move(West)
+							move(South)
+						cur = 0
 						while True:
 							v = measure()
 							ja = measure(South)
@@ -4637,35 +4858,17 @@ def w0():
 								wk.append(2)
 								qn += 1
 								q2 = True
-						break
-					q1 = False
-					move(East)
-					move(South)
-					while True:
-						v = measure()
-						ja = measure(South)
-						while ja == None:
-							ja = measure(South)
-						jb = measure(West)
-						while jb == None:
-							jb = measure(West)
-						if not ja <= v >= jb:
-							if jb > ja:
-								swap(West)
-								v = measure()
-							else:
-								swap(South)
-								v = measure()
-						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
-						if ja >= v:
-							break
-						swap(North)
-						if not q2:
-							wk.append(2)
-							qn += 1
-							q2 = True
+					elif cx == 1:
+						q1 = False
+						if cur == 0:
+							move(East)
+							move(South)
+						elif cur == 2:
+							move(South)
+						elif cur == 3:
+							move(South)
+							move(South)
+						cur = 1
 						while True:
 							v = measure()
 							ja = measure(South)
@@ -4685,42 +4888,15 @@ def w0():
 								wk.append(2)
 								qn += 1
 								q2 = True
-						break
-					q2 = False
-					move(North)
-					while True:
-						v = measure()
-						ja = measure(South)
-						while ja == None:
-							ja = measure(South)
-						jb = measure(West)
-						while jb == None:
-							jb = measure(West)
-						if not ja <= v >= jb:
-							if jb > ja:
-								swap(West)
-								if not q0:
-									wk.append(0)
-									qn += 1
-									q0 = True
-								v = measure()
-							else:
-								swap(South)
-								if not q1:
-									wk.append(1)
-									qn += 1
-									q1 = True
-								v = measure()
-						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
-						if ja >= v:
-							break
-						swap(North)
-						if not q3:
-							wk.append(3)
-							qn += 1
-							q3 = True
+					elif cx == 2:
+						q2 = False
+						if cur == 0:
+							move(East)
+						elif cur == 1:
+							move(North)
+						elif cur == 3:
+							move(South)
+						cur = 2
 						while True:
 							v = measure()
 							ja = measure(South)
@@ -4748,27 +4924,17 @@ def w0():
 								wk.append(3)
 								qn += 1
 								q3 = True
-						break
-					q3 = False
-					move(North)
-					while True:
-						v = measure()
-						ja = measure(South)
-						while ja == None:
-							ja = measure(South)
-						if ja > v:
-							swap(South)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
-							v = measure()
-						ja = measure(North)
-						while ja == None:
-							ja = measure(North)
-						if ja >= v:
-							break
-						swap(North)
+					else:
+						q3 = False
+						if cur == 0:
+							move(East)
+							move(North)
+						elif cur == 1:
+							move(North)
+							move(North)
+						elif cur == 2:
+							move(North)
+						cur = 3
 						while True:
 							v = measure()
 							ja = measure(South)
@@ -4783,302 +4949,178 @@ def w0():
 							if ja >= v:
 								break
 							swap(North)
-						break
-					cur = 3
-					qi = 4
-					while qi < qn:
-						cx = wk[qi]
-						qi += 1
-						if cx == 0:
-							q0 = False
-							if cur == 1:
-								move(West)
-								move(North)
-							elif cur == 2:
-								move(West)
-							elif cur == 3:
-								move(West)
-								move(South)
-							cur = 0
-							while True:
-								v = measure()
-								ja = measure(South)
-								jb = measure(West)
-								if not ja <= v >= jb:
-									if jb > ja:
-										swap(West)
-										v = measure()
-									else:
-										swap(South)
-										v = measure()
-								ja = measure(East)
-								if ja >= v:
-									break
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-						elif cx == 1:
-							q1 = False
-							if cur == 0:
-								move(East)
-								move(South)
-							elif cur == 2:
-								move(South)
-							elif cur == 3:
-								move(South)
-								move(South)
-							cur = 1
-							while True:
-								v = measure()
-								ja = measure(South)
-								jb = measure(West)
-								if not ja <= v >= jb:
-									if jb > ja:
-										swap(West)
-										v = measure()
-									else:
-										swap(South)
-										v = measure()
-								ja = measure(North)
-								if ja >= v:
-									break
-								swap(North)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-						elif cx == 2:
-							q2 = False
-							if cur == 0:
-								move(East)
-							elif cur == 1:
-								move(North)
-							elif cur == 3:
-								move(South)
-							cur = 2
-							while True:
-								v = measure()
-								ja = measure(South)
-								jb = measure(West)
-								if not ja <= v >= jb:
-									if jb > ja:
-										swap(West)
-										if not q0:
-											wk.append(0)
-											qn += 1
-											q0 = True
-										v = measure()
-									else:
-										swap(South)
-										if not q1:
-											wk.append(1)
-											qn += 1
-											q1 = True
-										v = measure()
-								ja = measure(North)
-								if ja >= v:
-									break
-								swap(North)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-						else:
-							q3 = False
-							if cur == 0:
-								move(East)
-								move(North)
-							elif cur == 1:
-								move(North)
-								move(North)
-							elif cur == 2:
-								move(North)
-							cur = 3
-							while True:
-								v = measure()
-								ja = measure(South)
-								if ja > v:
-									swap(South)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-									v = measure()
-								ja = measure(North)
-								if ja >= v:
-									break
-								swap(North)
-					if cur == 1:
-						move(North)
-						move(North)
-						move(North)
-					elif cur == 2:
-						move(North)
-						move(North)
-					elif cur == 3:
-						move(North)
-					else:
-						move(East)
-						move(North)
-						move(North)
-					if measure() < measure(West):
-						swap(West)
-					move(West)
-					if measure() > measure(North):
-						swap(North)
+				if cur == 1:
 					move(North)
-					if measure() < measure(West):
-						swap(West)
-					move(West)
-					if measure() > measure(North):
-						swap(North)
 					move(North)
-					if measure() < measure(West):
-						swap(West)
+					move(North)
+				elif cur == 2:
+					move(North)
+					move(North)
+				elif cur == 3:
+					move(North)
+				else:
+					move(East)
+					move(North)
+					move(North)
+				if measure() < measure(West):
+					swap(West)
+				move(West)
+				if measure() > measure(North):
+					swap(North)
+				move(North)
+				if measure() < measure(West):
+					swap(West)
+				move(West)
+				if measure() > measure(North):
+					swap(North)
+				move(North)
+				if measure() < measure(West):
+					swap(West)
+				move(West)
+				if measure() > measure(North):
+					swap(North)
+				e = tl + 0.9345
+				P = []
+				if get_time() < e:
 					move(West)
-					if measure() > measure(North):
-						swap(North)
-					e = tl + 0.9345
-					P = []
 					if get_time() < e:
 						move(West)
 						if get_time() < e:
 							move(West)
 							if get_time() < e:
-								move(West)
-								if get_time() < e:
-									move(North)
-								else:
-									P.append((North,))
+								move(North)
 							else:
-								P.append((West, North,))
+								P.append((North,))
 						else:
-							P.append((West, West, North,))
+							P.append((West, North,))
 					else:
-						P.append((West, West, West, North,))
-					wait_until(tl + 0.9676)
-					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-						if get_entity_type() == Entities.Cactus:
-							harvest()
-						else:
-							use_item(Items.Water)
+						P.append((West, West, North,))
+				else:
+					P.append((West, West, West, North,))
+				wait_until(tl + 0.9676)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
 					else:
 						use_item(Items.Water)
-					for q in P:
-						for d in q:
-							move(d)
-					while num_items(Items.Cactus) <= 0:
-						pass
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					if measure() > measure(East):
-						swap(East)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					move(North)
-					plant(Entities.Cactus)
-					move(West)
-					plant(Entities.Cactus)
-					tl = get_time()
-					if measure() > measure(East):
-						swap(East)
-					xcas(North, 1)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
-					move(South)
-					if measure() > measure(East):
-						swap(East)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
-					move(South)
-					if measure() > measure(East):
-						swap(East)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
-					move(South)
-					if measure() > measure(East):
-						swap(East)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
-					move(South)
-					if measure() > measure(East):
-						swap(East)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
-					move(South)
-					if measure() > measure(East):
-						swap(East)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
-					move(South)
-					if measure() > measure(East):
-						swap(East)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
-					move(South)
-					if measure() > measure(East):
-						swap(East)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
-					move(South)
-					if measure() > measure(East):
-						swap(East)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
-					move(South)
-					if measure() > measure(East):
-						swap(East)
-					move(East)
-					if measure() < measure(South):
-						swap(South)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
+				hb = 0
+				while num_items(Items.Cactus) <= 0:
+					hb = get_time()
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				if measure() > measure(East):
+					swap(East)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(North)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				tl = get_time()
+				if measure() > measure(East):
+					swap(East)
+				xcas(North, 1)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				move(South)
+				if measure() > measure(East):
+					swap(East)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				move(South)
+				if measure() > measure(East):
+					swap(East)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				move(South)
+				if measure() > measure(East):
+					swap(East)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				move(South)
+				if measure() > measure(East):
+					swap(East)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				move(South)
+				if measure() > measure(East):
+					swap(East)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				move(South)
+				if measure() > measure(East):
+					swap(East)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				move(South)
+				if measure() > measure(East):
+					swap(East)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				move(South)
+				if measure() > measure(East):
+					swap(East)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				move(South)
+				if measure() > measure(East):
+					swap(East)
+				move(East)
+				if measure() < measure(South):
+					swap(South)
+				if tl + 0.9676 > hb + 2.6:
 					wait_until(tl + 0.9676)
-				spawn_drone(w27)
+			spawn_drone(w27)
+			def w26():
 				move(West)
 				move(West)
 				move(West)
@@ -5264,8 +5306,9 @@ def w0():
 				for q in P:
 					for d in q:
 						move(d)
+				hb = 0
 				while num_items(Items.Cactus) <= 0:
-					pass
+					hb = get_time()
 				plant(Entities.Cactus)
 				move(East)
 				plant(Entities.Cactus)
@@ -5663,144 +5706,346 @@ def w0():
 							if ja >= v:
 								break
 							swap(North)
-				wait_until(tl + 0.9676)
+				if tl + 0.9676 > hb + 2.6:
+					wait_until(tl + 0.9676)
 			spawn_drone(w26)
-			def w23():
-				def w24():
-					def w25():
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						move(East)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						move(East)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(East)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(East)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(East)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						tl = get_time()
-						move(West)
-						fsSW_NE()
-						move(West)
-						move(North)
-						fsS_NE()
-						move(North)
-						if measure() < measure(West):
+			def w25():
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				move(South)
+				move(South)
+				move(South)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				if measure() < measure(South):
+					swap(South)
+				move(West)
+				till()
+				plant(Entities.Cactus)
+				if measure() > measure(East):
+					swap(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				if measure() < measure(South):
+					swap(South)
+				move(West)
+				till()
+				plant(Entities.Cactus)
+				if measure() > measure(East):
+					swap(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				if measure() < measure(South):
+					swap(South)
+				move(West)
+				till()
+				plant(Entities.Cactus)
+				if measure() > measure(East):
+					swap(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				if measure() < measure(South):
+					swap(South)
+				move(West)
+				till()
+				plant(Entities.Cactus)
+				move(West)
+				till()
+				plant(Entities.Cactus)
+				move(West)
+				move(West)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				tl = get_time()
+				move(West)
+				fsSW_NE()
+				move(West)
+				move(North)
+				fsS_NE()
+				move(North)
+				if measure() < measure(West):
+					swap(West)
+				move(West)
+				move(North)
+				wk = [0, 1, 2, 3]
+				cur = 0
+				qi = 0
+				qn = 4
+				q0 = True
+				q1 = True
+				q2 = True
+				q3 = True
+				q0 = False
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					jb = measure(West)
+					while jb == None:
+						jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
 							swap(West)
-						move(West)
-						move(North)
-						wk = [0, 1, 2, 3]
-						cur = 0
-						qi = 0
-						qn = 4
-						q0 = True
-						q1 = True
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(North)
+					while ja == None:
+						ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+					if not q2:
+						wk.append(2)
+						qn += 1
 						q2 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					break
+				q1 = False
+				move(West)
+				move(North)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					jb = measure(West)
+					while jb == None:
+						jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(East)
+					while ja == None:
+						ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					break
+				q2 = False
+				move(East)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					jb = measure(West)
+					while jb == None:
+						jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						else:
+							swap(South)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+					ja = measure(East)
+					while ja == None:
+						ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q3:
+						wk.append(3)
+						qn += 1
 						q3 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+							else:
+								swap(South)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					break
+				q3 = False
+				move(East)
+				while True:
+					v = measure()
+					ja = measure(West)
+					while ja == None:
+						ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						v = measure()
+					ja = measure(East)
+					while ja == None:
+						ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+					break
+				cur = 3
+				qi = 4
+				while qi < qn:
+					cx = wk[qi]
+					qi += 1
+					if cx == 0:
 						q0 = False
+						if cur == 1:
+							move(East)
+							move(South)
+						elif cur == 2:
+							move(South)
+						elif cur == 3:
+							move(West)
+							move(South)
+						cur = 0
 						while True:
 							v = measure()
 							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
 							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
 							if not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
@@ -5809,8 +6054,6 @@ def w0():
 									swap(South)
 									v = measure()
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
 							if ja >= v:
 								break
 							swap(North)
@@ -5818,37 +6061,21 @@ def w0():
 								wk.append(2)
 								qn += 1
 								q2 = True
-							while True:
-								v = measure()
-								ja = measure(South)
-								jb = measure(West)
-								if not ja <= v >= jb:
-									if jb > ja:
-										swap(West)
-										v = measure()
-									else:
-										swap(South)
-										v = measure()
-								ja = measure(North)
-								if ja >= v:
-									break
-								swap(North)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							break
+					elif cx == 1:
 						q1 = False
-						move(West)
-						move(North)
+						if cur == 0:
+							move(West)
+							move(North)
+						elif cur == 2:
+							move(West)
+						elif cur == 3:
+							move(West)
+							move(West)
+						cur = 1
 						while True:
 							v = measure()
 							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
 							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
 							if not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
@@ -5857,8 +6084,6 @@ def w0():
 									swap(South)
 									v = measure()
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
 							if ja >= v:
 								break
 							swap(East)
@@ -5866,36 +6091,19 @@ def w0():
 								wk.append(2)
 								qn += 1
 								q2 = True
-							while True:
-								v = measure()
-								ja = measure(South)
-								jb = measure(West)
-								if not ja <= v >= jb:
-									if jb > ja:
-										swap(West)
-										v = measure()
-									else:
-										swap(South)
-										v = measure()
-								ja = measure(East)
-								if ja >= v:
-									break
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							break
+					elif cx == 2:
 						q2 = False
-						move(East)
+						if cur == 0:
+							move(North)
+						elif cur == 1:
+							move(East)
+						elif cur == 3:
+							move(West)
+						cur = 2
 						while True:
 							v = measure()
 							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
 							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
 							if not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
@@ -5912,8 +6120,6 @@ def w0():
 										q0 = True
 									v = measure()
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
 							if ja >= v:
 								break
 							swap(East)
@@ -5921,41 +6127,20 @@ def w0():
 								wk.append(3)
 								qn += 1
 								q3 = True
-							while True:
-								v = measure()
-								ja = measure(South)
-								jb = measure(West)
-								if not ja <= v >= jb:
-									if jb > ja:
-										swap(West)
-										if not q1:
-											wk.append(1)
-											qn += 1
-											q1 = True
-										v = measure()
-									else:
-										swap(South)
-										if not q0:
-											wk.append(0)
-											qn += 1
-											q0 = True
-										v = measure()
-								ja = measure(East)
-								if ja >= v:
-									break
-								swap(East)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-							break
+					else:
 						q3 = False
-						move(East)
+						if cur == 0:
+							move(East)
+							move(North)
+						elif cur == 1:
+							move(East)
+							move(East)
+						elif cur == 2:
+							move(East)
+						cur = 3
 						while True:
 							v = measure()
 							ja = measure(West)
-							while ja == None:
-								ja = measure(West)
 							if ja > v:
 								swap(West)
 								if not q2:
@@ -5964,207 +6149,30 @@ def w0():
 									q2 = True
 								v = measure()
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
 							if ja >= v:
 								break
 							swap(East)
-							while True:
-								v = measure()
-								ja = measure(West)
-								if ja > v:
-									swap(West)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-									v = measure()
-								ja = measure(East)
-								if ja >= v:
-									break
-								swap(East)
-							break
-						cur = 3
-						qi = 4
-						while qi < qn:
-							cx = wk[qi]
-							qi += 1
-							if cx == 0:
-								q0 = False
-								if cur == 1:
-									move(East)
-									move(South)
-								elif cur == 2:
-									move(South)
-								elif cur == 3:
-									move(West)
-									move(South)
-								cur = 0
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											v = measure()
-										else:
-											swap(South)
-											v = measure()
-									ja = measure(North)
-									if ja >= v:
-										break
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif cx == 1:
-								q1 = False
-								if cur == 0:
-									move(West)
-									move(North)
-								elif cur == 2:
-									move(West)
-								elif cur == 3:
-									move(West)
-									move(West)
-								cur = 1
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											v = measure()
-										else:
-											swap(South)
-											v = measure()
-									ja = measure(East)
-									if ja >= v:
-										break
-									swap(East)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif cx == 2:
-								q2 = False
-								if cur == 0:
-									move(North)
-								elif cur == 1:
-									move(East)
-								elif cur == 3:
-									move(West)
-								cur = 2
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											if not q1:
-												wk.append(1)
-												qn += 1
-												q1 = True
-											v = measure()
-										else:
-											swap(South)
-											if not q0:
-												wk.append(0)
-												qn += 1
-												q0 = True
-											v = measure()
-									ja = measure(East)
-									if ja >= v:
-										break
-									swap(East)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-							else:
-								q3 = False
-								if cur == 0:
-									move(East)
-									move(North)
-								elif cur == 1:
-									move(East)
-									move(East)
-								elif cur == 2:
-									move(East)
-								cur = 3
-								while True:
-									v = measure()
-									ja = measure(West)
-									if ja > v:
-										swap(West)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-										v = measure()
-									ja = measure(East)
-									if ja >= v:
-										break
-									swap(East)
-						c = cur
-						e = tl + 0.9345
-						P = []
-						if c == 0:
+				c = cur
+				e = tl + 0.9345
+				P = []
+				if c == 0:
+					if get_time() < e:
+						move(East)
+						if get_time() < e:
+							move(East)
 							if get_time() < e:
 								move(East)
-								if get_time() < e:
-									move(East)
-									if get_time() < e:
-										move(East)
-									else:
-										P.append((East,))
-								else:
-									P.append((East, East,))
 							else:
-								P.append((East, East, East,))
-						elif c == 1:
-							if get_time() < e:
-								move(East)
-								if get_time() < e:
-									move(East)
-									if get_time() < e:
-										move(East)
-										if get_time() < e:
-											move(East)
-											if get_time() < e:
-												move(South)
-											else:
-												P.append((South,))
-										else:
-											P.append((East, South,))
-									else:
-										P.append((East, East, South,))
-								else:
-									P.append((East, East, East, South,))
-							else:
-								P.append((East, East, East, East, South,))
-						elif c == 2:
-							if get_time() < e:
-								move(East)
-								if get_time() < e:
-									move(East)
-									if get_time() < e:
-										move(East)
-										if get_time() < e:
-											move(South)
-										else:
-											P.append((South,))
-									else:
-										P.append((East, South,))
-								else:
-									P.append((East, East, South,))
-							else:
-								P.append((East, East, East, South,))
-						elif c == 3:
+								P.append((East,))
+						else:
+							P.append((East, East,))
+					else:
+						P.append((East, East, East,))
+				elif c == 1:
+					if get_time() < e:
+						move(East)
+						if get_time() < e:
+							move(East)
 							if get_time() < e:
 								move(East)
 								if get_time() < e:
@@ -6177,86 +6185,324 @@ def w0():
 									P.append((East, South,))
 							else:
 								P.append((East, East, South,))
-						wait_until(tl + 0.9676)
-						if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-							if get_entity_type() == Entities.Cactus:
-								harvest()
-							else:
-								use_item(Items.Water)
 						else:
-							use_item(Items.Water)
-						for q in P:
-							for d in q:
-								move(d)
-						while num_items(Items.Cactus) <= 0:
-							pass
-						plant(Entities.Cactus)
-						move(West)
-						plant(Entities.Cactus)
-						if measure() > measure(East):
-							swap(East)
-						move(North)
-						plant(Entities.Cactus)
-						if measure() < measure(South):
-							swap(South)
-						move(West)
-						plant(Entities.Cactus)
-						move(West)
-						plant(Entities.Cactus)
-						move(West)
-						plant(Entities.Cactus)
-						swap(West)
-						plant(Entities.Cactus)
-						move(South)
-						plant(Entities.Cactus)
+							P.append((East, East, East, South,))
+					else:
+						P.append((East, East, East, East, South,))
+				elif c == 2:
+					if get_time() < e:
 						move(East)
-						plant(Entities.Cactus)
-						move(South)
-						plant(Entities.Cactus)
+						if get_time() < e:
+							move(East)
+							if get_time() < e:
+								move(East)
+								if get_time() < e:
+									move(South)
+								else:
+									P.append((South,))
+							else:
+								P.append((East, South,))
+						else:
+							P.append((East, East, South,))
+					else:
+						P.append((East, East, East, South,))
+				elif c == 3:
+					if get_time() < e:
 						move(East)
-						plant(Entities.Cactus)
-						if measure() < measure(West):
+						if get_time() < e:
+							move(East)
+							if get_time() < e:
+								move(South)
+							else:
+								P.append((South,))
+						else:
+							P.append((East, South,))
+					else:
+						P.append((East, East, South,))
+				wait_until(tl + 0.9676)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
+				hb = 0
+				while num_items(Items.Cactus) <= 0:
+					hb = get_time()
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				if measure() > measure(East):
+					swap(East)
+				move(North)
+				plant(Entities.Cactus)
+				if measure() < measure(South):
+					swap(South)
+				move(West)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				move(West)
+				plant(Entities.Cactus)
+				swap(West)
+				plant(Entities.Cactus)
+				move(South)
+				plant(Entities.Cactus)
+				move(East)
+				plant(Entities.Cactus)
+				move(South)
+				plant(Entities.Cactus)
+				move(East)
+				plant(Entities.Cactus)
+				if measure() < measure(West):
+					swap(West)
+				move(South)
+				plant(Entities.Cactus)
+				swap(South)
+				plant(Entities.Cactus)
+				move(East)
+				plant(Entities.Cactus)
+				move(South)
+				pk_None_South_East_1_1()
+				pk_West_South_None_1_0()
+				move(East)
+				plant(Entities.Cactus)
+				tl = get_time()
+				move(West)
+				fsSW_NE()
+				move(West)
+				move(North)
+				fSW_NE()
+				move(West)
+				move(North)
+				fsS_NE()
+				move(West)
+				move(North)
+				move(North)
+				wk = [0, 1, 2, 3]
+				cur = 0
+				qi = 0
+				qn = 4
+				q0 = True
+				q1 = True
+				q2 = True
+				q3 = True
+				q0 = False
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					jb = measure(West)
+					while jb == None:
+						jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
 							swap(West)
-						move(South)
-						plant(Entities.Cactus)
-						swap(South)
-						plant(Entities.Cactus)
-						move(East)
-						plant(Entities.Cactus)
-						move(South)
-						pk_None_South_East_1_1()
-						pk_West_South_None_1_0()
-						move(East)
-						plant(Entities.Cactus)
-						tl = get_time()
-						move(West)
-						fsSW_NE()
-						move(West)
-						move(North)
-						fSW_NE()
-						move(West)
-						move(North)
-						fsS_NE()
-						move(West)
-						move(North)
-						move(North)
-						wk = [0, 1, 2, 3]
-						cur = 0
-						qi = 0
-						qn = 4
-						q0 = True
-						q1 = True
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(North)
+					while ja == None:
+						ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+					if not q2:
+						wk.append(2)
+						qn += 1
 						q2 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					break
+				q1 = False
+				move(West)
+				move(North)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					jb = measure(West)
+					while jb == None:
+						jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(East)
+					while ja == None:
+						ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					break
+				q2 = False
+				move(East)
+				while True:
+					v = measure()
+					ja = measure(South)
+					while ja == None:
+						ja = measure(South)
+					jb = measure(West)
+					while jb == None:
+						jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						else:
+							swap(South)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+					ja = measure(East)
+					while ja == None:
+						ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q3:
+						wk.append(3)
+						qn += 1
 						q3 = True
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+							else:
+								swap(South)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+					break
+				q3 = False
+				move(East)
+				while True:
+					v = measure()
+					ja = measure(West)
+					while ja == None:
+						ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						v = measure()
+					ja = measure(East)
+					while ja == None:
+						ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+					break
+				cur = 3
+				qi = 4
+				while qi < qn:
+					cx = wk[qi]
+					qi += 1
+					if cx == 0:
 						q0 = False
+						if cur == 1:
+							move(East)
+							move(South)
+						elif cur == 2:
+							move(South)
+						elif cur == 3:
+							move(West)
+							move(South)
+						cur = 0
 						while True:
 							v = measure()
 							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
 							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
 							if not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
@@ -6265,8 +6511,6 @@ def w0():
 									swap(South)
 									v = measure()
 							ja = measure(North)
-							while ja == None:
-								ja = measure(North)
 							if ja >= v:
 								break
 							swap(North)
@@ -6274,37 +6518,21 @@ def w0():
 								wk.append(2)
 								qn += 1
 								q2 = True
-							while True:
-								v = measure()
-								ja = measure(South)
-								jb = measure(West)
-								if not ja <= v >= jb:
-									if jb > ja:
-										swap(West)
-										v = measure()
-									else:
-										swap(South)
-										v = measure()
-								ja = measure(North)
-								if ja >= v:
-									break
-								swap(North)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							break
+					elif cx == 1:
 						q1 = False
-						move(West)
-						move(North)
+						if cur == 0:
+							move(West)
+							move(North)
+						elif cur == 2:
+							move(West)
+						elif cur == 3:
+							move(West)
+							move(West)
+						cur = 1
 						while True:
 							v = measure()
 							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
 							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
 							if not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
@@ -6313,8 +6541,6 @@ def w0():
 									swap(South)
 									v = measure()
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
 							if ja >= v:
 								break
 							swap(East)
@@ -6322,36 +6548,19 @@ def w0():
 								wk.append(2)
 								qn += 1
 								q2 = True
-							while True:
-								v = measure()
-								ja = measure(South)
-								jb = measure(West)
-								if not ja <= v >= jb:
-									if jb > ja:
-										swap(West)
-										v = measure()
-									else:
-										swap(South)
-										v = measure()
-								ja = measure(East)
-								if ja >= v:
-									break
-								swap(East)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-							break
+					elif cx == 2:
 						q2 = False
-						move(East)
+						if cur == 0:
+							move(North)
+						elif cur == 1:
+							move(East)
+						elif cur == 3:
+							move(West)
+						cur = 2
 						while True:
 							v = measure()
 							ja = measure(South)
-							while ja == None:
-								ja = measure(South)
 							jb = measure(West)
-							while jb == None:
-								jb = measure(West)
 							if not ja <= v >= jb:
 								if jb > ja:
 									swap(West)
@@ -6368,8 +6577,6 @@ def w0():
 										q0 = True
 									v = measure()
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
 							if ja >= v:
 								break
 							swap(East)
@@ -6377,41 +6584,20 @@ def w0():
 								wk.append(3)
 								qn += 1
 								q3 = True
-							while True:
-								v = measure()
-								ja = measure(South)
-								jb = measure(West)
-								if not ja <= v >= jb:
-									if jb > ja:
-										swap(West)
-										if not q1:
-											wk.append(1)
-											qn += 1
-											q1 = True
-										v = measure()
-									else:
-										swap(South)
-										if not q0:
-											wk.append(0)
-											qn += 1
-											q0 = True
-										v = measure()
-								ja = measure(East)
-								if ja >= v:
-									break
-								swap(East)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-							break
+					else:
 						q3 = False
-						move(East)
+						if cur == 0:
+							move(East)
+							move(North)
+						elif cur == 1:
+							move(East)
+							move(East)
+						elif cur == 2:
+							move(East)
+						cur = 3
 						while True:
 							v = measure()
 							ja = measure(West)
-							while ja == None:
-								ja = measure(West)
 							if ja > v:
 								swap(West)
 								if not q2:
@@ -6420,187 +6606,247 @@ def w0():
 									q2 = True
 								v = measure()
 							ja = measure(East)
-							while ja == None:
-								ja = measure(East)
 							if ja >= v:
 								break
 							swap(East)
-							while True:
-								v = measure()
-								ja = measure(West)
-								if ja > v:
-									swap(West)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-									v = measure()
-								ja = measure(East)
-								if ja >= v:
-									break
-								swap(East)
-							break
-						cur = 3
-						qi = 4
-						while qi < qn:
-							cx = wk[qi]
-							qi += 1
-							if cx == 0:
-								q0 = False
-								if cur == 1:
-									move(East)
-									move(South)
-								elif cur == 2:
-									move(South)
-								elif cur == 3:
-									move(West)
-									move(South)
-								cur = 0
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											v = measure()
-										else:
-											swap(South)
-											v = measure()
-									ja = measure(North)
-									if ja >= v:
-										break
-									swap(North)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif cx == 1:
-								q1 = False
-								if cur == 0:
-									move(West)
-									move(North)
-								elif cur == 2:
-									move(West)
-								elif cur == 3:
-									move(West)
-									move(West)
-								cur = 1
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											v = measure()
-										else:
-											swap(South)
-											v = measure()
-									ja = measure(East)
-									if ja >= v:
-										break
-									swap(East)
-									if not q2:
-										wk.append(2)
-										qn += 1
-										q2 = True
-							elif cx == 2:
-								q2 = False
-								if cur == 0:
-									move(North)
-								elif cur == 1:
-									move(East)
-								elif cur == 3:
-									move(West)
-								cur = 2
-								while True:
-									v = measure()
-									ja = measure(South)
-									jb = measure(West)
-									if not ja <= v >= jb:
-										if jb > ja:
-											swap(West)
-											if not q1:
-												wk.append(1)
-												qn += 1
-												q1 = True
-											v = measure()
-										else:
-											swap(South)
-											if not q0:
-												wk.append(0)
-												qn += 1
-												q0 = True
-											v = measure()
-									ja = measure(East)
-									if ja >= v:
-										break
-									swap(East)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
+				if tl + 0.9676 > hb + 2.6:
+					wait_until(tl + 0.9676)
+			spawn_drone(w25)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			till()
+			move(South)
+			till()
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			tl = get_time()
+			fsSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fsSW_NE()
+			e = tl + 0.9345
+			P = []
+			if get_time() < e:
+				move(East)
+				if get_time() < e:
+					move(South)
+				else:
+					P.append((South,))
+			else:
+				P.append((East, South,))
+			wait_until(tl + 0.9676)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
+			hb = 0
+			while num_items(Items.Cactus) <= 0:
+				hb = get_time()
+			plant(Entities.Cactus)
+			move(South)
+			plant(Entities.Cactus)
+			move(East)
+			plant(Entities.Cactus)
+			swap(North)
+			pk_None_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_None_1_0()
+			tl = get_time()
+			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
+			TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
+			TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
+			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+			if h:
+				own(TFS, TMS, TRS, 0, 5)
+			else:
+				fsSW_NE()
+				move(West)
+				move(North)
+				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+				if h:
+					own(TFS, TMS, TRS, 1, 5)
+				else:
+					fSW_NE()
+					move(West)
+					move(North)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+					if h:
+						own(TFS, TMS, TRS, 2, 5)
+					else:
+						fSW_NE()
+						move(West)
+						move(North)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+						if h:
+							own(TFS, TMS, TRS, 3, 6)
+						else:
+							fSW_NE()
+							move(West)
+							move(North)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+							if h:
+								own(TFS, TMS, TRS, 4, 6)
 							else:
-								q3 = False
-								if cur == 0:
-									move(East)
+								fSW_NE()
+								move(West)
+								move(North)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+								if h:
+									own(TFS, TMS, TRS, 5, 6)
+								else:
+									fSW_NE()
+									move(West)
 									move(North)
-								elif cur == 1:
-									move(East)
-									move(East)
-								elif cur == 2:
-									move(East)
-								cur = 3
-								while True:
-									v = measure()
-									ja = measure(West)
-									if ja > v:
-										swap(West)
-										if not q2:
-											wk.append(2)
-											qn += 1
-											q2 = True
-										v = measure()
-									ja = measure(East)
-									if ja >= v:
-										break
-									swap(East)
-						wait_until(tl + 0.9676)
-					spawn_drone(w25)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					till()
-					move(South)
-					till()
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
+									fSW_NE()
+									move(West)
+									move(North)
+									fsSW_NE()
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
+		spawn_drone(w24)
+		def w21():
+			def w22():
+				def w23():
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
 					move(South)
 					till()
 					plant(Entities.Cactus)
 					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(East)
-					move(North)
-					till()
-					plant(Entities.Cactus)
 					move(South)
-					plant(Entities.Cactus)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
 					move(South)
 					till()
 					plant(Entities.Cactus)
@@ -6659,13 +6905,21 @@ def w0():
 					till()
 					plant(Entities.Cactus)
 					move(South)
+					till()
+					plant(Entities.Cactus)
+					move(South)
+					till()
+					plant(Entities.Cactus)
+					move(East)
+					move(North)
 					till()
 					plant(Entities.Cactus)
 					tl = get_time()
+					move(South)
+					till()
+					use_item(Items.Water, 4)
+					plant(Entities.Cactus)
 					fsSW_NE()
-					move(West)
-					move(North)
-					fSW_NE()
 					move(West)
 					move(North)
 					fSW_NE()
@@ -6688,12 +6942,8 @@ def w0():
 					P = []
 					if get_time() < e:
 						move(East)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append((South,))
 					else:
-						P.append((East, South,))
+						P.append((East,))
 					wait_until(tl + 0.9676)
 					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 						if get_entity_type() == Entities.Cactus:
@@ -6705,14 +6955,11 @@ def w0():
 					for q in P:
 						for d in q:
 							move(d)
+					hb = 0
 					while num_items(Items.Cactus) <= 0:
-						pass
+						hb = get_time()
 					plant(Entities.Cactus)
 					move(South)
-					plant(Entities.Cactus)
-					move(East)
-					plant(Entities.Cactus)
-					swap(North)
 					pk_None_South_East_1_1()
 					pk_West_South_East_1_1()
 					pk_West_South_East_1_1()
@@ -6720,6 +6967,10 @@ def w0():
 					pk_West_South_East_1_1()
 					pk_West_South_East_1_1()
 					pk_West_South_None_1_0()
+					move(East)
+					plant(Entities.Cactus)
+					move(South)
+					plant(Entities.Cactus)
 					tl = get_time()
 					TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 					TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
@@ -6770,210 +7021,9 @@ def w0():
 											move(West)
 											move(North)
 											fsSW_NE()
-					wait_until(tl + 0.9676)
-				spawn_drone(w24)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				tl = get_time()
-				move(South)
-				till()
-				use_item(Items.Water, 4)
-				plant(Entities.Cactus)
-				fsSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fsSW_NE()
-				e = tl + 0.9345
-				P = []
-				if get_time() < e:
-					move(East)
-				else:
-					P.append((East,))
-				wait_until(tl + 0.9676)
-				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-					if get_entity_type() == Entities.Cactus:
-						harvest()
-					else:
-						use_item(Items.Water)
-				else:
-					use_item(Items.Water)
-				for q in P:
-					for d in q:
-						move(d)
-				while num_items(Items.Cactus) <= 0:
-					pass
-				plant(Entities.Cactus)
-				move(South)
-				pk_None_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_None_1_0()
-				move(East)
-				plant(Entities.Cactus)
-				move(South)
-				plant(Entities.Cactus)
-				tl = get_time()
-				TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
-				TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
-				TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-				h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
-				if h:
-					own(TFS, TMS, TRS, 0, 5)
-				else:
-					fsSW_NE()
-					move(West)
-					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
-					if h:
-						own(TFS, TMS, TRS, 1, 5)
-					else:
-						fSW_NE()
-						move(West)
-						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
-						if h:
-							own(TFS, TMS, TRS, 2, 5)
-						else:
-							fSW_NE()
-							move(West)
-							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
-							if h:
-								own(TFS, TMS, TRS, 3, 6)
-							else:
-								fSW_NE()
-								move(West)
-								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
-								if h:
-									own(TFS, TMS, TRS, 4, 6)
-								else:
-									fSW_NE()
-									move(West)
-									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
-									if h:
-										own(TFS, TMS, TRS, 5, 6)
-									else:
-										fSW_NE()
-										move(West)
-										move(North)
-										fSW_NE()
-										move(West)
-										move(North)
-										fsSW_NE()
-				wait_until(tl + 0.9676)
-			spawn_drone(w23)
-			def w22():
+					if tl + 0.9676 > hb + 2.6:
+						wait_until(tl + 0.9676)
+				spawn_drone(w23)
 				move(West)
 				move(West)
 				move(West)
@@ -7570,8 +7620,9 @@ def w0():
 				for q in P:
 					for d in q:
 						move(d)
+				hb = 0
 				while num_items(Items.Cactus) <= 0:
-					pass
+					hb = get_time()
 				plant(Entities.Cactus)
 				move(East)
 				plant(Entities.Cactus)
@@ -7923,7 +7974,8 @@ def w0():
 								swap(East)
 							else:
 								swap(North)
-				wait_until(tl + 0.9676)
+				if tl + 0.9676 > hb + 2.6:
+					wait_until(tl + 0.9676)
 			spawn_drone(w22)
 			move(West)
 			move(West)
@@ -8066,8 +8118,9 @@ def w0():
 			for q in P:
 				for d in q:
 					move(d)
+			hb = 0
 			while num_items(Items.Cactus) <= 0:
-				pass
+				hb = get_time()
 			plant(Entities.Cactus)
 			move(East)
 			plant(Entities.Cactus)
@@ -8546,275 +8599,44 @@ def w0():
 						if ja >= v:
 							break
 						swap(North)
-			wait_until(tl + 0.9676)
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
 		spawn_drone(w21)
-		def w16():
-			def w18():
-				def w19():
-					def w20():
-						move(West)
-						till()
-						move(West)
-						till()
-						move(West)
-						move(West)
-						move(West)
-						move(West)
-						move(West)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						move(West)
-						move(West)
-						move(West)
-						move(West)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						move(West)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(North)
-						till()
-						plant(Entities.Cactus)
-						tl = get_time()
-						fsSW_NE()
-						move(East)
-						move(South)
-						fSW_NE()
-						move(East)
-						move(South)
-						fSW_NE()
-						move(East)
-						move(South)
-						fSW_NE()
-						move(East)
-						move(South)
-						fSW_NE()
-						move(East)
-						move(South)
-						fSW_NE()
-						move(East)
-						move(South)
-						fsSW_NE()
-						e = tl + 0.9345
-						P = []
-						if get_time() < e:
-							move(East)
-							if get_time() < e:
-								move(East)
-								if get_time() < e:
-									move(South)
-									if get_time() < e:
-										move(South)
-										if get_time() < e:
-											move(South)
-											if get_time() < e:
-												move(South)
-												if get_time() < e:
-													move(South)
-												else:
-													P.append((South,))
-											else:
-												P.append((South, South,))
-										else:
-											P.append((South, South, South,))
-									else:
-										P.append((South, South, South, South,))
-								else:
-									P.append((South, South, South, South, South,))
-							else:
-								P.append((East, South, South, South, South, South,))
-						else:
-							P.append((East, East, South, South, South, South, South,))
-						wait_until(tl + 0.9676)
-						if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-							if get_entity_type() == Entities.Cactus:
-								harvest()
-							else:
-								use_item(Items.Water)
-						else:
-							use_item(Items.Water)
-						for q in P:
-							for d in q:
-								move(d)
-						while num_items(Items.Cactus) <= 0:
-							pass
-						plant(Entities.Cactus)
-						move(South)
-						pk_None_South_East_1_1()
-						pk_West_South_East_1_1()
-						pk_West_South_East_1_1()
-						pk_West_South_East_1_1()
-						pk_West_South_East_1_1()
-						pk_West_South_East_1_1()
-						pk_West_South_East_1_1()
-						pk_West_South_None_1_0()
-						move(East)
-						plant(Entities.Cactus)
-						move(South)
-						if use_item(Items.Water, 4):
-							plant(Entities.Cactus)
-							tw = get_time() - 0.0988
-						else:
-							plant(Entities.Cactus)
-							tw = 0
-						tl = get_time()
-						if tw:
-							tl = tw
-						TFS = (fsSW_N, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
-						TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
-						TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-						h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
-						if h:
-							own(TFS, TMS, TRS, 0, 6)
-						else:
-							fsSW_N()
-							move(West)
-							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
-							if h:
-								own(TFS, TMS, TRS, 1, 6)
-							else:
-								fSW_NE()
-								move(West)
-								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
-								if h:
-									own(TFS, TMS, TRS, 2, 6)
-								else:
-									fSW_NE()
-									move(West)
-									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
-									if h:
-										own(TFS, TMS, TRS, 3, 6)
-									else:
-										fSW_NE()
-										move(West)
-										move(North)
-										h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
-										if h:
-											own(TFS, TMS, TRS, 4, 7)
-										else:
-											fSW_NE()
-											move(West)
-											move(North)
-											h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
-											if h:
-												own(TFS, TMS, TRS, 5, 7)
-											else:
-												fSW_NE()
-												move(West)
-												move(North)
-												h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
-												if h:
-													own(TFS, TMS, TRS, 6, 7)
-												else:
-													fSW_NE()
-													move(West)
-													move(North)
-													fSW_NE()
-													move(West)
-													move(North)
-													fsSW_NE()
-						wait_until(tl + 0.9676)
-					spawn_drone(w20)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(East)
+		def w18():
+			def w19():
+				def w20():
+					move(West)
 					till()
-					plant(Entities.Cactus)
-					move(East)
-					move(East)
-					move(East)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
-					move(South)
+					move(West)
+					till()
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
 					till()
 					plant(Entities.Cactus)
 					move(West)
+					move(West)
+					move(West)
+					move(West)
+					move(West)
 					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(North)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
+					move(South)
 					till()
 					plant(Entities.Cactus)
 					move(North)
@@ -8841,10 +8663,6 @@ def w0():
 					till()
 					plant(Entities.Cactus)
 					move(West)
-					move(South)
-					till()
-					plant(Entities.Cactus)
-					move(North)
 					till()
 					plant(Entities.Cactus)
 					move(North)
@@ -8900,25 +8718,33 @@ def w0():
 					e = tl + 0.9345
 					P = []
 					if get_time() < e:
-						move(South)
+						move(East)
 						if get_time() < e:
-							move(South)
+							move(East)
 							if get_time() < e:
 								move(South)
 								if get_time() < e:
 									move(South)
 									if get_time() < e:
 										move(South)
+										if get_time() < e:
+											move(South)
+											if get_time() < e:
+												move(South)
+											else:
+												P.append((South,))
+										else:
+											P.append((South, South,))
 									else:
-										P.append((South,))
+										P.append((South, South, South,))
 								else:
-									P.append((South, South,))
+									P.append((South, South, South, South,))
 							else:
-								P.append((South, South, South,))
+								P.append((South, South, South, South, South,))
 						else:
-							P.append((South, South, South, South,))
+							P.append((East, South, South, South, South, South,))
 					else:
-						P.append((South, South, South, South, South,))
+						P.append((East, East, South, South, South, South, South,))
 					wait_until(tl + 0.9676)
 					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 						if get_entity_type() == Entities.Cactus:
@@ -8930,15 +8756,11 @@ def w0():
 					for q in P:
 						for d in q:
 							move(d)
+					hb = 0
 					while num_items(Items.Cactus) <= 0:
-						if (get_time() // WDT) - num_items(Items.Water) >= NSIG + 1:
-							harvest()
-					while num_items(Items.Cactus) <= 0:
-						pass
+						hb = get_time()
 					plant(Entities.Cactus)
-					move(East)
-					plant(Entities.Cactus)
-					swap(North)
+					move(South)
 					pk_None_South_East_1_1()
 					pk_West_South_East_1_1()
 					pk_West_South_East_1_1()
@@ -8947,58 +8769,83 @@ def w0():
 					pk_West_South_East_1_1()
 					pk_West_South_East_1_1()
 					pk_West_South_None_1_0()
-					tl = get_time()
-					TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
-					TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
-					TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-					h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
-					if h:
-						own(TFS, TMS, TRS, 0, 5)
+					move(East)
+					plant(Entities.Cactus)
+					move(South)
+					if use_item(Items.Water, 4):
+						plant(Entities.Cactus)
+						tw = get_time() - 0.0988
 					else:
-						fsSW_NE()
+						plant(Entities.Cactus)
+						tw = 0
+					tl = get_time()
+					if tw:
+						tl = tw
+					TFS = (fsSW_N, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
+					TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
+					TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
+					h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+					if h:
+						own(TFS, TMS, TRS, 0, 6)
+					else:
+						fsSW_N()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
 						if h:
-							own(TFS, TMS, TRS, 1, 5)
+							own(TFS, TMS, TRS, 1, 6)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
 							if h:
-								own(TFS, TMS, TRS, 2, 5)
+								own(TFS, TMS, TRS, 2, 6)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
 								if h:
 									own(TFS, TMS, TRS, 3, 6)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+									h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
 									if h:
-										own(TFS, TMS, TRS, 4, 6)
+										own(TFS, TMS, TRS, 4, 7)
 									else:
 										fSW_NE()
 										move(West)
 										move(North)
-										h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+										h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
 										if h:
-											own(TFS, TMS, TRS, 5, 6)
+											own(TFS, TMS, TRS, 5, 7)
 										else:
 											fSW_NE()
 											move(West)
 											move(North)
-											fSW_NE()
-											move(West)
-											move(North)
-											fsSW_NE()
-					wait_until(tl + 0.9676)
-				spawn_drone(w19)
+											h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+											if h:
+												own(TFS, TMS, TRS, 6, 7)
+											else:
+												fSW_NE()
+												move(West)
+												move(North)
+												fSW_NE()
+												move(West)
+												move(North)
+												fsSW_NE()
+					if tl + 0.9676 > hb + 2.6:
+						wait_until(tl + 0.9676)
+				spawn_drone(w20)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(East)
 				move(East)
 				move(East)
 				move(East)
@@ -9007,6 +8854,14 @@ def w0():
 				plant(Entities.Cactus)
 				move(East)
 				move(East)
+				move(East)
+				move(South)
+				move(South)
+				move(South)
+				move(South)
+				move(South)
+				move(South)
+				move(South)
 				move(South)
 				till()
 				plant(Entities.Cactus)
@@ -9017,102 +8872,328 @@ def w0():
 				move(North)
 				till()
 				plant(Entities.Cactus)
-				move(West)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(West)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				till()
-				plant(Entities.Cactus)
-				if measure() < measure(West):
-					swap(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
 				move(North)
 				till()
 				plant(Entities.Cactus)
+				move(West)
 				move(South)
 				till()
 				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
 				move(North)
 				till()
 				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
 				move(North)
 				till()
 				plant(Entities.Cactus)
+				move(West)
 				move(South)
 				till()
 				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(West)
 				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(West)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(West)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(West)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(North)
 				till()
 				plant(Entities.Cactus)
 				tl = get_time()
-				move(North)
 				fsSW_NE()
-				move(West)
-				move(North)
+				move(East)
+				move(South)
 				fSW_NE()
-				move(West)
-				move(North)
+				move(East)
+				move(South)
 				fSW_NE()
-				move(West)
-				move(North)
-				fsS_NE()
-				move(West)
-				move(North)
-				move(North)
-				wk = [0, 1, 2, 3, 4]
-				cur = 0
-				qi = 0
-				qn = 5
-				q0 = True
-				q1 = True
-				q2 = True
-				q3 = True
-				q4 = True
-				q0 = False
+				move(East)
+				move(South)
+				fSW_NE()
+				move(East)
+				move(South)
+				fSW_NE()
+				move(East)
+				move(South)
+				fSW_NE()
+				move(East)
+				move(South)
+				fsSW_NE()
+				e = tl + 0.9345
+				P = []
+				if get_time() < e:
+					move(South)
+					if get_time() < e:
+						move(South)
+						if get_time() < e:
+							move(South)
+							if get_time() < e:
+								move(South)
+								if get_time() < e:
+									move(South)
+								else:
+									P.append((South,))
+							else:
+								P.append((South, South,))
+						else:
+							P.append((South, South, South,))
+					else:
+						P.append((South, South, South, South,))
+				else:
+					P.append((South, South, South, South, South,))
+				wait_until(tl + 0.9676)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
+				hb = 0
+				while num_items(Items.Cactus) <= 0:
+					hb = get_time()
+					if (get_time() // WDT) - num_items(Items.Water) >= NSIG + 1:
+						harvest()
+				while num_items(Items.Cactus) <= 0:
+					hb = get_time()
+				plant(Entities.Cactus)
+				move(East)
+				plant(Entities.Cactus)
+				swap(North)
+				pk_None_South_East_1_1()
+				pk_West_South_East_1_1()
+				pk_West_South_East_1_1()
+				pk_West_South_East_1_1()
+				pk_West_South_East_1_1()
+				pk_West_South_East_1_1()
+				pk_West_South_East_1_1()
+				pk_West_South_None_1_0()
+				tl = get_time()
+				if use_item(Items.Water, 4):
+					tl = get_time() - 0.0988
+				TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
+				TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
+				TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
+				h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+				if h:
+					own(TFS, TMS, TRS, 0, 5)
+				else:
+					fsSW_NE()
+					move(West)
+					move(North)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+					if h:
+						own(TFS, TMS, TRS, 1, 5)
+					else:
+						fSW_NE()
+						move(West)
+						move(North)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+						if h:
+							own(TFS, TMS, TRS, 2, 5)
+						else:
+							fSW_NE()
+							move(West)
+							move(North)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+							if h:
+								own(TFS, TMS, TRS, 3, 6)
+							else:
+								fSW_NE()
+								move(West)
+								move(North)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+								if h:
+									own(TFS, TMS, TRS, 4, 6)
+								else:
+									fSW_NE()
+									move(West)
+									move(North)
+									h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+									if h:
+										own(TFS, TMS, TRS, 5, 6)
+									else:
+										fSW_NE()
+										move(West)
+										move(North)
+										fSW_NE()
+										move(West)
+										move(North)
+										fsSW_NE()
+				if tl + 0.9676 > hb + 2.6:
+					wait_until(tl + 0.9676)
+			spawn_drone(w19)
+			move(East)
+			move(East)
+			move(East)
+			move(East)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(East)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			till()
+			plant(Entities.Cactus)
+			if measure() < measure(West):
+				swap(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			tl = get_time()
+			move(North)
+			fsSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fsS_NE()
+			move(West)
+			move(North)
+			move(North)
+			wk = [0, 1, 2, 3, 4]
+			cur = 0
+			qi = 0
+			qn = 5
+			q0 = True
+			q1 = True
+			q2 = True
+			q3 = True
+			q4 = True
+			q0 = False
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				if ja >= v:
+					break
+				swap(North)
+				if not q2:
+					wk.append(2)
+					qn += 1
+					q2 = True
 				while True:
 					v = measure()
 					ja = measure(South)
-					while ja == None:
-						ja = measure(South)
 					jb = measure(West)
-					while jb == None:
-						jb = measure(West)
 					if not ja <= v >= jb:
 						if jb > ja:
 							swap(West)
@@ -9121,8 +9202,6 @@ def w0():
 							swap(South)
 							v = measure()
 					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
 					if ja >= v:
 						break
 					swap(North)
@@ -9130,6 +9209,228 @@ def w0():
 						wk.append(2)
 						qn += 1
 						q2 = True
+				break
+			q1 = False
+			move(West)
+			move(North)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q2:
+					wk.append(2)
+					qn += 1
+					q2 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				break
+			q2 = False
+			move(East)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+					else:
+						swap(South)
+						if not q0:
+							wk.append(0)
+							qn += 1
+							q0 = True
+						v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q3:
+					wk.append(3)
+					qn += 1
+					q3 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						else:
+							swap(South)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+				break
+			q3 = False
+			move(East)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+					v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q4:
+					wk.append(4)
+					qn += 1
+					q4 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q4:
+						wk.append(4)
+						qn += 1
+						q4 = True
+				break
+			q4 = False
+			move(East)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+				break
+			cur = 4
+			qi = 5
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
+				if cx == 0:
+					q0 = False
+					if cur == 1:
+						move(East)
+						move(South)
+					elif cur == 2:
+						move(South)
+					elif cur == 3:
+						move(West)
+						move(South)
+					elif cur == 4:
+						move(West)
+						move(West)
+						move(South)
+					cur = 0
 					while True:
 						v = measure()
 						ja = measure(South)
@@ -9149,35 +9450,21 @@ def w0():
 							wk.append(2)
 							qn += 1
 							q2 = True
-					break
-				q1 = False
-				move(West)
-				move(North)
-				while True:
-					v = measure()
-					ja = measure(South)
-					while ja == None:
-						ja = measure(South)
-					jb = measure(West)
-					while jb == None:
-						jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							v = measure()
-						else:
-							swap(South)
-							v = measure()
-					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
+				elif cx == 1:
+					q1 = False
+					if cur == 0:
+						move(West)
+						move(North)
+					elif cur == 2:
+						move(West)
+					elif cur == 3:
+						move(West)
+						move(West)
+					elif cur == 4:
+						move(West)
+						move(West)
+						move(West)
+					cur = 1
 					while True:
 						v = measure()
 						ja = measure(South)
@@ -9197,42 +9484,18 @@ def w0():
 							wk.append(2)
 							qn += 1
 							q2 = True
-					break
-				q2 = False
-				move(East)
-				while True:
-					v = measure()
-					ja = measure(South)
-					while ja == None:
-						ja = measure(South)
-					jb = measure(West)
-					while jb == None:
-						jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-							v = measure()
-						else:
-							swap(South)
-							if not q0:
-								wk.append(0)
-								qn += 1
-								q0 = True
-							v = measure()
-					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q3:
-						wk.append(3)
-						qn += 1
-						q3 = True
+				elif cx == 2:
+					q2 = False
+					if cur == 0:
+						move(North)
+					elif cur == 1:
+						move(East)
+					elif cur == 3:
+						move(West)
+					elif cur == 4:
+						move(West)
+						move(West)
+					cur = 2
 					while True:
 						v = measure()
 						ja = measure(South)
@@ -9260,31 +9523,19 @@ def w0():
 							wk.append(3)
 							qn += 1
 							q3 = True
-					break
-				q3 = False
-				move(East)
-				while True:
-					v = measure()
-					ja = measure(West)
-					while ja == None:
-						ja = measure(West)
-					if ja > v:
-						swap(West)
-						if not q2:
-							wk.append(2)
-							qn += 1
-							q2 = True
-						v = measure()
-					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q4:
-						wk.append(4)
-						qn += 1
-						q4 = True
+				elif cx == 3:
+					q3 = False
+					if cur == 0:
+						move(East)
+						move(North)
+					elif cur == 1:
+						move(East)
+						move(East)
+					elif cur == 2:
+						move(East)
+					elif cur == 4:
+						move(West)
+					cur = 3
 					while True:
 						v = measure()
 						ja = measure(West)
@@ -9303,34 +9554,22 @@ def w0():
 							wk.append(4)
 							qn += 1
 							q4 = True
-					break
-				q4 = False
-				move(East)
-				while True:
-					v = measure()
-					ja = measure(South)
-					while ja == None:
-						ja = measure(South)
-					jb = measure(West)
-					while jb == None:
-						jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							if not q3:
-								wk.append(3)
-								qn += 1
-								q3 = True
-							v = measure()
-						else:
-							swap(South)
-							v = measure()
-					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
+				else:
+					q4 = False
+					if cur == 0:
+						move(East)
+						move(East)
+						move(North)
+					elif cur == 1:
+						move(East)
+						move(East)
+						move(East)
+					elif cur == 2:
+						move(East)
+						move(East)
+					elif cur == 3:
+						move(East)
+					cur = 4
 					while True:
 						v = measure()
 						ja = measure(South)
@@ -9350,215 +9589,21 @@ def w0():
 						if ja >= v:
 							break
 						swap(East)
-					break
-				cur = 4
-				qi = 5
-				while qi < qn:
-					cx = wk[qi]
-					qi += 1
-					if cx == 0:
-						q0 = False
-						if cur == 1:
-							move(East)
-							move(South)
-						elif cur == 2:
-							move(South)
-						elif cur == 3:
-							move(West)
-							move(South)
-						elif cur == 4:
-							move(West)
-							move(West)
-							move(South)
-						cur = 0
-						while True:
-							v = measure()
-							ja = measure(South)
-							jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									v = measure()
-								else:
-									swap(South)
-									v = measure()
-							ja = measure(North)
-							if ja >= v:
-								break
-							swap(North)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
-					elif cx == 1:
-						q1 = False
-						if cur == 0:
-							move(West)
-							move(North)
-						elif cur == 2:
-							move(West)
-						elif cur == 3:
-							move(West)
-							move(West)
-						elif cur == 4:
-							move(West)
-							move(West)
-							move(West)
-						cur = 1
-						while True:
-							v = measure()
-							ja = measure(South)
-							jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									v = measure()
-								else:
-									swap(South)
-									v = measure()
-							ja = measure(East)
-							if ja >= v:
-								break
-							swap(East)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
-					elif cx == 2:
-						q2 = False
-						if cur == 0:
-							move(North)
-						elif cur == 1:
-							move(East)
-						elif cur == 3:
-							move(West)
-						elif cur == 4:
-							move(West)
-							move(West)
-						cur = 2
-						while True:
-							v = measure()
-							ja = measure(South)
-							jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									if not q1:
-										wk.append(1)
-										qn += 1
-										q1 = True
-									v = measure()
-								else:
-									swap(South)
-									if not q0:
-										wk.append(0)
-										qn += 1
-										q0 = True
-									v = measure()
-							ja = measure(East)
-							if ja >= v:
-								break
-							swap(East)
-							if not q3:
-								wk.append(3)
-								qn += 1
-								q3 = True
-					elif cx == 3:
-						q3 = False
-						if cur == 0:
-							move(East)
-							move(North)
-						elif cur == 1:
-							move(East)
-							move(East)
-						elif cur == 2:
-							move(East)
-						elif cur == 4:
-							move(West)
-						cur = 3
-						while True:
-							v = measure()
-							ja = measure(West)
-							if ja > v:
-								swap(West)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-								v = measure()
-							ja = measure(East)
-							if ja >= v:
-								break
-							swap(East)
-							if not q4:
-								wk.append(4)
-								qn += 1
-								q4 = True
-					else:
-						q4 = False
-						if cur == 0:
-							move(East)
-							move(East)
-							move(North)
-						elif cur == 1:
-							move(East)
-							move(East)
-							move(East)
-						elif cur == 2:
-							move(East)
-							move(East)
-						elif cur == 3:
-							move(East)
-						cur = 4
-						while True:
-							v = measure()
-							ja = measure(South)
-							jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-									v = measure()
-								else:
-									swap(South)
-									v = measure()
-							ja = measure(East)
-							if ja >= v:
-								break
-							swap(East)
-				c = cur
-				e = tl + 0.9345
-				P = []
-				if c == 0:
+			c = cur
+			e = tl + 0.9345
+			P = []
+			if c == 0:
+				if get_time() < e:
+					move(East)
 					if get_time() < e:
-						move(East)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append((South,))
+						move(South)
 					else:
-						P.append((East, South,))
-				elif c == 1:
-					if get_time() < e:
-						move(East)
-						if get_time() < e:
-							move(East)
-							if get_time() < e:
-								move(South)
-								if get_time() < e:
-									move(South)
-								else:
-									P.append((South,))
-							else:
-								P.append((South, South,))
-						else:
-							P.append((East, South, South,))
-					else:
-						P.append((East, East, South, South,))
-				elif c == 2:
+						P.append((South,))
+				else:
+					P.append((East, South,))
+			elif c == 1:
+				if get_time() < e:
+					move(East)
 					if get_time() < e:
 						move(East)
 						if get_time() < e:
@@ -9571,7 +9616,11 @@ def w0():
 							P.append((South, South,))
 					else:
 						P.append((East, South, South,))
-				elif c == 3:
+				else:
+					P.append((East, East, South, South,))
+			elif c == 2:
+				if get_time() < e:
+					move(East)
 					if get_time() < e:
 						move(South)
 						if get_time() < e:
@@ -9580,777 +9629,161 @@ def w0():
 							P.append((South,))
 					else:
 						P.append((South, South,))
-				elif c == 4:
+				else:
+					P.append((East, South, South,))
+			elif c == 3:
+				if get_time() < e:
+					move(South)
 					if get_time() < e:
-						move(West)
+						move(South)
+					else:
+						P.append((South,))
+				else:
+					P.append((South, South,))
+			elif c == 4:
+				if get_time() < e:
+					move(West)
+					if get_time() < e:
+						move(South)
 						if get_time() < e:
 							move(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append((South,))
 						else:
-							P.append((South, South,))
+							P.append((South,))
 					else:
-						P.append((West, South, South,))
-				wait_until(tl + 0.9676)
-				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-					if get_entity_type() == Entities.Cactus:
-						harvest()
-					else:
-						use_item(Items.Water)
+						P.append((South, South,))
+				else:
+					P.append((West, South, South,))
+			wait_until(tl + 0.9676)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
 				else:
 					use_item(Items.Water)
-				for q in P:
-					for d in q:
-						move(d)
-				while num_items(Items.Cactus) <= 0:
-					pass
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
+			hb = 0
+			while num_items(Items.Cactus) <= 0:
+				hb = get_time()
+			plant(Entities.Cactus)
+			move(South)
+			pk_None_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_None_1_0()
+			move(East)
+			plant(Entities.Cactus)
+			move(South)
+			if use_item(Items.Water, 4):
 				plant(Entities.Cactus)
-				move(South)
-				pk_None_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_None_1_0()
-				move(East)
+				tw = get_time() - 0.0988
+			else:
 				plant(Entities.Cactus)
-				move(South)
-				if use_item(Items.Water, 4):
-					plant(Entities.Cactus)
-					tw = get_time() - 0.0988
-				else:
-					plant(Entities.Cactus)
-					tw = 0
-				tl = get_time()
-				if tw:
-					tl = tw
-				TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsS_NE)
-				TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
-				TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-				h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+				tw = 0
+			tl = get_time()
+			if tw:
+				tl = tw
+			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsS_NE)
+			TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
+			TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
+			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+			if h:
+				own(TFS, TMS, TRS, 0, 6)
+			else:
+				fsSW_NE()
+				move(West)
+				move(North)
+				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
 				if h:
-					own(TFS, TMS, TRS, 0, 6)
+					own(TFS, TMS, TRS, 1, 6)
 				else:
-					fsSW_NE()
+					fSW_NE()
 					move(West)
 					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
 					if h:
-						own(TFS, TMS, TRS, 1, 6)
+						own(TFS, TMS, TRS, 2, 6)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
 						if h:
-							own(TFS, TMS, TRS, 2, 6)
+							own(TFS, TMS, TRS, 3, 6)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
 							if h:
-								own(TFS, TMS, TRS, 3, 6)
+								own(TFS, TMS, TRS, 4, 7)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
 								if h:
-									own(TFS, TMS, TRS, 4, 7)
+									own(TFS, TMS, TRS, 5, 7)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+									h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
 									if h:
-										own(TFS, TMS, TRS, 5, 7)
+										own(TFS, TMS, TRS, 6, 7)
 									else:
 										fSW_NE()
 										move(West)
 										move(North)
-										h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
-										if h:
-											own(TFS, TMS, TRS, 6, 7)
-										else:
-											fSW_NE()
-											move(West)
-											move(North)
-											fSW_NE()
-											move(West)
-											move(North)
-											fsS_NE()
+										fSW_NE()
+										move(West)
+										move(North)
+										fsS_NE()
+			if tl + 0.9676 > hb + 2.6:
 				wait_until(tl + 0.9676)
-			spawn_drone(w18)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(South)
-			move(South)
-			move(South)
-			move(South)
-			move(South)
-			move(South)
-			move(South)
-			def w17():
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(East)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				tl = get_time()
-				move(North)
-				fsSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fSW_NE()
-				move(West)
-				move(North)
-				fsSW_NE()
-				e = tl + 0.9345
-				P = []
-				if get_time() < e:
-					move(East)
-					if get_time() < e:
-						move(North)
-						if get_time() < e:
-							move(North)
-							if get_time() < e:
-								move(North)
-								if get_time() < e:
-									move(North)
-								else:
-									P.append((North,))
-							else:
-								P.append((North, North,))
-						else:
-							P.append((North, North, North,))
-					else:
-						P.append((North, North, North, North,))
-				else:
-					P.append((East, North, North, North, North,))
-				wait_until(tl + 0.9676)
-				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-					if get_entity_type() == Entities.Cactus:
-						harvest()
-					else:
-						use_item(Items.Water)
-				else:
-					use_item(Items.Water)
-				for q in P:
-					for d in q:
-						move(d)
-				while num_items(Items.Cactus) <= 0:
-					pass
-				plant(Entities.Cactus)
-				move(West)
-				plant(Entities.Cactus)
-				swap(South)
-				pk_None_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_None_0_0()
-				move(West)
-				plant(Entities.Cactus)
-				move(North)
-				plant(Entities.Cactus)
-				move(West)
-				plant(Entities.Cactus)
-				move(West)
-				plant(Entities.Cactus)
-				move(West)
-				plant(Entities.Cactus)
-				swap(West)
-				plant(Entities.Cactus)
-				move(South)
-				plant(Entities.Cactus)
-				move(East)
-				plant(Entities.Cactus)
-				move(South)
-				plant(Entities.Cactus)
-				tl = get_time()
-				xcas(East, 1)
-				move(North)
-				wk = [0, 1, 2, 3, 4]
-				cur = 0
-				qi = 0
-				qn = 5
-				q0 = True
-				q1 = True
-				q2 = True
-				q3 = True
-				q4 = True
-				q0 = False
-				while True:
-					v = measure()
-					ja = measure(South)
-					while ja == None:
-						ja = measure(South)
-					jb = measure(West)
-					while jb == None:
-						jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							v = measure()
-						else:
-							swap(South)
-							v = measure()
-					ja = measure(North)
-					while ja == None:
-						ja = measure(North)
-					if ja >= v:
-						break
-					swap(North)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-					while True:
-						v = measure()
-						ja = measure(South)
-						jb = measure(West)
-						if not ja <= v >= jb:
-							if jb > ja:
-								swap(West)
-								v = measure()
-							else:
-								swap(South)
-								v = measure()
-						ja = measure(North)
-						if ja >= v:
-							break
-						swap(North)
-						if not q2:
-							wk.append(2)
-							qn += 1
-							q2 = True
-					break
-				q1 = False
-				move(West)
-				move(North)
-				while True:
-					v = measure()
-					ja = measure(South)
-					while ja == None:
-						ja = measure(South)
-					jb = measure(West)
-					while jb == None:
-						jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							v = measure()
-						else:
-							swap(South)
-							v = measure()
-					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-					while True:
-						v = measure()
-						ja = measure(South)
-						jb = measure(West)
-						if not ja <= v >= jb:
-							if jb > ja:
-								swap(West)
-								v = measure()
-							else:
-								swap(South)
-								v = measure()
-						ja = measure(East)
-						if ja >= v:
-							break
-						swap(East)
-						if not q2:
-							wk.append(2)
-							qn += 1
-							q2 = True
-					break
-				q2 = False
-				move(East)
-				while True:
-					v = measure()
-					ja = measure(South)
-					while ja == None:
-						ja = measure(South)
-					jb = measure(West)
-					while jb == None:
-						jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-							v = measure()
-						else:
-							swap(South)
-							if not q0:
-								wk.append(0)
-								qn += 1
-								q0 = True
-							v = measure()
-					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q3:
-						wk.append(3)
-						qn += 1
-						q3 = True
-					while True:
-						v = measure()
-						ja = measure(South)
-						jb = measure(West)
-						if not ja <= v >= jb:
-							if jb > ja:
-								swap(West)
-								if not q1:
-									wk.append(1)
-									qn += 1
-									q1 = True
-								v = measure()
-							else:
-								swap(South)
-								if not q0:
-									wk.append(0)
-									qn += 1
-									q0 = True
-								v = measure()
-						ja = measure(East)
-						if ja >= v:
-							break
-						swap(East)
-						if not q3:
-							wk.append(3)
-							qn += 1
-							q3 = True
-					break
-				q3 = False
-				move(East)
-				while True:
-					v = measure()
-					ja = measure(West)
-					while ja == None:
-						ja = measure(West)
-					if ja > v:
-						swap(West)
-						if not q2:
-							wk.append(2)
-							qn += 1
-							q2 = True
-						v = measure()
-					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q4:
-						wk.append(4)
-						qn += 1
-						q4 = True
-					while True:
-						v = measure()
-						ja = measure(West)
-						if ja > v:
-							swap(West)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
-							v = measure()
-						ja = measure(East)
-						if ja >= v:
-							break
-						swap(East)
-						if not q4:
-							wk.append(4)
-							qn += 1
-							q4 = True
-					break
-				q4 = False
-				move(East)
-				while True:
-					v = measure()
-					ja = measure(South)
-					while ja == None:
-						ja = measure(South)
-					jb = measure(West)
-					while jb == None:
-						jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							if not q3:
-								wk.append(3)
-								qn += 1
-								q3 = True
-							v = measure()
-						else:
-							swap(South)
-							v = measure()
-					ja = measure(East)
-					while ja == None:
-						ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					while True:
-						v = measure()
-						ja = measure(South)
-						jb = measure(West)
-						if not ja <= v >= jb:
-							if jb > ja:
-								swap(West)
-								if not q3:
-									wk.append(3)
-									qn += 1
-									q3 = True
-								v = measure()
-							else:
-								swap(South)
-								v = measure()
-						ja = measure(East)
-						if ja >= v:
-							break
-						swap(East)
-					break
-				cur = 4
-				qi = 5
-				while qi < qn:
-					cx = wk[qi]
-					qi += 1
-					if cx == 0:
-						q0 = False
-						if cur == 1:
-							move(East)
-							move(South)
-						elif cur == 2:
-							move(South)
-						elif cur == 3:
-							move(West)
-							move(South)
-						elif cur == 4:
-							move(West)
-							move(West)
-							move(South)
-						cur = 0
-						while True:
-							v = measure()
-							ja = measure(South)
-							jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									v = measure()
-								else:
-									swap(South)
-									v = measure()
-							ja = measure(North)
-							if ja >= v:
-								break
-							swap(North)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
-					elif cx == 1:
-						q1 = False
-						if cur == 0:
-							move(West)
-							move(North)
-						elif cur == 2:
-							move(West)
-						elif cur == 3:
-							move(West)
-							move(West)
-						elif cur == 4:
-							move(West)
-							move(West)
-							move(West)
-						cur = 1
-						while True:
-							v = measure()
-							ja = measure(South)
-							jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									v = measure()
-								else:
-									swap(South)
-									v = measure()
-							ja = measure(East)
-							if ja >= v:
-								break
-							swap(East)
-							if not q2:
-								wk.append(2)
-								qn += 1
-								q2 = True
-					elif cx == 2:
-						q2 = False
-						if cur == 0:
-							move(North)
-						elif cur == 1:
-							move(East)
-						elif cur == 3:
-							move(West)
-						elif cur == 4:
-							move(West)
-							move(West)
-						cur = 2
-						while True:
-							v = measure()
-							ja = measure(South)
-							jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									if not q1:
-										wk.append(1)
-										qn += 1
-										q1 = True
-									v = measure()
-								else:
-									swap(South)
-									if not q0:
-										wk.append(0)
-										qn += 1
-										q0 = True
-									v = measure()
-							ja = measure(East)
-							if ja >= v:
-								break
-							swap(East)
-							if not q3:
-								wk.append(3)
-								qn += 1
-								q3 = True
-					elif cx == 3:
-						q3 = False
-						if cur == 0:
-							move(East)
-							move(North)
-						elif cur == 1:
-							move(East)
-							move(East)
-						elif cur == 2:
-							move(East)
-						elif cur == 4:
-							move(West)
-						cur = 3
-						while True:
-							v = measure()
-							ja = measure(West)
-							if ja > v:
-								swap(West)
-								if not q2:
-									wk.append(2)
-									qn += 1
-									q2 = True
-								v = measure()
-							ja = measure(East)
-							if ja >= v:
-								break
-							swap(East)
-							if not q4:
-								wk.append(4)
-								qn += 1
-								q4 = True
-					else:
-						q4 = False
-						if cur == 0:
-							move(East)
-							move(East)
-							move(North)
-						elif cur == 1:
-							move(East)
-							move(East)
-							move(East)
-						elif cur == 2:
-							move(East)
-							move(East)
-						elif cur == 3:
-							move(East)
-						cur = 4
-						while True:
-							v = measure()
-							ja = measure(South)
-							jb = measure(West)
-							if not ja <= v >= jb:
-								if jb > ja:
-									swap(West)
-									if not q3:
-										wk.append(3)
-										qn += 1
-										q3 = True
-									v = measure()
-								else:
-									swap(South)
-									v = measure()
-							ja = measure(East)
-							if ja >= v:
-								break
-							swap(East)
-				if cur == 1:
-					move(East)
-					move(East)
-					move(East)
-					move(East)
-					move(South)
-				elif cur == 2:
-					move(East)
-					move(East)
-					move(East)
-					move(South)
-				elif cur == 3:
-					move(East)
-					move(East)
-					move(South)
-				elif cur == 4:
-					move(East)
-					move(South)
-				else:
-					move(East)
-					move(East)
-					move(East)
-				fsSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fsSW_NE()
-				wait_until(tl + 0.9676)
-			spawn_drone(w17)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
+		spawn_drone(w18)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(South)
+		move(South)
+		move(South)
+		move(South)
+		move(South)
+		move(South)
+		move(South)
+		def w17():
 			till()
-			move(East)
-			move(South)
-			move(South)
-			move(South)
-			move(South)
-			move(South)
+			plant(Entities.Cactus)
 			move(South)
 			till()
 			plant(Entities.Cactus)
 			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
 			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
 			till()
 			plant(Entities.Cactus)
 			move(South)
@@ -10410,13 +9843,14 @@ def w0():
 			till()
 			plant(Entities.Cactus)
 			tl = get_time()
-			move(East)
 			move(North)
-			till()
-			use_item(Items.Water, 4)
-			plant(Entities.Cactus)
-			move(West)
 			fsSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
 			move(West)
 			move(North)
 			fSW_NE()
@@ -10442,14 +9876,18 @@ def w0():
 						move(North)
 						if get_time() < e:
 							move(North)
+							if get_time() < e:
+								move(North)
+							else:
+								P.append((North,))
 						else:
-							P.append((North,))
+							P.append((North, North,))
 					else:
-						P.append((North, North,))
+						P.append((North, North, North,))
 				else:
-					P.append((North, North, North,))
+					P.append((North, North, North, North,))
 			else:
-				P.append((East, North, North, North,))
+				P.append((East, North, North, North, North,))
 			wait_until(tl + 0.9676)
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
@@ -10461,8 +9899,2301 @@ def w0():
 			for q in P:
 				for d in q:
 					move(d)
+			hb = 0
 			while num_items(Items.Cactus) <= 0:
-				pass
+				hb = get_time()
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			swap(South)
+			pk_None_North_West_0_1()
+			pk_East_North_West_0_1()
+			pk_East_North_None_0_0()
+			move(West)
+			plant(Entities.Cactus)
+			move(North)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			swap(West)
+			plant(Entities.Cactus)
+			move(South)
+			plant(Entities.Cactus)
+			move(East)
+			plant(Entities.Cactus)
+			move(South)
+			plant(Entities.Cactus)
+			tl = get_time()
+			xcas(East, 1)
+			move(North)
+			wk = [0, 1, 2, 3, 4]
+			cur = 0
+			qi = 0
+			qn = 5
+			q0 = True
+			q1 = True
+			q2 = True
+			q3 = True
+			q4 = True
+			q0 = False
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				if ja >= v:
+					break
+				swap(North)
+				if not q2:
+					wk.append(2)
+					qn += 1
+					q2 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				break
+			q1 = False
+			move(West)
+			move(North)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q2:
+					wk.append(2)
+					qn += 1
+					q2 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				break
+			q2 = False
+			move(East)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+					else:
+						swap(South)
+						if not q0:
+							wk.append(0)
+							qn += 1
+							q0 = True
+						v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q3:
+					wk.append(3)
+					qn += 1
+					q3 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						else:
+							swap(South)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+				break
+			q3 = False
+			move(East)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+					v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q4:
+					wk.append(4)
+					qn += 1
+					q4 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q4:
+						wk.append(4)
+						qn += 1
+						q4 = True
+				break
+			q4 = False
+			move(East)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+				break
+			cur = 4
+			qi = 5
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
+				if cx == 0:
+					q0 = False
+					if cur == 1:
+						move(East)
+						move(South)
+					elif cur == 2:
+						move(South)
+					elif cur == 3:
+						move(West)
+						move(South)
+					elif cur == 4:
+						move(West)
+						move(West)
+						move(South)
+					cur = 0
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+				elif cx == 1:
+					q1 = False
+					if cur == 0:
+						move(West)
+						move(North)
+					elif cur == 2:
+						move(West)
+					elif cur == 3:
+						move(West)
+						move(West)
+					elif cur == 4:
+						move(West)
+						move(West)
+						move(West)
+					cur = 1
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+				elif cx == 2:
+					q2 = False
+					if cur == 0:
+						move(North)
+					elif cur == 1:
+						move(East)
+					elif cur == 3:
+						move(West)
+					elif cur == 4:
+						move(West)
+						move(West)
+					cur = 2
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+							else:
+								swap(South)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+				elif cx == 3:
+					q3 = False
+					if cur == 0:
+						move(East)
+						move(North)
+					elif cur == 1:
+						move(East)
+						move(East)
+					elif cur == 2:
+						move(East)
+					elif cur == 4:
+						move(West)
+					cur = 3
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q4:
+							wk.append(4)
+							qn += 1
+							q4 = True
+				else:
+					q4 = False
+					if cur == 0:
+						move(East)
+						move(East)
+						move(North)
+					elif cur == 1:
+						move(East)
+						move(East)
+						move(East)
+					elif cur == 2:
+						move(East)
+						move(East)
+					elif cur == 3:
+						move(East)
+					cur = 4
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								if not q3:
+									wk.append(3)
+									qn += 1
+									q3 = True
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+			if cur == 1:
+				move(East)
+				move(East)
+				move(East)
+				move(East)
+				move(South)
+			elif cur == 2:
+				move(East)
+				move(East)
+				move(East)
+				move(South)
+			elif cur == 3:
+				move(East)
+				move(East)
+				move(South)
+			elif cur == 4:
+				move(East)
+				move(South)
+			else:
+				move(East)
+				move(East)
+				move(East)
+			fsSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fsSW_NE()
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
+		spawn_drone(w17)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		till()
+		move(East)
+		move(South)
+		move(South)
+		move(South)
+		move(South)
+		move(South)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(East)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(East)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(East)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(East)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(East)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		tl = get_time()
+		move(East)
+		move(North)
+		till()
+		use_item(Items.Water, 4)
+		plant(Entities.Cactus)
+		move(West)
+		fsSW_NE()
+		move(West)
+		move(North)
+		fSW_NE()
+		move(West)
+		move(North)
+		fSW_NE()
+		move(West)
+		move(North)
+		fSW_NE()
+		move(West)
+		move(North)
+		fSW_NE()
+		move(West)
+		move(North)
+		fsSW_NE()
+		e = tl + 0.9345
+		P = []
+		if get_time() < e:
+			move(East)
+			if get_time() < e:
+				move(North)
+				if get_time() < e:
+					move(North)
+					if get_time() < e:
+						move(North)
+					else:
+						P.append((North,))
+				else:
+					P.append((North, North,))
+			else:
+				P.append((North, North, North,))
+		else:
+			P.append((East, North, North, North,))
+		wait_until(tl + 0.9676)
+		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+			if get_entity_type() == Entities.Cactus:
+				harvest()
+			else:
+				use_item(Items.Water)
+		else:
+			use_item(Items.Water)
+		for q in P:
+			for d in q:
+				move(d)
+		hb = 0
+		while num_items(Items.Cactus) <= 0:
+			hb = get_time()
+		plant(Entities.Cactus)
+		move(North)
+		plant(Entities.Cactus)
+		move(West)
+		plant(Entities.Cactus)
+		swap(South)
+		pk_None_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_None_0_0()
+		move(West)
+		plant(Entities.Cactus)
+		move(North)
+		plant(Entities.Cactus)
+		tl = get_time()
+		TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
+		TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
+		TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
+		h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+		if h:
+			own(TFS, TMS, TRS, 0, 6)
+		else:
+			fsSW_NE()
+			move(East)
+			move(South)
+			h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+			if h:
+				own(TFS, TMS, TRS, 1, 6)
+			else:
+				fSW_NE()
+				move(East)
+				move(South)
+				h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+				if h:
+					own(TFS, TMS, TRS, 2, 6)
+				else:
+					fSW_NE()
+					move(East)
+					move(South)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+					if h:
+						own(TFS, TMS, TRS, 3, 6)
+					else:
+						fSW_NE()
+						move(East)
+						move(South)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+						if h:
+							own(TFS, TMS, TRS, 4, 7)
+						else:
+							fSW_NE()
+							move(East)
+							move(South)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+							if h:
+								own(TFS, TMS, TRS, 5, 7)
+							else:
+								fSW_NE()
+								move(East)
+								move(South)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+								if h:
+									own(TFS, TMS, TRS, 6, 7)
+								else:
+									fSW_NE()
+									move(East)
+									move(South)
+									fSW_NE()
+									move(East)
+									move(South)
+									fsSW_NE()
+		if tl + 0.9676 > hb + 2.6:
+			wait_until(tl + 0.9676)
+	spawn_drone(w16)
+	def w12():
+		def w14():
+			def w15():
+				move(West)
+				move(West)
+				move(West)
+				move(West)
+				move(West)
+				move(West)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+				till()
+				move(West)
+				move(West)
+				move(West)
+				move(West)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(East)
+				move(North)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				till()
+				plant(Entities.Cactus)
+				move(South)
+				plant(Entities.Cactus)
+				tl = get_time()
+				xcas(East, 1)
+				move(North)
+				fsSW_N()
+				move(West)
+				move(North)
+				fSW_NE()
+				move(West)
+				move(North)
+				fSW_NE()
+				move(West)
+				move(North)
+				fSW_NE()
+				move(West)
+				move(North)
+				fSW_NE()
+				move(West)
+				move(North)
+				fSW_NE()
+				move(West)
+				move(North)
+				fSW_NE()
+				move(West)
+				move(North)
+				fsSW_NE()
+				e = tl + 0.9345
+				P = []
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(East)
+						if get_time() < e:
+							move(East)
+						else:
+							P.append((East,))
+					else:
+						P.append((East, East,))
+				else:
+					P.append((East, East, East,))
+				wait_until(tl + 0.9676)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
+				hb = 0
+				while num_items(Items.Cactus) <= 0:
+					hb = get_time()
+				plant(Entities.Cactus)
+				move(North)
+				pk_None_North_West_0_1()
+				pk_East_North_West_0_1()
+				pk_East_North_West_0_1()
+				pk_East_North_West_0_1()
+				pk_East_North_West_0_1()
+				pk_East_North_West_0_1()
+				pk_East_North_West_0_1()
+				pk_East_North_None_0_0()
+				move(West)
+				if use_item(Items.Water, 4):
+					plant(Entities.Cactus)
+					tw = get_time() - 0.0988
+				else:
+					plant(Entities.Cactus)
+					tw = 0
+				tl = get_time()
+				if tw:
+					tl = tw
+				move(East)
+				TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
+				TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
+				TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
+				h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+				if h:
+					own(TFS, TMS, TRS, 0, 5)
+				else:
+					fsSW_NE()
+					move(East)
+					move(South)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+					if h:
+						own(TFS, TMS, TRS, 1, 5)
+					else:
+						fSW_NE()
+						move(East)
+						move(South)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+						if h:
+							own(TFS, TMS, TRS, 2, 5)
+						else:
+							fSW_NE()
+							move(East)
+							move(South)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+							if h:
+								own(TFS, TMS, TRS, 3, 6)
+							else:
+								fSW_NE()
+								move(East)
+								move(South)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+								if h:
+									own(TFS, TMS, TRS, 4, 6)
+								else:
+									fSW_NE()
+									move(East)
+									move(South)
+									h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+									if h:
+										own(TFS, TMS, TRS, 5, 6)
+									else:
+										fSW_NE()
+										move(East)
+										move(South)
+										fSW_NE()
+										move(East)
+										move(South)
+										fsSW_NE()
+				if tl + 0.9676 > hb + 2.6:
+					wait_until(tl + 0.9676)
+			spawn_drone(w15)
+			move(West)
+			move(West)
+			move(North)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			plant(Entities.Cactus)
+			move(South)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			if measure() < measure(South):
+				swap(South)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			tl = get_time()
+			move(West)
+			fsSW_NE()
+			move(East)
+			move(South)
+			fsSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fsW_NE()
+			move(East)
+			move(East)
+			move(East)
+			wk = [3, 2, 1, 0]
+			cur = 3
+			qi = 0
+			qn = 4
+			q3 = True
+			q2 = True
+			q1 = True
+			q0 = True
+			q3 = False
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				if ja > v:
+					swap(South)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				jb = measure(East)
+				while jb == None:
+					jb = measure(East)
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+				else:
+					swap(North)
+				while True:
+					v = measure()
+					ja = measure(South)
+					if ja > v:
+						swap(South)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+				break
+			q2 = False
+			move(East)
+			move(South)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				if ja >= v:
+					break
+				swap(North)
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+					ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+				break
+			q1 = False
+			move(West)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					if not q0:
+						wk.append(0)
+						qn += 1
+						q0 = True
+					v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				jb = measure(East)
+				while jb == None:
+					jb = measure(East)
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				else:
+					swap(North)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q0:
+							wk.append(0)
+							qn += 1
+							q0 = True
+						v = measure()
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					else:
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+				break
+			q0 = False
+			move(West)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q1:
+					wk.append(1)
+					qn += 1
+					q1 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+				break
+			cur = 0
+			qi = 4
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
+				if cx == 0:
+					q0 = False
+					if cur == 1:
+						move(West)
+					elif cur == 2:
+						move(West)
+						move(West)
+					elif cur == 3:
+						move(West)
+						move(South)
+					cur = 0
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+				elif cx == 1:
+					q1 = False
+					if cur == 0:
+						move(East)
+					elif cur == 2:
+						move(West)
+					elif cur == 3:
+						move(South)
+					cur = 1
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						else:
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+				elif cx == 2:
+					q2 = False
+					if cur == 0:
+						move(East)
+						move(East)
+					elif cur == 1:
+						move(East)
+					elif cur == 3:
+						move(East)
+						move(South)
+					cur = 2
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+				else:
+					q3 = False
+					if cur == 0:
+						move(East)
+						move(North)
+					elif cur == 1:
+						move(North)
+					elif cur == 2:
+						move(West)
+						move(North)
+					cur = 3
+					while True:
+						v = measure()
+						ja = measure(South)
+						if ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+			c = cur
+			e = tl + 0.9345
+			P = []
+			if c == 0:
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(East)
+						if get_time() < e:
+							move(South)
+							if get_time() < e:
+								move(South)
+							else:
+								P.append((South,))
+						else:
+							P.append((South, South,))
+					else:
+						P.append((East, South, South,))
+				else:
+					P.append((East, East, South, South,))
+			elif c == 1:
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(South)
+						if get_time() < e:
+							move(South)
+						else:
+							P.append((South,))
+					else:
+						P.append((South, South,))
+				else:
+					P.append((East, South, South,))
+			elif c == 2:
+				if get_time() < e:
+					move(South)
+					if get_time() < e:
+						move(South)
+					else:
+						P.append((South,))
+				else:
+					P.append((South, South,))
+			elif c == 3:
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(South)
+						if get_time() < e:
+							move(South)
+							if get_time() < e:
+								move(South)
+							else:
+								P.append((South,))
+						else:
+							P.append((South, South,))
+					else:
+						P.append((South, South, South,))
+				else:
+					P.append((East, South, South, South,))
+			wait_until(tl + 0.9676)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
+			hb = 0
+			while num_items(Items.Cactus) <= 0:
+				hb = get_time()
+			plant(Entities.Cactus)
+			move(North)
+			plant(Entities.Cactus)
+			if measure() < measure(South):
+				swap(South)
+			move(West)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			swap(West)
+			plant(Entities.Cactus)
+			move(South)
+			plant(Entities.Cactus)
+			move(East)
+			plant(Entities.Cactus)
+			move(South)
+			plant(Entities.Cactus)
+			move(East)
+			plant(Entities.Cactus)
+			if measure() < measure(West):
+				swap(West)
+			move(South)
+			plant(Entities.Cactus)
+			if measure() > measure(North):
+				swap(North)
+			move(East)
+			plant(Entities.Cactus)
+			if measure() < measure(West):
+				swap(West)
+			move(South)
+			plant(Entities.Cactus)
+			swap(South)
+			plant(Entities.Cactus)
+			move(South)
+			move(South)
+			plant(Entities.Cactus)
+			swap(South)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			move(North)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			tl = get_time()
+			xcas(North, 1)
+			move(East)
+			wk = [0, 1, 2, 3]
+			cur = 0
+			qi = 0
+			qn = 4
+			q0 = True
+			q1 = True
+			q2 = True
+			q3 = True
+			q0 = False
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q2:
+					wk.append(2)
+					qn += 1
+					q2 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				break
+			q1 = False
+			move(East)
+			move(South)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				if ja >= v:
+					break
+				swap(North)
+				if not q2:
+					wk.append(2)
+					qn += 1
+					q2 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				break
+			q2 = False
+			move(North)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						if not q0:
+							wk.append(0)
+							qn += 1
+							q0 = True
+						v = measure()
+					else:
+						swap(South)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				if ja >= v:
+					break
+				swap(North)
+				if not q3:
+					wk.append(3)
+					qn += 1
+					q3 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+						else:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+					ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+				break
+			q3 = False
+			move(North)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				if ja > v:
+					swap(South)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+					v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				if ja >= v:
+					break
+				swap(North)
+				while True:
+					v = measure()
+					ja = measure(South)
+					if ja > v:
+						swap(South)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						v = measure()
+					ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+				break
+			cur = 3
+			qi = 4
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
+				if cx == 0:
+					q0 = False
+					if cur == 1:
+						move(West)
+						move(North)
+					elif cur == 2:
+						move(West)
+					elif cur == 3:
+						move(West)
+						move(South)
+					cur = 0
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+				elif cx == 1:
+					q1 = False
+					if cur == 0:
+						move(East)
+						move(South)
+					elif cur == 2:
+						move(South)
+					elif cur == 3:
+						move(South)
+						move(South)
+					cur = 1
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+				elif cx == 2:
+					q2 = False
+					if cur == 0:
+						move(East)
+					elif cur == 1:
+						move(North)
+					elif cur == 3:
+						move(South)
+					cur = 2
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+							else:
+								swap(South)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+				else:
+					q3 = False
+					if cur == 0:
+						move(East)
+						move(North)
+					elif cur == 1:
+						move(North)
+						move(North)
+					elif cur == 2:
+						move(North)
+					cur = 3
+					while True:
+						v = measure()
+						ja = measure(South)
+						if ja > v:
+							swap(South)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+			if cur == 1:
+				move(West)
+				move(West)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+			elif cur == 2:
+				move(West)
+				move(West)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+			elif cur == 3:
+				move(West)
+				move(West)
+				move(North)
+				move(North)
+				move(North)
+			else:
+				move(West)
+				move(North)
+				move(North)
+				move(North)
+				move(North)
+			wk = [0, 1, 2, 3]
+			cur = 0
+			qi = 0
+			qn = 4
+			q0 = True
+			q1 = True
+			q2 = True
+			q3 = True
+			q0 = False
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				if ja >= v:
+					break
+				swap(North)
+				if not q2:
+					wk.append(2)
+					qn += 1
+					q2 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(North)
+					if ja >= v:
+						break
+					swap(North)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				break
+			q1 = False
+			move(West)
+			move(North)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						v = measure()
+					else:
+						swap(South)
+						v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q2:
+					wk.append(2)
+					qn += 1
+					q2 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							v = measure()
+						else:
+							swap(South)
+							v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				break
+			q2 = False
+			move(East)
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				jb = measure(West)
+				while jb == None:
+					jb = measure(West)
+				if not ja <= v >= jb:
+					if jb > ja:
+						swap(West)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+					else:
+						swap(South)
+						if not q0:
+							wk.append(0)
+							qn += 1
+							q0 = True
+						v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q3:
+					wk.append(3)
+					qn += 1
+					q3 = True
+				while True:
+					v = measure()
+					ja = measure(South)
+					jb = measure(West)
+					if not ja <= v >= jb:
+						if jb > ja:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						else:
+							swap(South)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+				break
+			q3 = False
+			move(East)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+					v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+						v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+				break
+			cur = 3
+			qi = 4
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
+				if cx == 0:
+					q0 = False
+					if cur == 1:
+						move(East)
+						move(South)
+					elif cur == 2:
+						move(South)
+					elif cur == 3:
+						move(West)
+						move(South)
+					cur = 0
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(North)
+						if ja >= v:
+							break
+						swap(North)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+				elif cx == 1:
+					q1 = False
+					if cur == 0:
+						move(West)
+						move(North)
+					elif cur == 2:
+						move(West)
+					elif cur == 3:
+						move(West)
+						move(West)
+					cur = 1
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								v = measure()
+							else:
+								swap(South)
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+				elif cx == 2:
+					q2 = False
+					if cur == 0:
+						move(North)
+					elif cur == 1:
+						move(East)
+					elif cur == 3:
+						move(West)
+					cur = 2
+					while True:
+						v = measure()
+						ja = measure(South)
+						jb = measure(West)
+						if not ja <= v >= jb:
+							if jb > ja:
+								swap(West)
+								if not q1:
+									wk.append(1)
+									qn += 1
+									q1 = True
+								v = measure()
+							else:
+								swap(South)
+								if not q0:
+									wk.append(0)
+									qn += 1
+									q0 = True
+								v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+				else:
+					q3 = False
+					if cur == 0:
+						move(East)
+						move(North)
+					elif cur == 1:
+						move(East)
+						move(East)
+					elif cur == 2:
+						move(East)
+					cur = 3
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+							v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
+		spawn_drone(w14)
+		def w13():
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(North)
+			move(North)
+			move(North)
+			move(North)
+			move(North)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			tl = get_time()
+			move(South)
+			fsSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fsSW_NE()
+			e = tl + 0.9345
+			P = []
+			if get_time() < e:
+				move(East)
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(South)
+						if get_time() < e:
+							move(South)
+						else:
+							P.append((South,))
+					else:
+						P.append((South, South,))
+				else:
+					P.append((East, South, South,))
+			else:
+				P.append((East, East, South, South,))
+			wait_until(tl + 0.9676)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
+			hb = 0
+			while num_items(Items.Cactus) <= 0:
+				hb = get_time()
 			plant(Entities.Cactus)
 			move(North)
 			plant(Entities.Cactus)
@@ -10481,6 +12212,8 @@ def w0():
 			move(North)
 			plant(Entities.Cactus)
 			tl = get_time()
+			if use_item(Items.Fertilizer):
+				tl = get_time() - 0.0988
 			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
 			TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
 			TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
@@ -10537,268 +12270,38 @@ def w0():
 										move(East)
 										move(South)
 										fsSW_NE()
-			wait_until(tl + 0.9676)
-		spawn_drone(w16)
-		move(West)
-		move(West)
-		move(North)
-		move(North)
-		def w15():
-			move(West)
-			move(West)
-			move(West)
-			move(West)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			till()
-			move(West)
-			move(West)
-			move(West)
-			move(West)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(South)
-			plant(Entities.Cactus)
-			tl = get_time()
-			xcas(East, 1)
-			move(North)
-			fsSW_N()
-			move(West)
-			move(North)
-			fSW_NE()
-			move(West)
-			move(North)
-			fSW_NE()
-			move(West)
-			move(North)
-			fSW_NE()
-			move(West)
-			move(North)
-			fSW_NE()
-			move(West)
-			move(North)
-			fSW_NE()
-			move(West)
-			move(North)
-			fSW_NE()
-			move(West)
-			move(North)
-			fsSW_NE()
-			e = tl + 0.9345
-			P = []
-			if get_time() < e:
-				move(East)
-				if get_time() < e:
-					move(East)
-					if get_time() < e:
-						move(East)
-					else:
-						P.append((East,))
-				else:
-					P.append((East, East,))
-			else:
-				P.append((East, East, East,))
-			wait_until(tl + 0.9676)
-			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-				if get_entity_type() == Entities.Cactus:
-					harvest()
-				else:
-					use_item(Items.Water)
-			else:
-				use_item(Items.Water)
-			for q in P:
-				for d in q:
-					move(d)
-			while num_items(Items.Cactus) <= 0:
-				pass
-			plant(Entities.Cactus)
-			move(North)
-			pk_None_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_None_0_0()
-			move(West)
-			if use_item(Items.Water, 4):
-				plant(Entities.Cactus)
-				tw = get_time() - 0.0988
-			else:
-				plant(Entities.Cactus)
-				tw = 0
-			tl = get_time()
-			if tw:
-				tl = tw
-			move(East)
-			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
-			TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
-			TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
-			if h:
-				own(TFS, TMS, TRS, 0, 5)
-			else:
-				fsSW_NE()
-				move(East)
-				move(South)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
-				if h:
-					own(TFS, TMS, TRS, 1, 5)
-				else:
-					fSW_NE()
-					move(East)
-					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
-					if h:
-						own(TFS, TMS, TRS, 2, 5)
-					else:
-						fSW_NE()
-						move(East)
-						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
-						if h:
-							own(TFS, TMS, TRS, 3, 6)
-						else:
-							fSW_NE()
-							move(East)
-							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
-							if h:
-								own(TFS, TMS, TRS, 4, 6)
-							else:
-								fSW_NE()
-								move(East)
-								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
-								if h:
-									own(TFS, TMS, TRS, 5, 6)
-								else:
-									fSW_NE()
-									move(East)
-									move(South)
-									fSW_NE()
-									move(East)
-									move(South)
-									fsSW_NE()
-			wait_until(tl + 0.9676)
-		spawn_drone(w15)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
+		spawn_drone(w13)
 		move(East)
-		plant(Entities.Cactus)
-		move(South)
-		plant(Entities.Cactus)
-		move(West)
-		plant(Entities.Cactus)
-		move(West)
-		till()
-		plant(Entities.Cactus)
-		move(West)
-		till()
-		plant(Entities.Cactus)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
 		move(North)
-		till()
-		plant(Entities.Cactus)
-		if measure() < measure(South):
-			swap(South)
-		move(West)
-		till()
-		plant(Entities.Cactus)
 		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(West)
-		move(South)
-		till()
-		plant(Entities.Cactus)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
 		move(North)
 		till()
 		plant(Entities.Cactus)
 		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(West)
-		move(South)
+		move(North)
 		till()
 		plant(Entities.Cactus)
 		move(North)
@@ -10832,12 +12335,43 @@ def w0():
 		till()
 		plant(Entities.Cactus)
 		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(West)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(West)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(West)
+		move(South)
 		till()
 		plant(Entities.Cactus)
 		move(North)
 		till()
 		plant(Entities.Cactus)
 		tl = get_time()
+		move(North)
+		till()
+		use_item(Items.Water, 4)
+		plant(Entities.Cactus)
 		move(South)
 		fsSW_NE()
 		move(East)
@@ -10854,372 +12388,24 @@ def w0():
 		fSW_NE()
 		move(East)
 		move(South)
-		fsW_NE()
-		move(East)
-		move(East)
-		move(East)
-		wk = [3, 2, 1, 0]
-		cur = 3
-		qi = 0
-		qn = 4
-		q3 = True
-		q2 = True
-		q1 = True
-		q0 = True
-		q3 = False
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			if ja > v:
-				swap(South)
-				if not q1:
-					wk.append(1)
-					qn += 1
-					q1 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			jb = measure(East)
-			while jb == None:
-				jb = measure(East)
-			if ja >= v <= jb:
-				break
-			if jb < ja:
-				swap(East)
-			else:
-				swap(North)
-			while True:
-				v = measure()
-				ja = measure(South)
-				if ja > v:
-					swap(South)
-					if not q1:
-						wk.append(1)
-						qn += 1
-						q1 = True
-					v = measure()
-				ja = measure(North)
-				jb = measure(East)
-				if ja >= v <= jb:
-					break
-				if jb < ja:
-					swap(East)
-				else:
-					swap(North)
-			break
-		q2 = False
+		fSW_NE()
 		move(East)
 		move(South)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				if not q1:
-					wk.append(1)
-					qn += 1
-					q1 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			if ja >= v:
-				break
-			swap(North)
-			while True:
-				v = measure()
-				ja = measure(West)
-				if ja > v:
-					swap(West)
-					if not q1:
-						wk.append(1)
-						qn += 1
-						q1 = True
-					v = measure()
-				ja = measure(North)
-				if ja >= v:
-					break
-				swap(North)
-			break
-		q1 = False
-		move(West)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				if not q0:
-					wk.append(0)
-					qn += 1
-					q0 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			jb = measure(East)
-			while jb == None:
-				jb = measure(East)
-			if ja >= v <= jb:
-				break
-			if jb < ja:
-				swap(East)
-				if not q2:
-					wk.append(2)
-					qn += 1
-					q2 = True
-			else:
-				swap(North)
-				if not q3:
-					wk.append(3)
-					qn += 1
-					q3 = True
-			while True:
-				v = measure()
-				ja = measure(West)
-				if ja > v:
-					swap(West)
-					if not q0:
-						wk.append(0)
-						qn += 1
-						q0 = True
-					v = measure()
-				ja = measure(North)
-				jb = measure(East)
-				if ja >= v <= jb:
-					break
-				if jb < ja:
-					swap(East)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-				else:
-					swap(North)
-					if not q3:
-						wk.append(3)
-						qn += 1
-						q3 = True
-			break
-		q0 = False
-		move(West)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				v = measure()
-			ja = measure(East)
-			while ja == None:
-				ja = measure(East)
-			if ja >= v:
-				break
-			swap(East)
-			if not q1:
-				wk.append(1)
-				qn += 1
-				q1 = True
-			while True:
-				v = measure()
-				ja = measure(West)
-				if ja > v:
-					swap(West)
-					v = measure()
-				ja = measure(East)
-				if ja >= v:
-					break
-				swap(East)
-				if not q1:
-					wk.append(1)
-					qn += 1
-					q1 = True
-			break
-		cur = 0
-		qi = 4
-		while qi < qn:
-			cx = wk[qi]
-			qi += 1
-			if cx == 0:
-				q0 = False
-				if cur == 1:
-					move(West)
-				elif cur == 2:
-					move(West)
-					move(West)
-				elif cur == 3:
-					move(West)
-					move(South)
-				cur = 0
-				while True:
-					v = measure()
-					ja = measure(West)
-					if ja > v:
-						swap(West)
-						v = measure()
-					ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q1:
-						wk.append(1)
-						qn += 1
-						q1 = True
-			elif cx == 1:
-				q1 = False
-				if cur == 0:
-					move(East)
-				elif cur == 2:
-					move(West)
-				elif cur == 3:
-					move(South)
-				cur = 1
-				while True:
-					v = measure()
-					ja = measure(West)
-					if ja > v:
-						swap(West)
-						if not q0:
-							wk.append(0)
-							qn += 1
-							q0 = True
-						v = measure()
-					ja = measure(North)
-					jb = measure(East)
-					if ja >= v <= jb:
-						break
-					if jb < ja:
-						swap(East)
-						if not q2:
-							wk.append(2)
-							qn += 1
-							q2 = True
-					else:
-						swap(North)
-						if not q3:
-							wk.append(3)
-							qn += 1
-							q3 = True
-			elif cx == 2:
-				q2 = False
-				if cur == 0:
-					move(East)
-					move(East)
-				elif cur == 1:
-					move(East)
-				elif cur == 3:
-					move(East)
-					move(South)
-				cur = 2
-				while True:
-					v = measure()
-					ja = measure(West)
-					if ja > v:
-						swap(West)
-						if not q1:
-							wk.append(1)
-							qn += 1
-							q1 = True
-						v = measure()
-					ja = measure(North)
-					if ja >= v:
-						break
-					swap(North)
-			else:
-				q3 = False
-				if cur == 0:
-					move(East)
-					move(North)
-				elif cur == 1:
-					move(North)
-				elif cur == 2:
-					move(West)
-					move(North)
-				cur = 3
-				while True:
-					v = measure()
-					ja = measure(South)
-					if ja > v:
-						swap(South)
-						if not q1:
-							wk.append(1)
-							qn += 1
-							q1 = True
-						v = measure()
-					ja = measure(North)
-					jb = measure(East)
-					if ja >= v <= jb:
-						break
-					if jb < ja:
-						swap(East)
-					else:
-						swap(North)
-		c = cur
+		fsSW_NE()
 		e = tl + 0.9345
 		P = []
-		if c == 0:
+		if get_time() < e:
+			move(East)
 			if get_time() < e:
 				move(East)
-				if get_time() < e:
-					move(East)
-					if get_time() < e:
-						move(South)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append((South,))
-					else:
-						P.append((South, South,))
-				else:
-					P.append((East, South, South,))
-			else:
-				P.append((East, East, South, South,))
-		elif c == 1:
-			if get_time() < e:
-				move(East)
-				if get_time() < e:
-					move(South)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append((South,))
-				else:
-					P.append((South, South,))
-			else:
-				P.append((East, South, South,))
-		elif c == 2:
-			if get_time() < e:
-				move(South)
 				if get_time() < e:
 					move(South)
 				else:
 					P.append((South,))
 			else:
-				P.append((South, South,))
-		elif c == 3:
-			if get_time() < e:
-				move(East)
-				if get_time() < e:
-					move(South)
-					if get_time() < e:
-						move(South)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append((South,))
-					else:
-						P.append((South, South,))
-				else:
-					P.append((South, South, South,))
-			else:
-				P.append((East, South, South, South,))
+				P.append((East, South,))
+		else:
+			P.append((East, East, South,))
 		wait_until(tl + 0.9676)
 		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 			if get_entity_type() == Entities.Cactus:
@@ -11231,1193 +12417,91 @@ def w0():
 		for q in P:
 			for d in q:
 				move(d)
+		hb = 0
 		while num_items(Items.Cactus) <= 0:
-			pass
-		plant(Entities.Cactus)
-		move(North)
-		plant(Entities.Cactus)
-		if measure() < measure(South):
-			swap(South)
-		move(West)
+			hb = get_time()
 		plant(Entities.Cactus)
 		move(West)
-		plant(Entities.Cactus)
-		move(West)
-		plant(Entities.Cactus)
-		swap(West)
-		plant(Entities.Cactus)
-		move(South)
-		plant(Entities.Cactus)
-		move(East)
-		plant(Entities.Cactus)
-		move(South)
-		plant(Entities.Cactus)
-		move(East)
-		plant(Entities.Cactus)
-		if measure() < measure(West):
-			swap(West)
-		move(South)
-		plant(Entities.Cactus)
-		if measure() > measure(North):
-			swap(North)
-		move(East)
-		plant(Entities.Cactus)
-		if measure() < measure(West):
-			swap(West)
-		move(South)
 		plant(Entities.Cactus)
 		swap(South)
-		plant(Entities.Cactus)
-		move(South)
-		move(South)
-		plant(Entities.Cactus)
-		swap(South)
-		plant(Entities.Cactus)
-		move(West)
-		plant(Entities.Cactus)
-		move(North)
-		plant(Entities.Cactus)
-		move(West)
-		plant(Entities.Cactus)
+		pk_None_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_None_0_0()
 		tl = get_time()
-		xcas(North, 1)
-		move(East)
-		wk = [0, 1, 2, 3]
-		cur = 0
-		qi = 0
-		qn = 4
-		q0 = True
-		q1 = True
-		q2 = True
-		q3 = True
-		q0 = False
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			jb = measure(West)
-			while jb == None:
-				jb = measure(West)
-			if not ja <= v >= jb:
-				if jb > ja:
-					swap(West)
-					v = measure()
-				else:
-					swap(South)
-					v = measure()
-			ja = measure(East)
-			while ja == None:
-				ja = measure(East)
-			if ja >= v:
-				break
-			swap(East)
-			if not q2:
-				wk.append(2)
-				qn += 1
-				q2 = True
-			while True:
-				v = measure()
-				ja = measure(South)
-				jb = measure(West)
-				if not ja <= v >= jb:
-					if jb > ja:
-						swap(West)
-						v = measure()
-					else:
-						swap(South)
-						v = measure()
-				ja = measure(East)
-				if ja >= v:
-					break
-				swap(East)
-				if not q2:
-					wk.append(2)
-					qn += 1
-					q2 = True
-			break
-		q1 = False
-		move(East)
-		move(South)
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			jb = measure(West)
-			while jb == None:
-				jb = measure(West)
-			if not ja <= v >= jb:
-				if jb > ja:
-					swap(West)
-					v = measure()
-				else:
-					swap(South)
-					v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			if ja >= v:
-				break
-			swap(North)
-			if not q2:
-				wk.append(2)
-				qn += 1
-				q2 = True
-			while True:
-				v = measure()
-				ja = measure(South)
-				jb = measure(West)
-				if not ja <= v >= jb:
-					if jb > ja:
-						swap(West)
-						v = measure()
-					else:
-						swap(South)
-						v = measure()
-				ja = measure(North)
-				if ja >= v:
-					break
-				swap(North)
-				if not q2:
-					wk.append(2)
-					qn += 1
-					q2 = True
-			break
-		q2 = False
-		move(North)
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			jb = measure(West)
-			while jb == None:
-				jb = measure(West)
-			if not ja <= v >= jb:
-				if jb > ja:
-					swap(West)
-					if not q0:
-						wk.append(0)
-						qn += 1
-						q0 = True
-					v = measure()
-				else:
-					swap(South)
-					if not q1:
-						wk.append(1)
-						qn += 1
-						q1 = True
-					v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			if ja >= v:
-				break
-			swap(North)
-			if not q3:
-				wk.append(3)
-				qn += 1
-				q3 = True
-			while True:
-				v = measure()
-				ja = measure(South)
-				jb = measure(West)
-				if not ja <= v >= jb:
-					if jb > ja:
-						swap(West)
-						if not q0:
-							wk.append(0)
-							qn += 1
-							q0 = True
-						v = measure()
-					else:
-						swap(South)
-						if not q1:
-							wk.append(1)
-							qn += 1
-							q1 = True
-						v = measure()
-				ja = measure(North)
-				if ja >= v:
-					break
-				swap(North)
-				if not q3:
-					wk.append(3)
-					qn += 1
-					q3 = True
-			break
-		q3 = False
-		move(North)
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			if ja > v:
-				swap(South)
-				if not q2:
-					wk.append(2)
-					qn += 1
-					q2 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			if ja >= v:
-				break
-			swap(North)
-			while True:
-				v = measure()
-				ja = measure(South)
-				if ja > v:
-					swap(South)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-					v = measure()
-				ja = measure(North)
-				if ja >= v:
-					break
-				swap(North)
-			break
-		cur = 3
-		qi = 4
-		while qi < qn:
-			cx = wk[qi]
-			qi += 1
-			if cx == 0:
-				q0 = False
-				if cur == 1:
-					move(West)
-					move(North)
-				elif cur == 2:
-					move(West)
-				elif cur == 3:
-					move(West)
-					move(South)
-				cur = 0
-				while True:
-					v = measure()
-					ja = measure(South)
-					jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							v = measure()
-						else:
-							swap(South)
-							v = measure()
-					ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-			elif cx == 1:
-				q1 = False
-				if cur == 0:
-					move(East)
-					move(South)
-				elif cur == 2:
-					move(South)
-				elif cur == 3:
-					move(South)
-					move(South)
-				cur = 1
-				while True:
-					v = measure()
-					ja = measure(South)
-					jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							v = measure()
-						else:
-							swap(South)
-							v = measure()
-					ja = measure(North)
-					if ja >= v:
-						break
-					swap(North)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-			elif cx == 2:
-				q2 = False
-				if cur == 0:
-					move(East)
-				elif cur == 1:
-					move(North)
-				elif cur == 3:
-					move(South)
-				cur = 2
-				while True:
-					v = measure()
-					ja = measure(South)
-					jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							if not q0:
-								wk.append(0)
-								qn += 1
-								q0 = True
-							v = measure()
-						else:
-							swap(South)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-							v = measure()
-					ja = measure(North)
-					if ja >= v:
-						break
-					swap(North)
-					if not q3:
-						wk.append(3)
-						qn += 1
-						q3 = True
-			else:
-				q3 = False
-				if cur == 0:
-					move(East)
-					move(North)
-				elif cur == 1:
-					move(North)
-					move(North)
-				elif cur == 2:
-					move(North)
-				cur = 3
-				while True:
-					v = measure()
-					ja = measure(South)
-					if ja > v:
-						swap(South)
-						if not q2:
-							wk.append(2)
-							qn += 1
-							q2 = True
-						v = measure()
-					ja = measure(North)
-					if ja >= v:
-						break
-					swap(North)
-		if cur == 1:
-			move(West)
-			move(West)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-		elif cur == 2:
-			move(West)
-			move(West)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-		elif cur == 3:
-			move(West)
-			move(West)
-			move(North)
-			move(North)
-			move(North)
+		if use_item(Items.Water, 4):
+			tl = get_time() - 0.0988
+		TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
+		TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
+		TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
+		h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+		if h:
+			own(TFS, TMS, TRS, 0, 5)
 		else:
-			move(West)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-		wk = [0, 1, 2, 3]
-		cur = 0
-		qi = 0
-		qn = 4
-		q0 = True
-		q1 = True
-		q2 = True
-		q3 = True
-		q0 = False
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			jb = measure(West)
-			while jb == None:
-				jb = measure(West)
-			if not ja <= v >= jb:
-				if jb > ja:
-					swap(West)
-					v = measure()
-				else:
-					swap(South)
-					v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			if ja >= v:
-				break
-			swap(North)
-			if not q2:
-				wk.append(2)
-				qn += 1
-				q2 = True
-			while True:
-				v = measure()
-				ja = measure(South)
-				jb = measure(West)
-				if not ja <= v >= jb:
-					if jb > ja:
-						swap(West)
-						v = measure()
-					else:
-						swap(South)
-						v = measure()
-				ja = measure(North)
-				if ja >= v:
-					break
-				swap(North)
-				if not q2:
-					wk.append(2)
-					qn += 1
-					q2 = True
-			break
-		q1 = False
-		move(West)
-		move(North)
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			jb = measure(West)
-			while jb == None:
-				jb = measure(West)
-			if not ja <= v >= jb:
-				if jb > ja:
-					swap(West)
-					v = measure()
-				else:
-					swap(South)
-					v = measure()
-			ja = measure(East)
-			while ja == None:
-				ja = measure(East)
-			if ja >= v:
-				break
-			swap(East)
-			if not q2:
-				wk.append(2)
-				qn += 1
-				q2 = True
-			while True:
-				v = measure()
-				ja = measure(South)
-				jb = measure(West)
-				if not ja <= v >= jb:
-					if jb > ja:
-						swap(West)
-						v = measure()
-					else:
-						swap(South)
-						v = measure()
-				ja = measure(East)
-				if ja >= v:
-					break
-				swap(East)
-				if not q2:
-					wk.append(2)
-					qn += 1
-					q2 = True
-			break
-		q2 = False
-		move(East)
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			jb = measure(West)
-			while jb == None:
-				jb = measure(West)
-			if not ja <= v >= jb:
-				if jb > ja:
-					swap(West)
-					if not q1:
-						wk.append(1)
-						qn += 1
-						q1 = True
-					v = measure()
-				else:
-					swap(South)
-					if not q0:
-						wk.append(0)
-						qn += 1
-						q0 = True
-					v = measure()
-			ja = measure(East)
-			while ja == None:
-				ja = measure(East)
-			if ja >= v:
-				break
-			swap(East)
-			if not q3:
-				wk.append(3)
-				qn += 1
-				q3 = True
-			while True:
-				v = measure()
-				ja = measure(South)
-				jb = measure(West)
-				if not ja <= v >= jb:
-					if jb > ja:
-						swap(West)
-						if not q1:
-							wk.append(1)
-							qn += 1
-							q1 = True
-						v = measure()
-					else:
-						swap(South)
-						if not q0:
-							wk.append(0)
-							qn += 1
-							q0 = True
-						v = measure()
-				ja = measure(East)
-				if ja >= v:
-					break
-				swap(East)
-				if not q3:
-					wk.append(3)
-					qn += 1
-					q3 = True
-			break
-		q3 = False
-		move(East)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				if not q2:
-					wk.append(2)
-					qn += 1
-					q2 = True
-				v = measure()
-			ja = measure(East)
-			while ja == None:
-				ja = measure(East)
-			if ja >= v:
-				break
-			swap(East)
-			while True:
-				v = measure()
-				ja = measure(West)
-				if ja > v:
-					swap(West)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-					v = measure()
-				ja = measure(East)
-				if ja >= v:
-					break
-				swap(East)
-			break
-		cur = 3
-		qi = 4
-		while qi < qn:
-			cx = wk[qi]
-			qi += 1
-			if cx == 0:
-				q0 = False
-				if cur == 1:
-					move(East)
-					move(South)
-				elif cur == 2:
-					move(South)
-				elif cur == 3:
-					move(West)
-					move(South)
-				cur = 0
-				while True:
-					v = measure()
-					ja = measure(South)
-					jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							v = measure()
-						else:
-							swap(South)
-							v = measure()
-					ja = measure(North)
-					if ja >= v:
-						break
-					swap(North)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-			elif cx == 1:
-				q1 = False
-				if cur == 0:
-					move(West)
-					move(North)
-				elif cur == 2:
-					move(West)
-				elif cur == 3:
-					move(West)
-					move(West)
-				cur = 1
-				while True:
-					v = measure()
-					ja = measure(South)
-					jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							v = measure()
-						else:
-							swap(South)
-							v = measure()
-					ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-			elif cx == 2:
-				q2 = False
-				if cur == 0:
-					move(North)
-				elif cur == 1:
-					move(East)
-				elif cur == 3:
-					move(West)
-				cur = 2
-				while True:
-					v = measure()
-					ja = measure(South)
-					jb = measure(West)
-					if not ja <= v >= jb:
-						if jb > ja:
-							swap(West)
-							if not q1:
-								wk.append(1)
-								qn += 1
-								q1 = True
-							v = measure()
-						else:
-							swap(South)
-							if not q0:
-								wk.append(0)
-								qn += 1
-								q0 = True
-							v = measure()
-					ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q3:
-						wk.append(3)
-						qn += 1
-						q3 = True
-			else:
-				q3 = False
-				if cur == 0:
-					move(East)
-					move(North)
-				elif cur == 1:
-					move(East)
-					move(East)
-				elif cur == 2:
-					move(East)
-				cur = 3
-				while True:
-					v = measure()
-					ja = measure(West)
-					if ja > v:
-						swap(West)
-						if not q2:
-							wk.append(2)
-							qn += 1
-							q2 = True
-						v = measure()
-					ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-		wait_until(tl + 0.9676)
-	spawn_drone(w14)
-	def w10():
-		def w12():
-			def w13():
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(North)
-				move(North)
-				move(North)
-				move(North)
-				move(North)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				tl = get_time()
-				move(South)
-				fsSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fsSW_NE()
-				e = tl + 0.9345
-				P = []
-				if get_time() < e:
-					move(East)
-					if get_time() < e:
-						move(East)
-						if get_time() < e:
-							move(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append((South,))
-						else:
-							P.append((South, South,))
-					else:
-						P.append((East, South, South,))
-				else:
-					P.append((East, East, South, South,))
-				wait_until(tl + 0.9676)
-				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-					if get_entity_type() == Entities.Cactus:
-						harvest()
-					else:
-						use_item(Items.Water)
-				else:
-					use_item(Items.Water)
-				for q in P:
-					for d in q:
-						move(d)
-				while num_items(Items.Cactus) <= 0:
-					pass
-				plant(Entities.Cactus)
-				move(North)
-				plant(Entities.Cactus)
-				move(West)
-				plant(Entities.Cactus)
-				swap(South)
-				pk_None_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_None_0_0()
-				move(West)
-				plant(Entities.Cactus)
-				move(North)
-				plant(Entities.Cactus)
-				tl = get_time()
-				if use_item(Items.Fertilizer):
-					tl = get_time() - 0.0988
-				TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
-				TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
-				TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-				h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
-				if h:
-					own(TFS, TMS, TRS, 0, 6)
-				else:
-					fsSW_NE()
-					move(East)
-					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
-					if h:
-						own(TFS, TMS, TRS, 1, 6)
-					else:
-						fSW_NE()
-						move(East)
-						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
-						if h:
-							own(TFS, TMS, TRS, 2, 6)
-						else:
-							fSW_NE()
-							move(East)
-							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
-							if h:
-								own(TFS, TMS, TRS, 3, 6)
-							else:
-								fSW_NE()
-								move(East)
-								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
-								if h:
-									own(TFS, TMS, TRS, 4, 7)
-								else:
-									fSW_NE()
-									move(East)
-									move(South)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
-									if h:
-										own(TFS, TMS, TRS, 5, 7)
-									else:
-										fSW_NE()
-										move(East)
-										move(South)
-										h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
-										if h:
-											own(TFS, TMS, TRS, 6, 7)
-										else:
-											fSW_NE()
-											move(East)
-											move(South)
-											fSW_NE()
-											move(East)
-											move(South)
-											fsSW_NE()
-				wait_until(tl + 0.9676)
-			spawn_drone(w13)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(West)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(West)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(West)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(West)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(West)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(West)
-			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			tl = get_time()
-			move(North)
-			till()
-			use_item(Items.Water, 4)
-			plant(Entities.Cactus)
-			move(South)
 			fsSW_NE()
 			move(East)
 			move(South)
-			fSW_NE()
-			move(East)
-			move(South)
-			fSW_NE()
-			move(East)
-			move(South)
-			fSW_NE()
-			move(East)
-			move(South)
-			fSW_NE()
-			move(East)
-			move(South)
-			fSW_NE()
-			move(East)
-			move(South)
-			fsSW_NE()
-			e = tl + 0.9345
-			P = []
-			if get_time() < e:
-				move(East)
-				if get_time() < e:
-					move(East)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append((South,))
-				else:
-					P.append((East, South,))
-			else:
-				P.append((East, East, South,))
-			wait_until(tl + 0.9676)
-			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-				if get_entity_type() == Entities.Cactus:
-					harvest()
-				else:
-					use_item(Items.Water)
-			else:
-				use_item(Items.Water)
-			for q in P:
-				for d in q:
-					move(d)
-			while num_items(Items.Cactus) <= 0:
-				pass
-			plant(Entities.Cactus)
-			move(West)
-			plant(Entities.Cactus)
-			swap(South)
-			pk_None_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_None_0_0()
-			tl = get_time()
-			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
-			TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
-			TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+			h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
 			if h:
-				own(TFS, TMS, TRS, 0, 5)
+				own(TFS, TMS, TRS, 1, 5)
 			else:
-				fsSW_NE()
+				fSW_NE()
 				move(East)
 				move(South)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+				h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
 				if h:
-					own(TFS, TMS, TRS, 1, 5)
+					own(TFS, TMS, TRS, 2, 5)
 				else:
 					fSW_NE()
 					move(East)
 					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
 					if h:
-						own(TFS, TMS, TRS, 2, 5)
+						own(TFS, TMS, TRS, 3, 6)
 					else:
 						fSW_NE()
 						move(East)
 						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
 						if h:
-							own(TFS, TMS, TRS, 3, 6)
+							own(TFS, TMS, TRS, 4, 6)
 						else:
 							fSW_NE()
 							move(East)
 							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
 							if h:
-								own(TFS, TMS, TRS, 4, 6)
+								own(TFS, TMS, TRS, 5, 6)
 							else:
 								fSW_NE()
 								move(East)
 								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
-								if h:
-									own(TFS, TMS, TRS, 5, 6)
-								else:
-									fSW_NE()
-									move(East)
-									move(South)
-									fSW_NE()
-									move(East)
-									move(South)
-									fsSW_NE()
+								fSW_NE()
+								move(East)
+								move(South)
+								fsSW_NE()
+		if tl + 0.9676 > hb + 2.6:
 			wait_until(tl + 0.9676)
-		spawn_drone(w12)
-		move(East)
-		move(South)
-		move(South)
-		move(South)
-		move(South)
-		move(South)
-		move(South)
-		move(South)
-		move(South)
-		move(South)
-		move(South)
+	spawn_drone(w12)
+	def w9():
 		def w11():
 			move(East)
 			move(East)
+			move(East)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
 			till()
 			plant(Entities.Cactus)
 			move(East)
@@ -12863,8 +12947,9 @@ def w0():
 			for q in P:
 				for d in q:
 					move(d)
+			hb = 0
 			while num_items(Items.Cactus) <= 0:
-				pass
+				hb = get_time()
 			plant(Entities.Cactus)
 			move(North)
 			pk_None_North_West_0_1()
@@ -13246,246 +13331,20 @@ def w0():
 			move(East)
 			move(South)
 			fsSW_NE()
-			wait_until(tl + 0.9676)
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
 		spawn_drone(w11)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		plant(Entities.Cactus)
-		move(East)
-		move(North)
-		till()
-		plant(Entities.Cactus)
-		tl = get_time()
-		move(West)
-		fsSW_NE()
-		move(West)
-		move(North)
-		fSW_NE()
-		move(West)
-		move(North)
-		fSW_NE()
-		move(West)
-		move(North)
-		fSW_NE()
-		move(West)
-		move(North)
-		fSW_NE()
-		move(West)
-		move(North)
-		fSW_NE()
-		move(West)
-		move(North)
-		fSW_NE()
-		move(West)
-		move(North)
-		fsSW_NE()
-		e = tl + 0.9345
-		P = []
-		if get_time() < e:
-			move(West)
-			if get_time() < e:
-				move(North)
-				if get_time() < e:
-					move(North)
-				else:
-					P.append((North,))
-			else:
-				P.append((North, North,))
-		else:
-			P.append((West, North, North,))
-		wait_until(tl + 0.9676)
-		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-			if get_entity_type() == Entities.Cactus:
-				harvest()
-			else:
-				use_item(Items.Water)
-		else:
-			use_item(Items.Water)
-		for q in P:
-			for d in q:
-				move(d)
-		while num_items(Items.Cactus) <= 0:
-			pass
-		plant(Entities.Cactus)
-		move(South)
-		pk_None_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_None_1_0()
-		move(East)
-		plant(Entities.Cactus)
-		tl = get_time()
-		if use_item(Items.Fertilizer):
-			tl = get_time() - 0.0988
-		move(West)
-		TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsS_NE)
-		TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
-		TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-		h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
-		if h:
-			own(TFS, TMS, TRS, 0, 5)
-		else:
-			fsSW_NE()
-			move(West)
-			move(North)
-			h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
-			if h:
-				own(TFS, TMS, TRS, 1, 5)
-			else:
-				fSW_NE()
-				move(West)
-				move(North)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
-				if h:
-					own(TFS, TMS, TRS, 2, 5)
-				else:
-					fSW_NE()
-					move(West)
-					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
-					if h:
-						own(TFS, TMS, TRS, 3, 6)
-					else:
-						fSW_NE()
-						move(West)
-						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
-						if h:
-							own(TFS, TMS, TRS, 4, 6)
-						else:
-							fSW_NE()
-							move(West)
-							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
-							if h:
-								own(TFS, TMS, TRS, 5, 6)
-							else:
-								fSW_NE()
-								move(West)
-								move(North)
-								fSW_NE()
-								move(West)
-								move(North)
-								fsS_NE()
-		wait_until(tl + 0.9676)
-	spawn_drone(w10)
-	def w8():
-		def w9():
+		def w10():
 			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(East)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			move(North)
-			till()
-			move(East)
-			till()
-			plant(Entities.Cactus)
 			move(South)
-			till()
-			plant(Entities.Cactus)
-			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
 			move(South)
-			till()
-			plant(Entities.Cactus)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
+			move(South)
 			move(South)
 			till()
 			plant(Entities.Cactus)
@@ -13540,9 +13399,36 @@ def w0():
 			till()
 			plant(Entities.Cactus)
 			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
 			till()
 			plant(Entities.Cactus)
 			tl = get_time()
+			move(West)
 			fsSW_NE()
 			move(West)
 			move(North)
@@ -13571,10 +13457,14 @@ def w0():
 				move(West)
 				if get_time() < e:
 					move(North)
+					if get_time() < e:
+						move(North)
+					else:
+						P.append((North,))
 				else:
-					P.append((North,))
+					P.append((North, North,))
 			else:
-				P.append((West, North,))
+				P.append((West, North, North,))
 			wait_until(tl + 0.9676)
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
@@ -13586,15 +13476,13 @@ def w0():
 			for q in P:
 				for d in q:
 					move(d)
+			hb = 0
 			while num_items(Items.Cactus) <= 0:
-				pass
+				hb = get_time()
 			plant(Entities.Cactus)
 			move(South)
-			plant(Entities.Cactus)
-			move(East)
-			plant(Entities.Cactus)
-			swap(North)
 			pk_None_South_East_1_1()
+			pk_West_South_East_1_1()
 			pk_West_South_East_1_1()
 			pk_West_South_East_1_1()
 			pk_West_South_East_1_1()
@@ -13603,91 +13491,116 @@ def w0():
 			pk_West_South_None_1_0()
 			move(East)
 			plant(Entities.Cactus)
-			move(South)
-			plant(Entities.Cactus)
 			tl = get_time()
-			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
-			TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
-			TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
-			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+			if use_item(Items.Fertilizer):
+				tl = get_time() - 0.0988
+			move(West)
+			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsS_NE)
+			TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
+			TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
+			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
 			if h:
-				own(TFS, TMS, TRS, 0, 6)
+				own(TFS, TMS, TRS, 0, 5)
 			else:
 				fsSW_NE()
 				move(West)
 				move(North)
-				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
 				if h:
-					own(TFS, TMS, TRS, 1, 6)
+					own(TFS, TMS, TRS, 1, 5)
 				else:
 					fSW_NE()
 					move(West)
 					move(North)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
 					if h:
-						own(TFS, TMS, TRS, 2, 6)
+						own(TFS, TMS, TRS, 2, 5)
 					else:
 						fSW_NE()
 						move(West)
 						move(North)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
 						if h:
 							own(TFS, TMS, TRS, 3, 6)
 						else:
 							fSW_NE()
 							move(West)
 							move(North)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
 							if h:
-								own(TFS, TMS, TRS, 4, 7)
+								own(TFS, TMS, TRS, 4, 6)
 							else:
 								fSW_NE()
 								move(West)
 								move(North)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
 								if h:
-									own(TFS, TMS, TRS, 5, 7)
+									own(TFS, TMS, TRS, 5, 6)
 								else:
 									fSW_NE()
 									move(West)
 									move(North)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
-									if h:
-										own(TFS, TMS, TRS, 6, 7)
-									else:
-										fSW_NE()
-										move(West)
-										move(North)
-										fSW_NE()
-										move(West)
-										move(North)
-										fsSW_NE()
-			wait_until(tl + 0.9676)
-		spawn_drone(w9)
-		move(West)
-		move(West)
-		move(West)
+									fSW_NE()
+									move(West)
+									move(North)
+									fsS_NE()
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
+		spawn_drone(w10)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
 		move(North)
 		move(North)
 		till()
-		move(West)
-		move(West)
-		move(West)
-		move(West)
-		move(West)
-		move(West)
-		move(West)
-		move(West)
-		move(West)
-		move(West)
-		move(West)
-		move(West)
+		move(East)
 		till()
 		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(East)
 		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(East)
 		move(North)
-		move(North)
-		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(East)
+		till()
+		plant(Entities.Cactus)
+		move(South)
 		till()
 		plant(Entities.Cactus)
 		move(East)
@@ -13725,375 +13638,22 @@ def w0():
 		till()
 		plant(Entities.Cactus)
 		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		till()
-		plant(Entities.Cactus)
-		if measure() < measure(West):
-			swap(West)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(East)
-		plant(Entities.Cactus)
-		move(South)
-		till()
-		plant(Entities.Cactus)
-		move(West)
-		till()
-		plant(Entities.Cactus)
-		move(West)
-		till()
-		plant(Entities.Cactus)
-		move(West)
 		till()
 		plant(Entities.Cactus)
 		tl = get_time()
-		xcas(North, 1)
-		move(East)
-		move(East)
+		fsSW_NE()
+		move(West)
 		move(North)
-		wk = [3, 2, 1, 0]
-		cur = 3
-		qi = 0
-		qn = 4
-		q3 = True
-		q2 = True
-		q1 = True
-		q0 = True
-		q3 = False
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			if ja > v:
-				swap(South)
-				if not q1:
-					wk.append(1)
-					qn += 1
-					q1 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			jb = measure(East)
-			while jb == None:
-				jb = measure(East)
-			if ja >= v <= jb:
-				break
-			if jb < ja:
-				swap(East)
-			else:
-				swap(North)
-			while True:
-				v = measure()
-				ja = measure(South)
-				if ja > v:
-					swap(South)
-					if not q1:
-						wk.append(1)
-						qn += 1
-						q1 = True
-					v = measure()
-				ja = measure(North)
-				jb = measure(East)
-				if ja >= v <= jb:
-					break
-				if jb < ja:
-					swap(East)
-				else:
-					swap(North)
-			break
-		q2 = False
-		move(East)
-		move(South)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				if not q1:
-					wk.append(1)
-					qn += 1
-					q1 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			jb = measure(East)
-			while jb == None:
-				jb = measure(East)
-			if ja >= v <= jb:
-				break
-			if jb < ja:
-				swap(East)
-			else:
-				swap(North)
-			while True:
-				v = measure()
-				ja = measure(West)
-				if ja > v:
-					swap(West)
-					if not q1:
-						wk.append(1)
-						qn += 1
-						q1 = True
-					v = measure()
-				ja = measure(North)
-				jb = measure(East)
-				if ja >= v <= jb:
-					break
-				if jb < ja:
-					swap(East)
-				else:
-					swap(North)
-			break
-		q1 = False
+		fSW_NE()
 		move(West)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				if not q0:
-					wk.append(0)
-					qn += 1
-					q0 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			jb = measure(East)
-			while jb == None:
-				jb = measure(East)
-			if ja >= v <= jb:
-				break
-			if jb < ja:
-				swap(East)
-				if not q2:
-					wk.append(2)
-					qn += 1
-					q2 = True
-			else:
-				swap(North)
-				if not q3:
-					wk.append(3)
-					qn += 1
-					q3 = True
-			while True:
-				v = measure()
-				ja = measure(West)
-				if ja > v:
-					swap(West)
-					if not q0:
-						wk.append(0)
-						qn += 1
-						q0 = True
-					v = measure()
-				ja = measure(North)
-				jb = measure(East)
-				if ja >= v <= jb:
-					break
-				if jb < ja:
-					swap(East)
-					if not q2:
-						wk.append(2)
-						qn += 1
-						q2 = True
-				else:
-					swap(North)
-					if not q3:
-						wk.append(3)
-						qn += 1
-						q3 = True
-			break
-		q0 = False
+		move(North)
+		fSW_NE()
 		move(West)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				v = measure()
-			ja = measure(East)
-			while ja == None:
-				ja = measure(East)
-			if ja >= v:
-				break
-			swap(East)
-			if not q1:
-				wk.append(1)
-				qn += 1
-				q1 = True
-			while True:
-				v = measure()
-				ja = measure(West)
-				if ja > v:
-					swap(West)
-					v = measure()
-				ja = measure(East)
-				if ja >= v:
-					break
-				swap(East)
-				if not q1:
-					wk.append(1)
-					qn += 1
-					q1 = True
-			break
-		cur = 0
-		qi = 4
-		while qi < qn:
-			cx = wk[qi]
-			qi += 1
-			if cx == 0:
-				q0 = False
-				if cur == 1:
-					move(West)
-				elif cur == 2:
-					move(West)
-					move(West)
-				elif cur == 3:
-					move(West)
-					move(South)
-				cur = 0
-				while True:
-					v = measure()
-					ja = measure(West)
-					if ja > v:
-						swap(West)
-						v = measure()
-					ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q1:
-						wk.append(1)
-						qn += 1
-						q1 = True
-			elif cx == 1:
-				q1 = False
-				if cur == 0:
-					move(East)
-				elif cur == 2:
-					move(West)
-				elif cur == 3:
-					move(South)
-				cur = 1
-				while True:
-					v = measure()
-					ja = measure(West)
-					if ja > v:
-						swap(West)
-						if not q0:
-							wk.append(0)
-							qn += 1
-							q0 = True
-						v = measure()
-					ja = measure(North)
-					jb = measure(East)
-					if ja >= v <= jb:
-						break
-					if jb < ja:
-						swap(East)
-						if not q2:
-							wk.append(2)
-							qn += 1
-							q2 = True
-					else:
-						swap(North)
-						if not q3:
-							wk.append(3)
-							qn += 1
-							q3 = True
-			elif cx == 2:
-				q2 = False
-				if cur == 0:
-					move(East)
-					move(East)
-				elif cur == 1:
-					move(East)
-				elif cur == 3:
-					move(East)
-					move(South)
-				cur = 2
-				while True:
-					v = measure()
-					ja = measure(West)
-					if ja > v:
-						swap(West)
-						if not q1:
-							wk.append(1)
-							qn += 1
-							q1 = True
-						v = measure()
-					ja = measure(North)
-					jb = measure(East)
-					if ja >= v <= jb:
-						break
-					if jb < ja:
-						swap(East)
-					else:
-						swap(North)
-			else:
-				q3 = False
-				if cur == 0:
-					move(East)
-					move(North)
-				elif cur == 1:
-					move(North)
-				elif cur == 2:
-					move(West)
-					move(North)
-				cur = 3
-				while True:
-					v = measure()
-					ja = measure(South)
-					if ja > v:
-						swap(South)
-						if not q1:
-							wk.append(1)
-							qn += 1
-							q1 = True
-						v = measure()
-					ja = measure(North)
-					jb = measure(East)
-					if ja >= v <= jb:
-						break
-					if jb < ja:
-						swap(East)
-					else:
-						swap(North)
-		if cur == 0:
-			move(North)
-			move(North)
-			move(North)
-		elif cur == 1:
-			move(West)
-			move(North)
-			move(North)
-			move(North)
-		elif cur == 2:
-			move(West)
-			move(West)
-			move(North)
-			move(North)
-			move(North)
-		else:
-			move(West)
-			move(North)
-			move(North)
-		fsSW_N()
+		move(North)
+		fSW_NE()
+		move(West)
+		move(North)
+		fSW_NE()
 		move(West)
 		move(North)
 		fSW_NE()
@@ -14107,8 +13667,12 @@ def w0():
 		P = []
 		if get_time() < e:
 			move(West)
+			if get_time() < e:
+				move(North)
+			else:
+				P.append((North,))
 		else:
-			P.append((West,))
+			P.append((West, North,))
 		wait_until(tl + 0.9676)
 		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 			if get_entity_type() == Entities.Cactus:
@@ -14120,8 +13684,11 @@ def w0():
 		for q in P:
 			for d in q:
 				move(d)
+		hb = 0
 		while num_items(Items.Cactus) <= 0:
-			pass
+			hb = get_time()
+		plant(Entities.Cactus)
+		move(South)
 		plant(Entities.Cactus)
 		move(East)
 		plant(Entities.Cactus)
@@ -14129,67 +13696,183 @@ def w0():
 		pk_None_South_East_1_1()
 		pk_West_South_East_1_1()
 		pk_West_South_East_1_1()
+		pk_West_South_East_1_1()
+		pk_West_South_East_1_1()
+		pk_West_South_East_1_1()
 		pk_West_South_None_1_0()
 		move(East)
-		move(South)
-		plant(Entities.Cactus)
-		if measure() < measure(West):
-			swap(West)
-		move(South)
-		plant(Entities.Cactus)
-		move(East)
 		plant(Entities.Cactus)
 		move(South)
-		plant(Entities.Cactus)
-		swap(East)
-		plant(Entities.Cactus)
-		move(West)
-		plant(Entities.Cactus)
-		move(West)
-		plant(Entities.Cactus)
-		move(West)
 		plant(Entities.Cactus)
 		tl = get_time()
-		xcas(North, 1)
-		move(East)
-		move(East)
-		move(North)
-		wk = [3, 2, 1, 0]
-		cur = 3
-		qi = 0
-		qn = 4
-		q3 = True
-		q2 = True
-		q1 = True
-		q0 = True
-		q3 = False
-		while True:
-			v = measure()
-			ja = measure(South)
-			while ja == None:
-				ja = measure(South)
-			if ja > v:
-				swap(South)
-				if not q1:
-					wk.append(1)
-					qn += 1
-					q1 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			jb = measure(East)
-			while jb == None:
-				jb = measure(East)
-			if ja >= v <= jb:
-				break
-			if jb < ja:
-				swap(East)
+		TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
+		TMS = ((West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North), (West, North))
+		TRS = ((South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East), (South, East))
+		h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+		if h:
+			own(TFS, TMS, TRS, 0, 6)
+		else:
+			fsSW_NE()
+			move(West)
+			move(North)
+			h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+			if h:
+				own(TFS, TMS, TRS, 1, 6)
 			else:
-				swap(North)
+				fSW_NE()
+				move(West)
+				move(North)
+				h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+				if h:
+					own(TFS, TMS, TRS, 2, 6)
+				else:
+					fSW_NE()
+					move(West)
+					move(North)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+					if h:
+						own(TFS, TMS, TRS, 3, 6)
+					else:
+						fSW_NE()
+						move(West)
+						move(North)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+						if h:
+							own(TFS, TMS, TRS, 4, 7)
+						else:
+							fSW_NE()
+							move(West)
+							move(North)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+							if h:
+								own(TFS, TMS, TRS, 5, 7)
+							else:
+								fSW_NE()
+								move(West)
+								move(North)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+								if h:
+									own(TFS, TMS, TRS, 6, 7)
+								else:
+									fSW_NE()
+									move(West)
+									move(North)
+									fSW_NE()
+									move(West)
+									move(North)
+									fsSW_NE()
+		if tl + 0.9676 > hb + 2.6:
+			wait_until(tl + 0.9676)
+	spawn_drone(w9)
+	def w6():
+		def w8():
+			move(West)
+			move(West)
+			move(West)
+			move(North)
+			move(North)
+			till()
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			move(North)
+			move(North)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			till()
+			plant(Entities.Cactus)
+			if measure() < measure(West):
+				swap(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(East)
+			plant(Entities.Cactus)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			tl = get_time()
+			xcas(North, 1)
+			move(East)
+			move(East)
+			move(North)
+			wk = [3, 2, 1, 0]
+			cur = 3
+			qi = 0
+			qn = 4
+			q3 = True
+			q2 = True
+			q1 = True
+			q0 = True
+			q3 = False
 			while True:
 				v = measure()
 				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
 				if ja > v:
 					swap(South)
 					if not q1:
@@ -14198,44 +13881,44 @@ def w0():
 						q1 = True
 					v = measure()
 				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
 				jb = measure(East)
+				while jb == None:
+					jb = measure(East)
 				if ja >= v <= jb:
 					break
 				if jb < ja:
 					swap(East)
 				else:
 					swap(North)
-			break
-		q2 = False
-		move(East)
-		move(South)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				if not q1:
-					wk.append(1)
-					qn += 1
-					q1 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			jb = measure(East)
-			while jb == None:
-				jb = measure(East)
-			if ja >= v <= jb:
+				while True:
+					v = measure()
+					ja = measure(South)
+					if ja > v:
+						swap(South)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
 				break
-			if jb < ja:
-				swap(East)
-			else:
-				swap(North)
+			q2 = False
+			move(East)
+			move(South)
 			while True:
 				v = measure()
 				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
 				if ja > v:
 					swap(West)
 					if not q1:
@@ -14244,51 +13927,43 @@ def w0():
 						q1 = True
 					v = measure()
 				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
 				jb = measure(East)
+				while jb == None:
+					jb = measure(East)
 				if ja >= v <= jb:
 					break
 				if jb < ja:
 					swap(East)
 				else:
 					swap(North)
-			break
-		q1 = False
-		move(West)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				if not q0:
-					wk.append(0)
-					qn += 1
-					q0 = True
-				v = measure()
-			ja = measure(North)
-			while ja == None:
-				ja = measure(North)
-			jb = measure(East)
-			while jb == None:
-				jb = measure(East)
-			if ja >= v <= jb:
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
 				break
-			if jb < ja:
-				swap(East)
-				if not q2:
-					wk.append(2)
-					qn += 1
-					q2 = True
-			else:
-				swap(North)
-				if not q3:
-					wk.append(3)
-					qn += 1
-					q3 = True
+			q1 = False
+			move(West)
 			while True:
 				v = measure()
 				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
 				if ja > v:
 					swap(West)
 					if not q0:
@@ -14297,7 +13972,11 @@ def w0():
 						q0 = True
 					v = measure()
 				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
 				jb = measure(East)
+				while jb == None:
+					jb = measure(East)
 				if ja >= v <= jb:
 					break
 				if jb < ja:
@@ -14312,81 +13991,6 @@ def w0():
 						wk.append(3)
 						qn += 1
 						q3 = True
-			break
-		q0 = False
-		move(West)
-		while True:
-			v = measure()
-			ja = measure(West)
-			while ja == None:
-				ja = measure(West)
-			if ja > v:
-				swap(West)
-				v = measure()
-			ja = measure(East)
-			while ja == None:
-				ja = measure(East)
-			if ja >= v:
-				break
-			swap(East)
-			if not q1:
-				wk.append(1)
-				qn += 1
-				q1 = True
-			while True:
-				v = measure()
-				ja = measure(West)
-				if ja > v:
-					swap(West)
-					v = measure()
-				ja = measure(East)
-				if ja >= v:
-					break
-				swap(East)
-				if not q1:
-					wk.append(1)
-					qn += 1
-					q1 = True
-			break
-		cur = 0
-		qi = 4
-		while qi < qn:
-			cx = wk[qi]
-			qi += 1
-			if cx == 0:
-				q0 = False
-				if cur == 1:
-					move(West)
-				elif cur == 2:
-					move(West)
-					move(West)
-				elif cur == 3:
-					move(West)
-					move(South)
-				cur = 0
-				while True:
-					v = measure()
-					ja = measure(West)
-					if ja > v:
-						swap(West)
-						v = measure()
-					ja = measure(East)
-					if ja >= v:
-						break
-					swap(East)
-					if not q1:
-						wk.append(1)
-						qn += 1
-						q1 = True
-			elif cx == 1:
-				q1 = False
-				if cur == 0:
-					move(East)
-				elif cur == 2:
-					move(West)
-				elif cur == 3:
-					move(South)
-				cur = 1
 				while True:
 					v = measure()
 					ja = measure(West)
@@ -14413,46 +14017,279 @@ def w0():
 							wk.append(3)
 							qn += 1
 							q3 = True
-			elif cx == 2:
-				q2 = False
-				if cur == 0:
-					move(East)
-					move(East)
-				elif cur == 1:
-					move(East)
-				elif cur == 3:
-					move(East)
-					move(South)
-				cur = 2
+				break
+			q0 = False
+			move(West)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q1:
+					wk.append(1)
+					qn += 1
+					q1 = True
 				while True:
 					v = measure()
 					ja = measure(West)
 					if ja > v:
 						swap(West)
+						v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+				break
+			cur = 0
+			qi = 4
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
+				if cx == 0:
+					q0 = False
+					if cur == 1:
+						move(West)
+					elif cur == 2:
+						move(West)
+						move(West)
+					elif cur == 3:
+						move(West)
+						move(South)
+					cur = 0
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
 						if not q1:
 							wk.append(1)
 							qn += 1
 							q1 = True
+				elif cx == 1:
+					q1 = False
+					if cur == 0:
+						move(East)
+					elif cur == 2:
+						move(West)
+					elif cur == 3:
+						move(South)
+					cur = 1
+					while True:
 						v = measure()
-					ja = measure(North)
-					jb = measure(East)
-					if ja >= v <= jb:
-						break
-					if jb < ja:
-						swap(East)
-					else:
-						swap(North)
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						else:
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+				elif cx == 2:
+					q2 = False
+					if cur == 0:
+						move(East)
+						move(East)
+					elif cur == 1:
+						move(East)
+					elif cur == 3:
+						move(East)
+						move(South)
+					cur = 2
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+				else:
+					q3 = False
+					if cur == 0:
+						move(East)
+						move(North)
+					elif cur == 1:
+						move(North)
+					elif cur == 2:
+						move(West)
+						move(North)
+					cur = 3
+					while True:
+						v = measure()
+						ja = measure(South)
+						if ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+			if cur == 0:
+				move(North)
+				move(North)
+				move(North)
+			elif cur == 1:
+				move(West)
+				move(North)
+				move(North)
+				move(North)
+			elif cur == 2:
+				move(West)
+				move(West)
+				move(North)
+				move(North)
+				move(North)
 			else:
-				q3 = False
-				if cur == 0:
-					move(East)
-					move(North)
-				elif cur == 1:
-					move(North)
-				elif cur == 2:
-					move(West)
-					move(North)
-				cur = 3
+				move(West)
+				move(North)
+				move(North)
+			fsSW_N()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fSW_NE()
+			move(West)
+			move(North)
+			fsSW_NE()
+			e = tl + 0.9345
+			P = []
+			if get_time() < e:
+				move(West)
+			else:
+				P.append((West,))
+			wait_until(tl + 0.9676)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
+			hb = 0
+			while num_items(Items.Cactus) <= 0:
+				hb = get_time()
+			plant(Entities.Cactus)
+			move(East)
+			plant(Entities.Cactus)
+			swap(North)
+			pk_None_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_East_1_1()
+			pk_West_South_None_1_0()
+			move(East)
+			move(South)
+			plant(Entities.Cactus)
+			if measure() < measure(West):
+				swap(West)
+			move(South)
+			plant(Entities.Cactus)
+			move(East)
+			plant(Entities.Cactus)
+			move(South)
+			plant(Entities.Cactus)
+			swap(East)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			tl = get_time()
+			xcas(North, 1)
+			move(East)
+			move(East)
+			move(North)
+			wk = [3, 2, 1, 0]
+			cur = 3
+			qi = 0
+			qn = 4
+			q3 = True
+			q2 = True
+			q1 = True
+			q0 = True
+			q3 = False
+			while True:
+				v = measure()
+				ja = measure(South)
+				while ja == None:
+					ja = measure(South)
+				if ja > v:
+					swap(South)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				jb = measure(East)
+				while jb == None:
+					jb = measure(East)
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+				else:
+					swap(North)
 				while True:
 					v = measure()
 					ja = measure(South)
@@ -14471,441 +14308,711 @@ def w0():
 						swap(East)
 					else:
 						swap(North)
-		if cur == 0:
-			move(North)
-			move(North)
-			move(North)
-		elif cur == 1:
+				break
+			q2 = False
+			move(East)
+			move(South)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+					v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				jb = measure(East)
+				while jb == None:
+					jb = measure(East)
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+				else:
+					swap(North)
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+						v = measure()
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+					else:
+						swap(North)
+				break
+			q1 = False
+			move(West)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					if not q0:
+						wk.append(0)
+						qn += 1
+						q0 = True
+					v = measure()
+				ja = measure(North)
+				while ja == None:
+					ja = measure(North)
+				jb = measure(East)
+				while jb == None:
+					jb = measure(East)
+				if ja >= v <= jb:
+					break
+				if jb < ja:
+					swap(East)
+					if not q2:
+						wk.append(2)
+						qn += 1
+						q2 = True
+				else:
+					swap(North)
+					if not q3:
+						wk.append(3)
+						qn += 1
+						q3 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						if not q0:
+							wk.append(0)
+							qn += 1
+							q0 = True
+						v = measure()
+					ja = measure(North)
+					jb = measure(East)
+					if ja >= v <= jb:
+						break
+					if jb < ja:
+						swap(East)
+						if not q2:
+							wk.append(2)
+							qn += 1
+							q2 = True
+					else:
+						swap(North)
+						if not q3:
+							wk.append(3)
+							qn += 1
+							q3 = True
+				break
+			q0 = False
+			move(West)
+			while True:
+				v = measure()
+				ja = measure(West)
+				while ja == None:
+					ja = measure(West)
+				if ja > v:
+					swap(West)
+					v = measure()
+				ja = measure(East)
+				while ja == None:
+					ja = measure(East)
+				if ja >= v:
+					break
+				swap(East)
+				if not q1:
+					wk.append(1)
+					qn += 1
+					q1 = True
+				while True:
+					v = measure()
+					ja = measure(West)
+					if ja > v:
+						swap(West)
+						v = measure()
+					ja = measure(East)
+					if ja >= v:
+						break
+					swap(East)
+					if not q1:
+						wk.append(1)
+						qn += 1
+						q1 = True
+				break
+			cur = 0
+			qi = 4
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
+				if cx == 0:
+					q0 = False
+					if cur == 1:
+						move(West)
+					elif cur == 2:
+						move(West)
+						move(West)
+					elif cur == 3:
+						move(West)
+						move(South)
+					cur = 0
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							v = measure()
+						ja = measure(East)
+						if ja >= v:
+							break
+						swap(East)
+						if not q1:
+							wk.append(1)
+							qn += 1
+							q1 = True
+				elif cx == 1:
+					q1 = False
+					if cur == 0:
+						move(East)
+					elif cur == 2:
+						move(West)
+					elif cur == 3:
+						move(South)
+					cur = 1
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q0:
+								wk.append(0)
+								qn += 1
+								q0 = True
+							v = measure()
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+							if not q2:
+								wk.append(2)
+								qn += 1
+								q2 = True
+						else:
+							swap(North)
+							if not q3:
+								wk.append(3)
+								qn += 1
+								q3 = True
+				elif cx == 2:
+					q2 = False
+					if cur == 0:
+						move(East)
+						move(East)
+					elif cur == 1:
+						move(East)
+					elif cur == 3:
+						move(East)
+						move(South)
+					cur = 2
+					while True:
+						v = measure()
+						ja = measure(West)
+						if ja > v:
+							swap(West)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+				else:
+					q3 = False
+					if cur == 0:
+						move(East)
+						move(North)
+					elif cur == 1:
+						move(North)
+					elif cur == 2:
+						move(West)
+						move(North)
+					cur = 3
+					while True:
+						v = measure()
+						ja = measure(South)
+						if ja > v:
+							swap(South)
+							if not q1:
+								wk.append(1)
+								qn += 1
+								q1 = True
+							v = measure()
+						ja = measure(North)
+						jb = measure(East)
+						if ja >= v <= jb:
+							break
+						if jb < ja:
+							swap(East)
+						else:
+							swap(North)
+			if cur == 0:
+				move(North)
+				move(North)
+				move(North)
+			elif cur == 1:
+				move(West)
+				move(North)
+				move(North)
+				move(North)
+			elif cur == 2:
+				move(West)
+				move(West)
+				move(North)
+				move(North)
+				move(North)
+			else:
+				move(West)
+				move(North)
+				move(North)
+			fsSW_N()
 			move(West)
 			move(North)
-			move(North)
-			move(North)
-		elif cur == 2:
-			move(West)
+			fSW_NE()
 			move(West)
 			move(North)
-			move(North)
-			move(North)
-		else:
+			fSW_NE()
 			move(West)
 			move(North)
+			fsSW_NE()
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
+		spawn_drone(w8)
+		def w7():
+			move(West)
 			move(North)
-		fsSW_N()
-		move(West)
+			till()
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			move(West)
+			till()
+			move(West)
+			move(West)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(West)
+			move(South)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			move(North)
+			till()
+			plant(Entities.Cactus)
+			tl = get_time()
+			move(South)
+			fsSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fSW_NE()
+			move(East)
+			move(South)
+			fsW_NE()
+			e = tl + 0.9345
+			P = []
+			if get_time() < e:
+				move(East)
+			else:
+				P.append((East,))
+			wait_until(tl + 0.9676)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
+			hb = 0
+			while num_items(Items.Cactus) <= 0:
+				hb = get_time()
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			move(North)
+			plant(Entities.Cactus)
+			move(West)
+			plant(Entities.Cactus)
+			swap(South)
+			pk_None_North_West_0_1()
+			pk_East_North_West_0_1()
+			pk_East_North_West_0_1()
+			pk_East_North_West_0_1()
+			pk_East_North_West_0_1()
+			pk_East_North_West_0_1()
+			pk_East_North_None_0_0()
+			move(West)
+			plant(Entities.Cactus)
+			tl = get_time()
+			move(East)
+			TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsW_NE)
+			TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
+			TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
+			h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
+			if h:
+				own(TFS, TMS, TRS, 0, 5)
+			else:
+				fsSW_NE()
+				move(East)
+				move(South)
+				h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
+				if h:
+					own(TFS, TMS, TRS, 1, 5)
+				else:
+					fSW_NE()
+					move(East)
+					move(South)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
+					if h:
+						own(TFS, TMS, TRS, 2, 5)
+					else:
+						fSW_NE()
+						move(East)
+						move(South)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
+						if h:
+							own(TFS, TMS, TRS, 3, 6)
+						else:
+							fSW_NE()
+							move(East)
+							move(South)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
+							if h:
+								own(TFS, TMS, TRS, 4, 6)
+							else:
+								fSW_NE()
+								move(East)
+								move(South)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
+								if h:
+									own(TFS, TMS, TRS, 5, 6)
+								else:
+									fSW_NE()
+									move(East)
+									move(South)
+									fSW_NE()
+									move(East)
+									move(South)
+									fsW_NE()
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
+		spawn_drone(w7)
+		move(East)
+		move(East)
 		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		move(North)
+		till()
+		move(East)
+		move(East)
+		move(North)
+		till()
+		move(East)
+		till()
+		move(East)
+		move(East)
+		till()
+		move(East)
+		move(East)
+		move(East)
+		move(East)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(West)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(West)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(West)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(West)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(West)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(West)
+		move(South)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		move(North)
+		till()
+		plant(Entities.Cactus)
+		tl = get_time()
+		move(South)
+		fsSW_NE()
+		move(East)
+		move(South)
 		fSW_NE()
-		move(West)
-		move(North)
+		move(East)
+		move(South)
 		fSW_NE()
-		move(West)
-		move(North)
+		move(East)
+		move(South)
+		fSW_NE()
+		move(East)
+		move(South)
+		fSW_NE()
+		move(East)
+		move(South)
+		fSW_NE()
+		move(East)
+		move(South)
 		fsSW_NE()
 		wait_until(tl + 0.9676)
-	spawn_drone(w8)
+		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+			if get_entity_type() == Entities.Cactus:
+				harvest()
+			else:
+				use_item(Items.Water)
+		else:
+			use_item(Items.Water)
+		hb = 0
+		while num_items(Items.Cactus) <= 0:
+			hb = get_time()
+		plant(Entities.Cactus)
+		move(North)
+		plant(Entities.Cactus)
+		move(West)
+		plant(Entities.Cactus)
+		swap(South)
+		pk_None_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_West_0_1()
+		pk_East_North_None_0_0()
+		move(West)
+		plant(Entities.Cactus)
+		move(North)
+		plant(Entities.Cactus)
+		tl = get_time()
+		TFS = (fsSW_E, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
+		TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
+		TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
+		h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
+		if h:
+			own(TFS, TMS, TRS, 0, 6)
+		else:
+			fsSW_E()
+			move(East)
+			move(South)
+			h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
+			if h:
+				own(TFS, TMS, TRS, 1, 6)
+			else:
+				fSW_NE()
+				move(East)
+				move(South)
+				h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
+				if h:
+					own(TFS, TMS, TRS, 2, 6)
+				else:
+					fSW_NE()
+					move(East)
+					move(South)
+					h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
+					if h:
+						own(TFS, TMS, TRS, 3, 6)
+					else:
+						fSW_NE()
+						move(East)
+						move(South)
+						h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
+						if h:
+							own(TFS, TMS, TRS, 4, 7)
+						else:
+							fSW_NE()
+							move(East)
+							move(South)
+							h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
+							if h:
+								own(TFS, TMS, TRS, 5, 7)
+							else:
+								fSW_NE()
+								move(East)
+								move(South)
+								h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
+								if h:
+									own(TFS, TMS, TRS, 6, 7)
+								else:
+									fSW_NE()
+									move(East)
+									move(South)
+									fSW_NE()
+									move(East)
+									move(South)
+									fsSW_NE()
+		if tl + 0.9676 > hb + 2.6:
+			wait_until(tl + 0.9676)
+	spawn_drone(w6)
 	def w3():
 		def w5():
-			def w7():
-				move(West)
-				move(North)
-				till()
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				move(West)
-				till()
-				move(West)
-				move(West)
-				move(West)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				tl = get_time()
-				move(South)
-				fsSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fsW_NE()
-				e = tl + 0.9345
-				P = []
-				if get_time() < e:
-					move(East)
-				else:
-					P.append((East,))
-				wait_until(tl + 0.9676)
-				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-					if get_entity_type() == Entities.Cactus:
-						harvest()
-					else:
-						use_item(Items.Water)
-				else:
-					use_item(Items.Water)
-				for q in P:
-					for d in q:
-						move(d)
-				while num_items(Items.Cactus) <= 0:
-					pass
-				plant(Entities.Cactus)
-				move(West)
-				plant(Entities.Cactus)
-				move(North)
-				plant(Entities.Cactus)
-				move(West)
-				plant(Entities.Cactus)
-				swap(South)
-				pk_None_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_None_0_0()
-				move(West)
-				plant(Entities.Cactus)
-				tl = get_time()
-				move(East)
-				TFS = (fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsW_NE)
-				TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
-				TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-				h = spawn_drone(hlp, TFS, TMS, TRS, 0, 6, 7)
-				if h:
-					own(TFS, TMS, TRS, 0, 5)
-				else:
-					fsSW_NE()
-					move(East)
-					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 1, 6, 7)
-					if h:
-						own(TFS, TMS, TRS, 1, 5)
-					else:
-						fSW_NE()
-						move(East)
-						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 2, 6, 7)
-						if h:
-							own(TFS, TMS, TRS, 2, 5)
-						else:
-							fSW_NE()
-							move(East)
-							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 7)
-							if h:
-								own(TFS, TMS, TRS, 3, 6)
-							else:
-								fSW_NE()
-								move(East)
-								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 4, 7, 7)
-								if h:
-									own(TFS, TMS, TRS, 4, 6)
-								else:
-									fSW_NE()
-									move(East)
-									move(South)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 5, 7, 7)
-									if h:
-										own(TFS, TMS, TRS, 5, 6)
-									else:
-										fSW_NE()
-										move(East)
-										move(South)
-										fSW_NE()
-										move(East)
-										move(South)
-										fsW_NE()
-				wait_until(tl + 0.9676)
-			spawn_drone(w7)
-			def w6():
-				move(East)
-				move(East)
-				move(North)
-				move(North)
-				move(North)
-				move(North)
-				move(North)
-				move(North)
-				move(North)
-				till()
-				move(East)
-				move(East)
-				move(North)
-				till()
-				move(East)
-				till()
-				move(East)
-				move(East)
-				till()
-				move(East)
-				move(East)
-				move(East)
-				move(East)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				move(North)
-				till()
-				plant(Entities.Cactus)
-				tl = get_time()
-				move(South)
-				fsSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fSW_NE()
-				move(East)
-				move(South)
-				fsSW_NE()
-				wait_until(tl + 0.9676)
-				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
-					if get_entity_type() == Entities.Cactus:
-						harvest()
-					else:
-						use_item(Items.Water)
-				else:
-					use_item(Items.Water)
-				while num_items(Items.Cactus) <= 0:
-					pass
-				plant(Entities.Cactus)
-				move(North)
-				plant(Entities.Cactus)
-				move(West)
-				plant(Entities.Cactus)
-				swap(South)
-				pk_None_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_None_0_0()
-				move(West)
-				plant(Entities.Cactus)
-				move(North)
-				plant(Entities.Cactus)
-				tl = get_time()
-				TFS = (fsSW_E, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE, fsSW_NE)
-				TMS = ((East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South), (East, South))
-				TRS = ((North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West), (North, West))
-				h = spawn_drone(hlp, TFS, TMS, TRS, 0, 7, 8)
-				if h:
-					own(TFS, TMS, TRS, 0, 6)
-				else:
-					fsSW_E()
-					move(East)
-					move(South)
-					h = spawn_drone(hlp, TFS, TMS, TRS, 1, 7, 8)
-					if h:
-						own(TFS, TMS, TRS, 1, 6)
-					else:
-						fSW_NE()
-						move(East)
-						move(South)
-						h = spawn_drone(hlp, TFS, TMS, TRS, 2, 7, 8)
-						if h:
-							own(TFS, TMS, TRS, 2, 6)
-						else:
-							fSW_NE()
-							move(East)
-							move(South)
-							h = spawn_drone(hlp, TFS, TMS, TRS, 3, 7, 8)
-							if h:
-								own(TFS, TMS, TRS, 3, 6)
-							else:
-								fSW_NE()
-								move(East)
-								move(South)
-								h = spawn_drone(hlp, TFS, TMS, TRS, 4, 8, 8)
-								if h:
-									own(TFS, TMS, TRS, 4, 7)
-								else:
-									fSW_NE()
-									move(East)
-									move(South)
-									h = spawn_drone(hlp, TFS, TMS, TRS, 5, 8, 8)
-									if h:
-										own(TFS, TMS, TRS, 5, 7)
-									else:
-										fSW_NE()
-										move(East)
-										move(South)
-										h = spawn_drone(hlp, TFS, TMS, TRS, 6, 8, 8)
-										if h:
-											own(TFS, TMS, TRS, 6, 7)
-										else:
-											fSW_NE()
-											move(East)
-											move(South)
-											fSW_NE()
-											move(East)
-											move(South)
-											fsSW_NE()
-				wait_until(tl + 0.9676)
-			spawn_drone(w6)
 			move(East)
 			move(East)
 			move(East)
@@ -15366,8 +15473,9 @@ def w0():
 			for q in P:
 				for d in q:
 					move(d)
+			hb = 0
 			while num_items(Items.Cactus) <= 0:
-				pass
+				hb = get_time()
 			plant(Entities.Cactus)
 			move(North)
 			plant(Entities.Cactus)
@@ -15733,7 +15841,8 @@ def w0():
 							swap(East)
 						else:
 							swap(North)
-			wait_until(tl + 0.9676)
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
 		spawn_drone(w5)
 		def w4():
 			move(East)
@@ -15872,8 +15981,9 @@ def w0():
 			for q in P:
 				for d in q:
 					move(d)
+			hb = 0
 			while num_items(Items.Cactus) <= 0:
-				pass
+				hb = get_time()
 			plant(Entities.Cactus)
 			move(South)
 			pk_None_South_East_1_1()
@@ -15947,7 +16057,8 @@ def w0():
 										move(West)
 										move(North)
 										fsSW_NE()
-			wait_until(tl + 0.9676)
+			if tl + 0.9676 > hb + 2.6:
+				wait_until(tl + 0.9676)
 		spawn_drone(w4)
 		move(East)
 		move(East)
@@ -16417,8 +16528,9 @@ def w0():
 		for q in P:
 			for d in q:
 				move(d)
+		hb = 0
 		while num_items(Items.Cactus) <= 0:
-			pass
+			hb = get_time()
 		plant(Entities.Cactus)
 		move(East)
 		plant(Entities.Cactus)
@@ -16818,7 +16930,8 @@ def w0():
 						swap(East)
 					else:
 						swap(North)
-		wait_until(tl + 0.9676)
+		if tl + 0.9676 > hb + 2.6:
+			wait_until(tl + 0.9676)
 	spawn_drone(w3)
 	def w2():
 		move(East)
@@ -17307,8 +17420,9 @@ def w0():
 		for q in P:
 			for d in q:
 				move(d)
+		hb = 0
 		while num_items(Items.Cactus) <= 0:
-			pass
+			hb = get_time()
 		plant(Entities.Cactus)
 		move(West)
 		plant(Entities.Cactus)
@@ -17718,7 +17832,8 @@ def w0():
 						swap(East)
 					else:
 						swap(North)
-		wait_until(tl + 0.9676)
+		if tl + 0.9676 > hb + 2.6:
+			wait_until(tl + 0.9676)
 	spawn_drone(w2)
 	def w1():
 		move(East)
@@ -18222,8 +18337,9 @@ def w0():
 		for q in P:
 			for d in q:
 				move(d)
+		hb = 0
 		while num_items(Items.Cactus) <= 0:
-			pass
+			hb = get_time()
 		plant(Entities.Cactus)
 		move(South)
 		plant(Entities.Cactus)
@@ -18934,7 +19050,8 @@ def w0():
 						swap(East)
 					else:
 						swap(North)
-		wait_until(tl + 0.9676)
+		if tl + 0.9676 > hb + 2.6:
+			wait_until(tl + 0.9676)
 	spawn_drone(w1)
 	move(East)
 	move(East)
@@ -19747,6 +19864,7 @@ def w0():
 			move(d)
 	while num_items(Items.Cactus) <= 0:
 		pass
+	hm = get_time()
 	plant(Entities.Cactus)
 	move(East)
 	plant(Entities.Cactus)
@@ -20152,6 +20270,7 @@ def w0():
 	wait_until(tl + 0.9676)
 	while num_drones() > 1:
 		pass
+	wait_until(hm + 2.6)
 	harvest()
 
 w0()

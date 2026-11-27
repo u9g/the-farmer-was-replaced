@@ -54,7 +54,7 @@ for f in files:
             if e<=ln<=w+1 and d not in tail:
                 tail[d]=lastact[d]+TA if d in lastact else t; pos[d]=(x,y)
             if k=='plant' and t<hA: lastplantA[d]=t
-            if k=='use' or (k=='harvest' and abs(t-hA)<1e-9): sig[d]=t
+            if (k=='use' and ln>=e) or (k=='harvest' and abs(t-hA)<1e-9): sig[d]=t
         if k in ('move','swap','plant','till','use','harvest'): lastact[d]=t
         if t>=hA and t<hB:
             if k=='plant' and d not in fp: fp[d]=t; fpos[d]=(x,y); bown[d]=owner(ln)

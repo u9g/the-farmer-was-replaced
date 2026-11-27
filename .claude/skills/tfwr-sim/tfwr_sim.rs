@@ -14286,7 +14286,7 @@ fn run_leaderboards(cfgs: &[Config], first_seed: i32, fixed_runs: Option<i32>, w
             let mean = d.iter().sum::<f64>() / k;
             let var = d.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / (k - 1.0);
             let faster = d.iter().filter(|x| **x < 0.0).count();
-            println!("  {:+.1}s ± {:.1}s  (faster on {} of {} seeds)  {}", mean, (var / k).sqrt(), faster, d.len(), cfgs[ci].script.display());
+            println!("  {:+.4}s ± {:.4}s  (faster on {} of {} seeds)  {}", mean, (var / k).sqrt(), faster, d.len(), cfgs[ci].script.display());
         }
     }
     all_ok
