@@ -1076,9 +1076,9 @@ SUN_GRADED = True
 SUN_WSAFE = 1.06
 # the snake's neighbour tables are built during a power round's wait for its flowers
 SUN_DINO = True
-SUN_MARGIN = 1.1
+SUN_MARGIN = 1.04
 SUN_SLACK = 0
-SUN_GROW = 0.3
+SUN_GROW = 0.05
 SUN_NEW = True
 # a sunflower's petals are drawn anew at every planting: in the last power round (carrots to
 # spare) one planted with fewer than SUN_MINP is cut at once (not grown: nothing lost but its
@@ -1427,7 +1427,7 @@ def power_need(need):
 def power_check():
 	if num_unlocked(Unlocks.Sunflowers) == 0 or width() < 6 or (SUN_STRIP and drones() == 1):
 		return
-	lim = 60 * drones()
+	lim = 75 * drones()
 	if drones() <= 2:
 		lim = 20 * drones()
 	if num_unlocked(Unlocks.Mazes) >= 4:
