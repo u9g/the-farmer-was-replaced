@@ -2065,67 +2065,82 @@ def cactus3_job(i, d, a):
 			if k > 0:
 				move(step_dir(px[k], py[k], px[k - 1], py[k - 1]))
 			k -= 1
-		# junction chains: passes back and forth until one makes no swap
-		for ch in CJ_S[5][i]:
-			go(ch[0][0], ch[0][1])
-			m = len(ch)
+		# junction chains: a dirty flag per edge (chain cell to neighbour); stand on the chain cell
+		# with a dirty edge nearest to me, fix its edges (swap with the largest lower neighbour above
+		# it, else the smallest upper one below it), mark the edges at the swapped cell dirty
+		for jc in CJ_S[5][i]:
+			P = jc[0]
+			EJ = jc[1]
+			MK = jc[2]
+			dt = []
+			for e in range(jc[3]):
+				dt.append(True)
+			m = len(P)
+			rd = False
+			x = get_pos_x()
+			y = get_pos_y()
 			j = 0
-			st = 1
-			lo = m
-			hi = -1
-			while True:
-				v4 = ch[j][2]
+			if abs(P[m - 1][0] - x) + abs(P[m - 1][1] - y) < abs(P[0][0] - x) + abs(P[0][1] - y):
+				j = m - 1
+			while j >= 0:
+				x = P[j][0]
+				y = P[j][1]
+				go(x, y)
+				ej = EJ[j]
 				while True:
 					h = measure()
-					while h == None:
+					if h == None:
+						clear_cell()
+						soil()
+						plant(Entities.Cactus)
+						tl = get_time()
 						h = measure()
-					v = [h, h, h, h]
-					for dd in range(4):
-						if v4[dd]:
-							z = measure(DIRS[dd])
-							while z == None:
-								z = measure(DIRS[dd])
-							v[dd] = z
-					# v: north, east, south, west
-					if v[0] < v[1]:
-						mlo = v[0]
-						dl = 0
+					bl = -1
+					bv = h
+					tu = -1
+					tv = h
+					for e in ej:
+						z = measure(DIRS[e[0]])
+						if z == None and PREP and r > 0:
+							# not planted yet: move my cactus there and plant mine again
+							if swap(DIRS[e[0]]):
+								plant(Entities.Cactus)
+								tl = get_time()
+								rd = True
+								break
+						while z == None:
+							z = measure(DIRS[e[0]])
+						if e[0] < 2:
+							if z < tv:
+								tv = z
+								tu = e[0]
+						elif z > bv:
+							bv = z
+							bl = e[0]
+					if rd:
+						rd = False
+						continue
+					if bl >= 0:
+						dd = bl
+					elif tu >= 0:
+						dd = tu
 					else:
-						mlo = v[1]
-						dl = 1
-					if v[2] > v[3]:
-						mhi = v[2]
-						dh = 2
-					else:
-						mhi = v[3]
-						dh = 3
-					dd = -1
-					if h - mlo >= mhi - h:
-						if h > mlo:
-							dd = dl
-					elif mhi > h:
-						dd = dh
-					if dd < 0:
 						break
 					swap(DIRS[dd])
-					lo = m
-					hi = -1
-					# the cell behind got the other value: follow it there
-					b = j - st
-					if b >= 0 and b < m and ch[b][0] == ch[j][0] + DX[dd] and ch[b][1] == ch[j][1] + DY[dd]:
-						move(DIRS[dd])
-						j = b
-						v4 = ch[j][2]
-				if j < lo:
-					lo = j
-				if j > hi:
-					hi = j
-				if lo == 0 and hi == m - 1:
-					break
-				if j + st < 0 or j + st >= m:
-					st = -st
-				go(ch[j + st][0], ch[j + st][1])
-				j += st
+					for e in MK[j][dd]:
+						dt[e] = True
+				for e in ej:
+					dt[e[1]] = False
+				j = -1
+				bd = 99
+				for t in range(m):
+					for e in EJ[t]:
+						if dt[e[1]]:
+							q = abs(P[t][0] - x) + abs(P[t][1] - y)
+							if q < bd:
+								bd = q
+								j = t
+							break
 		tl += 1.0
 		while get_time() < tl:
 			pass
@@ -2135,7 +2150,8 @@ def cactus3_job(i, d, a):
 			if i == 0:
 				while num_items(Items.Weird_Substance) > w0 - 2 * (d - 1):
 					pass
-				go(0, 0)
+				if get_entity_type() != Entities.Cactus:
+					go(0, 0)
 				harvest()
 				w0 = num_items(Items.Weird_Substance)
 			else:
@@ -2391,16 +2407,43 @@ def cactus_round(weird, R):
 		for t in range(d):
 			cl2 = []
 			for cells in OWN[t]:
-				# the neighbours each chain cell has to be kept in order with: north, east, south, west
-				cl = []
+				# per chain: cells, their edges (direction, edge id), and for each cell and direction
+				# the edges at that neighbour (made dirty by a swap with it)
+				P = []
 				for b in cells:
-					v = []
+					P.append((b[0], b[1]))
+				EI = {}
+				CE = {}
+				ne = 0
+				EJ = []
+				for b in P:
+					ej = []
 					for dd in range(4):
 						x2 = b[0] + DX[dd]
 						y2 = b[1] + DY[dd]
-						v.append(x2 >= 0 and x2 < n and y2 >= 0 and y2 < n and (((x2 + y2) % 4 != 3 and not (x2, y2) in DR) or (x2, y2) in CN))
-					cl.append((b[0], b[1], v))
-				cl2.append(cl)
+						if x2 >= 0 and x2 < n and y2 >= 0 and y2 < n and (((x2 + y2) % 4 != 3 and not (x2, y2) in DR) or (x2, y2) in CN):
+							o = (x2, y2)
+							if dd < 2:
+								key = (b, o)
+							else:
+								key = (o, b)
+							if not key in EI:
+								EI[key] = ne
+								ne += 1
+							e = EI[key]
+							ej.append((dd, e))
+							for c in [b, o]:
+								if not c in CE:
+									CE[c] = []
+								CE[c].append(e)
+					EJ.append(ej)
+				MK = []
+				for j in range(len(P)):
+					mk = [[], [], [], []]
+					for e in EJ[j]:
+						mk[e[0]] = CE[(P[j][0] + DX[e[0]], P[j][1] + DY[e[0]])]
+					MK.append(mk)
+				cl2.append((P, EJ, MK, ne))
 			OWN[t] = cl2
 		CJ_S = (CN, DR, JC, CUT, RV, OWN)
 	if R > 1:
@@ -2411,7 +2454,8 @@ def cactus_round(weird, R):
 		harvest()
 		R -= 1
 	fan(cactus3_job, 0, d, d, (weird, R))
-	go(0, 0)
+	if get_entity_type() != Entities.Cactus:
+		go(0, 0)
 	harvest()
 
 
@@ -4951,7 +4995,8 @@ def carrots_for(n):
 WSB = 60000
 CJ_N = 0
 CJ_S = 0
-CJ_D = 12
+CJ_D = 14
+PREP = True
 CJ_P = 5
 
 
