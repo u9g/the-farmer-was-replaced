@@ -140,7 +140,11 @@ def plan5(lay):
         ch = solve(offf, ref)
         starts = [start_of(*c) for c in ch]
         from spawnmm import spawn_plan_mm
-        offs, plans, _mk = spawn_plan_mm(tuple(starts), tuple(cA(*c)[0] for c in ch), (0, 0))
+        if E("SPOBJ", "mm") == "mm":
+            offs, plans, _mk = spawn_plan_mm(tuple(starts), tuple(cA(*c)[0] for c in ch), (0, 0))
+        else:
+            from spawnx import spawn_plan_x
+            offs, plans, _mk = spawn_plan_x(tuple(starts), tuple(cA(*c)[0] for c in ch), (0, 0), E("SPOBJ"), float(E("SPTAU", "600")))
         act = {starts[k]: offs[k] * T_ACT + T_ACT for k in range(ND)}
         fin = finishes(ch, act)
         ref = max(fin)
@@ -275,10 +279,14 @@ def body(ops):
     out = []
     run = []
     for op in ops:
-        if op[0] in ("push", "cm"):
+        if op[0] in ("push", "cm", "pk", "pk2"):
             out += render("x", run)[1:-2]
             run = []
-            if op[0] == "push":
+            if op[0] == "pk2":
+                out.append("\tpk2(%s, %s, %s, %d, %d)" % ("None" if op[1] < 0 else DN[op[1]], DN[op[2]], "None" if op[3] < 0 else DN[op[3]], 1 if op[4] else 0, 1 if op[5] else 0))
+            elif op[0] == "pk":
+                out.append("\tpk(%s, %s, %d, %d)" % ("None" if op[1] < 0 else DN[op[1]], DN[op[2]], 1 if op[3] else 0, 1 if op[4] else 0))
+            elif op[0] == "push":
                 out.append("\tswap(%s)" % DN[op[1]])
             else:
                 out.append("\t%s(%d, %d)" % ("cmd" if op[1] else "cmu", 1 if op[2] else 0, 1 if op[3] else 0))
@@ -384,11 +392,34 @@ def main():
     tpl = open(os.path.join(HERE, E("TPL", "t5.py"))).read()
     usedA = sum(min(water_n(True), q - p) for p, q, d in lay.chA)
     rt = RUNTIME if any(ln.startswith("\tcm") for ln in L) else ""
+    if any(ln.startswith("\tpk(") for ln in L):
+        from g5_cols import PKRT, KT
+        rt += "KT = %d\n" % KT + PKRT
+    if any(ln.startswith("\tpk2(") for ln in L):
+        from g5_cols import PK2RT, KA, KB, KP
+        rt += "KA = %d\nKB = %d\nKP = %d\n" % (KA, KB, KP) + PK2RT
     src = tpl.replace("#DATA#", rt + "\n".join(L)).replace("#NSIG#", str(ND - 1 + usedA))
+    if E("POST", "0") == "1":
+        # tail post-processing (post/post.py) on the flat entry, before the drone defs are nested
+        import subprocess, tempfile
+        fd, tmp = tempfile.mkstemp(suffix=".py")
+        os.close(fd)
+        open(tmp, "w", newline="\n").write(src)
+        subprocess.run([sys.executable, os.path.join(HERE, "post", "post.py"), tmp, tmp + ".out"], check=True)
+        src = open(tmp + ".out").read()
+        os.remove(tmp)
+        os.remove(tmp + ".out")
+    if E("NEST", "1") == "1":
+        # each w<k> is defined inside its spawner just before its spawn_drone call, so the main
+        # drone runs 8 statements before its first spawn instead of 38 (a def is 1 tick)
+        from nest import nest
+        src = nest(src)
     open(sys.argv[1], "w", newline="\n").write(src)
     print("A", [(q - p, d) for p, q, d in lay.chA], file=sys.stderr)
     print("B", [(q - p, d) for p, q, d in lay.chB], file=sys.stderr)
     print("offs", [round(x) for x in lay.offs], "avg %.1f" % (sum(lay.offs) / ND), file=sys.stderr)
+    sd = [tdist((0, 0), o[p] if d == 0 else o[q - 1]) for p, q, d in lay.chA]
+    print("startdist", sd, "avg %.2f" % (sum(sd) / ND), "overhead %.2f" % ((sum(lay.offs) - sum(sd)) / ND), file=sys.stderr)
 
 
 if __name__ == "__main__":

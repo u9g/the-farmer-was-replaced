@@ -3,6 +3,20 @@ g5: generator for `cactus_lb_entry.py` (Leaderboards.Cactus). 7.445 s over a ful
 
     WIDTHS=2,2,2,2,2,3,3,3,3,3,3,3,2,2,2,2,2,2,2 TAPERX=4 JMAX=5 DEPTH=8 AITER=5 DIRS=1 python g5.py ../../cactus_lb_entry.py
 
+Merged entry (launch tree + round-B routing + tail post-processing), one command:
+
+    WIDTHS=2,2,2,2,2,3,3,3,3,3,3,3,2,2,2,2,2,2,2 TAPERX=4 JMAX=5 DEPTH=6 AITER=5 DIRS=1 SPOBJ=exp SPTAU=600 CHOICE=2 KA=3 KB=6 KP=6 LEAFPUSH=1 POST=1 python g5.py ../../cactus_lb_entry.py
+
+- `SPOBJ=exp SPTAU=600 DEPTH=6` (spawnx.py): launch tree weighted by each chunk's planned finish.
+- `NEST=1` (default, nest.py): each `w<k>` is defined inside its spawner just before its spawn.
+- `CHOICE=2 KA KB KP` (g5_cols.py, `pk2` runtime): round-B 3-wide columns route a measured
+  value into the far cell or the next column's entry; `LEAFPUSH=1`: dead ends planted by swap.
+- `POST=1` (post/post.py, run on the flat entry before nesting): HARVESTER=3 does the first
+  harvest (hswap), fm tails forked to free drone slots (fork2, NMIN=3; its geometry check passes
+  for every tail with pk2 routing, which runs before `tl` and only in the drone's own chunk),
+  free junction exits (fexit), per-site fm/jf code (spec, jspec), fork tables as tuples (tup),
+  unused defs dropped (clean). `POSTSTEPS=hswap,fork2,...` keeps only some steps.
+
 It reuses the layout, junction model, spawn plan and race rules of `../cactus_lb_g2` (g2.py,
 g3.py, lay.py, jlazy.py, spawnmm.py, build_entry.py) and changes the planner and the code layout.
 

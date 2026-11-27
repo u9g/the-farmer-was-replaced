@@ -13,6 +13,13 @@ from build_entry import path_moves
 
 E = os.environ.get
 PUSH = E("PUSH", "1") == "1"
+CHOICE = int(E("CHOICE", "0"))   # round B: a push column's far cell may be filled from the next column's middle instead
+KT = int(E("KT", "5"))
+KA = int(E("KA", "2"))
+KB = int(E("KB", "6"))
+KP = int(E("KP", "6"))
+PK_T = float(E("PK_T", "0"))  # model: interpreter ticks of a pk2 call
+FMB_SAVE = float(E("FMB_SAVE", "0"))  # model: ticks a routed (CHOICE) middle fix saves in round B
 COLFIX = E("COLFIX", "0") == "1"   # sort a 3-wide column in place right after planting it
 COLFIX_A = E("COLFIX_A", "1") == "1"  # ... in round A (with COLFIX)
 TM_A = float(E("TM_A", "0"))          # ticks of the growth wait kept clear of tail work, round A
@@ -179,6 +186,34 @@ def walk_plan(lay, p, q, d, till, K, start, xstart=None, hx=True, nolast=False, 
         return (col is not None and COLFIX and (COLFIX_A or not till) and col["reg"] and col["plain"] and t + 2 < zone
                 and not (t + 2 >= n - Wn) and (till or (PUSH and col["push"])))
 
+    def elig(t):
+        col = cols.get(t)
+        return (col is not None and not till and PUSH and col["push"] and not (t + 2 >= n - Wn)
+                and col["reg"] and not ci[t][0] and not ci[t + 1][0] and not ci[t + 2][0])
+
+    def link(t):
+        if not (CHOICE and elig(t) and elig(t + 3)):
+            return False
+        a = o[w[t + 2]]
+        b = o[w[t + 4]]
+        if abs(a[0] - b[0]) + abs(a[1] - b[1]) != 1:
+            return False
+        if CHOICE >= 2:
+            c1, f0 = o[w[t + 1]], o[w[t + 3]]
+            # c1 -> far -> next middle and c1 -> next entry -> next middle are both 2 moves
+            if abs(c1[0] - f0[0]) + abs(c1[1] - f0[1]) != 1 or (a[0] + f0[0] - c1[0], a[1] + f0[1] - c1[1]) != b:
+                return False
+        return True
+
+    def dirto(a, b):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        return {(0, 1): 0, (1, 0): 1, (0, -1): 2, (-1, 0): 3}[(dx, dy)]
+
+    chm = set()
+    if CHOICE and not till:
+        for t0 in cols:
+            if link(t0) or (t0 >= 3 and link(t0 - 3)):
+                chm.add(t0 + 1)
     t = 0
     while t < n:
         col = cols.get(t)
@@ -192,6 +227,7 @@ def walk_plan(lay, p, q, d, till, K, start, xstart=None, hx=True, nolast=False, 
                 nx = cols.get(t + 3)
                 nxt_inline = inline_ok(nx, t + 3) and nx["cross_en"]
                 complete = (col["side_en"] or not col["side_ex"]) and (not col["next_ex"] or nxt_inline)
+            k0 = len(ops) if emit else 0
             goto(c0)
             if emit:
                 if till:
@@ -202,12 +238,24 @@ def walk_plan(lay, p, q, d, till, K, start, xstart=None, hx=True, nolast=False, 
             st["fwd"] += act
             fixes(t)
             goto(c1)
+            if emit and push and CHOICE >= 2 and t >= 3 and link(t - 3):
+                del ops[k0:]   # the previous column's pk2 walked here and planted on the way
             if push:
                 if emit:
-                    ops.append(("plant",))
-                    ops.append(("push", 2 if col["down"] else 0))
-                    ops.append(("plant",))
-                st["fwd"] += 2 * PLANT_B + T_ACT
+                    nx = link(t)
+                    pv = t >= 3 and link(t - 3)
+                    if CHOICE >= 2 and (nx or pv):
+                        dp = dirto(c1, o[w[t - 1]]) if pv else -1
+                        de = dirto(c1, o[w[t + 3]]) if nx else -1
+                        ops.append(("pk2", dp, 2 if col["down"] else 0, de, col["down"], nx))
+                    elif nx or pv:
+                        dp = dirto(c1, o[w[t - 1]]) if pv else -1
+                        ops.append(("pk", dp, 2 if col["down"] else 0, col["down"], nx))
+                    else:
+                        ops.append(("plant",))
+                        ops.append(("push", 2 if col["down"] else 0))
+                        ops.append(("plant",))
+                st["fwd"] += 2 * PLANT_B + T_ACT + (PK_T if (t + 1) in chm else 0.0)
                 fixes(t + 1, drop_fm=complete)
                 fixes(t + 2)
             else:
@@ -259,6 +307,8 @@ def walk_plan(lay, p, q, d, till, K, start, xstart=None, hx=True, nolast=False, 
         cur = c
         for it in deferred[t]:
             tail += item_cost(lay, it)
+            if it[0] == "fm" and t in chm:
+                tail -= FMB_SAVE
             vb += item_var(lay, it)
             if it[0] == "jx":
                 comp, order, cst, J, P = lay.net[it[1]]
@@ -300,7 +350,12 @@ def chunk_eval(lay, p, q, d, till, start):
     best = None
     for z in sorted(zs, reverse=True):
         K = n - z
-        _, _, f, vf, b, vb = walk_plan(lay, p, q, d, till, K, start)
+        em = LEAFPUSH and not till and LPMODEL
+        ops, _, f, vf, b, vb = walk_plan(lay, p, q, d, till, K, start, emit=em)
+        if em:
+            k = ops.index(("LP",))
+            leaf_push(ops[:k])
+            f -= T_ACT * leaf_push.n
         f += ZF * max(vf, 0) ** 0.5
         b += ZB * vb ** 0.5
         tot = f + max(GW, b + ((TM_A if till else TM_B) if b > 0 else 0))
@@ -312,10 +367,125 @@ def chunk_eval(lay, p, q, d, till, start):
     return out
 
 
+LEAFPUSH = E("LEAFPUSH", "0") == "1"
+LPMODEL = E("LPMODEL", "0") == "1"
+
+
+def leaf_push(ops):
+    """round B: 'move d, plant, move back, plant' (a dead end planted before the cell it hangs
+    off) becomes 'plant, swap d, plant': one action less."""
+    out = []
+    i = 0
+    n = 0
+    def back(a, b):
+        return a[0] == "move" and b[0] == "move" and b[1] == (a[1] + 2) % 4
+
+    while i < len(ops):
+        # here unplanted: go to the leaf, plant it, come back, plant here
+        if (i + 3 < len(ops) and back(ops[i], ops[i + 2]) and ops[i + 1] == ("plant",)
+                and (ops[i + 3] == ("plant",) or ops[i + 3][0] in ("pk", "pk2"))):
+            out += [("plant",), ("push", ops[i][1])]
+            i += 3
+            n += 1
+            continue
+        # here planted with nothing to check: plant the leaf from here instead
+        if (i + 3 < len(ops) and ops[i] == ("plant",) and back(ops[i + 1], ops[i + 3]) and ops[i + 2] == ("plant",)):
+            out += [("plant",), ("push", ops[i + 1][1]), ("plant",)]
+            i += 4
+            n += 1
+            continue
+        out.append(ops[i])
+        i += 1
+    leaf_push.n = n
+    return out
+
+
 def phase_ops(lay, p, q, d, till, K, start, xstart=None, hx=True, nolast=False, xw=False):
     r = walk_plan(lay, p, q, d, till, K, start, xstart, hx, nolast, xw, emit=True)
-    return r[0], r[1]
+    ops = r[0]
+    if LEAFPUSH and not till:
+        k = ops.index(("LP",))
+        ops = leaf_push(ops[:k]) + ops[k:]
+    return ops, r[1]
 
+
+PKRT = '''PD = False
+
+
+def pk(dp, df, lo, nx):
+	global PD
+	plant(Entities.Cactus)
+	if PD:
+		swap(dp)
+		plant(Entities.Cactus)
+		PD = False
+	if nx:
+		v = measure()
+		if lo:
+			k = v >= KT
+			if k and dp != None:
+				k = v >= measure(dp)
+		else:
+			k = v <= 9 - KT
+			if k and dp != None:
+				k = v <= measure(dp)
+		if k:
+			PD = True
+			return
+	swap(df)
+	plant(Entities.Cactus)
+
+
+'''
+
+PK2RT = '''PD = False
+
+
+def pk2(dp, df, de, lo, nx):
+	global PD
+	plant(Entities.Cactus)
+	f = 0
+	if PD:
+		if nx:
+			v = measure()
+			if not lo:
+				v = 9 - v
+			if v >= KP:
+				swap(de)
+				plant(Entities.Cactus)
+				f = 2
+		swap(dp)
+		plant(Entities.Cactus)
+		PD = False
+	if not nx:
+		swap(df)
+		plant(Entities.Cactus)
+		return
+	if f == 0:
+		v = measure()
+		if not lo:
+			v = 9 - v
+		if v <= KA:
+			swap(df)
+			plant(Entities.Cactus)
+			f = 1
+		elif v >= KB:
+			swap(de)
+			plant(Entities.Cactus)
+			f = 2
+	if f == 2:
+		move(df)
+		plant(Entities.Cactus)
+		move(de)
+	else:
+		move(de)
+		plant(Entities.Cactus)
+		move(df)
+		if f == 0:
+			PD = True
+
+
+'''
 
 RUNTIME = '''BL = [South, West]
 TU = [North, East]
