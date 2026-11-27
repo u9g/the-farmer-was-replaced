@@ -304,8 +304,10 @@ def tend_mixed(cdef):
 		PEND[item_of(c)] += yield_of(c)
 		if pos not in WANT and get_water() < WM_LO and num_items(Items.Water) >= 1:
 			use_item(Items.Water)
-	if POLY:
-		# claim the companion's cell; if it is taken by another type, replant for a new companion
+	if POLY and pos not in WANT:
+		# claim the companion's cell (a companion planted for another plant claims none: its own
+		# claim could make the farm cut a growing crop, and so on down a chain); if it is taken by
+		# another type, replant for a new companion
 		# (with two drones a wish often falls in the other drone's columns: one reroll, then keep it)
 		k = RR_N
 		if max_drones() <= RR_FEW_D:
