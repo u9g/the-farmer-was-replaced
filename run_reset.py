@@ -1506,6 +1506,8 @@ def power_mini():
 				m = sf[q]
 				mp = q
 		go(mp[0], mp[1])
+		if not can_harvest() and num_items(Items.Water) >= 1:
+			use_item(Items.Water)
 		while not can_harvest():
 			pass
 		harvest()
@@ -1523,7 +1525,7 @@ def power_check():
 		return
 	if num_unlocked(Unlocks.Sunflowers) == 0 or width() < 6 or (SUN_STRIP and drones() == 1):
 		return
-	lim = 75 * drones()
+	lim = 50 * drones()
 	if drones() <= 2:
 		lim = 20 * drones()
 	if num_unlocked(Unlocks.Mazes) >= 4:
@@ -1608,7 +1610,7 @@ def step_dir(x0, y0, x1, y1):
 # Water: a cell below PK_WLO gets one water whenever there is any. Water stays in the soil (it
 # loses about 1% a second), so it is spread thin over many cells rather than poured on a few.
 
-PK_WLO = 0.3
+PK_WLO = 0.2
 PK_FA = 2
 PK_RES = 6000
 PK_ALL = True
