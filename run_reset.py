@@ -262,6 +262,8 @@ def tend_plain(c):
 
 
 WT_LO = 0.12
+LPS = None
+LP_PW = 40
 # polyculture farm: a crop (not a companion cell) planted on soil below WM_LO gets one water
 WM_LO = 0.12
 # companion checks per planting (a failed check rerolls the plant), fewer while drones own few columns
@@ -363,7 +365,30 @@ def mixed_job(i, d, need, flags):
 				harvest()
 		return 0
 	if POLY or d > 1 or strip or weird:
-		for x in my_cols(i, d):
+		cl = my_cols(i, d)
+		m = len(cl)
+		# two drones on an unlock's round: pass after pass until it is affordable, checked every
+		# column (as one drone does), each drone carrying on from the column it stopped at last round
+		lp = d == 2 and len(NEED) > 2
+		k = 0
+		if lp and len(flags) > 2 and flags[2] != None and len(flags[2]) == d and flags[2][i][1] == POLY:
+			k = flags[2][i][0]
+		goal = NEED[0]
+		if lp:
+			goal = NEED[2]
+		j = 0
+		while True:
+			if lp and j > 0:
+				done = True
+				for it in goal:
+					if num_items(it) < goal[it]:
+						done = False
+				if done or (k == 0 and num_items(Items.Power) < LP_PW):
+					return (k, POLY)
+				if k == 0:
+					for it in PEND:
+						PEND[it] = 0
+			x = cl[k]
 			go(x, 0)
 			ce = choose(True)
 			co = choose(False)
@@ -380,7 +405,10 @@ def mixed_job(i, d, need, flags):
 			for y in range(n):
 				mixed_cell(strip, weird, cs[y % 2])
 				move(North)
-		return 0
+			k = (k + 1) % m
+			j += 1
+			if not lp and k == 0:
+				return (k, POLY)
 	# one drone, no polyculture: pass after pass until the current unlock is affordable;
 	# a torus walk (n - 1 steps north per column, then east) visits n * n cells in n * n moves
 	small = w * n <= 3
@@ -431,6 +459,11 @@ def mixed_job(i, d, need, flags):
 				# a mix of crop types lets some plants find their companion (x5 even before polyculture)
 				if ce == Entities.Grass:
 					co = Entities.Bush
+					if FL[2]:
+						# trees rather than bushes beside the grass: cut less often, and standing ready
+						# for the weird substance round
+						ce = Entities.Tree
+						co = Entities.Grass
 				else:
 					co = Entities.Grass
 			if x % 2 == 0:
@@ -668,7 +701,8 @@ def tend_wait(c):
 def mixed_round(need):
 	strip = False
 	weird = Items.Weird_Substance in need[0] and num_unlocked(Unlocks.Fertilizer) > 0
-	all_drones(mixed_job, need, (strip, weird))
+	global LPS
+	LPS = all_drones(mixed_job, need, (strip, weird, LPS))
 
 
 # ---- polyculture farm ----------------------------------------------------------------------------
@@ -861,6 +895,12 @@ def wsub_job(i, d, goal, b):
 						# every tree is cut once a pass, so each is toggled exactly once
 						while not can_harvest():
 							pass
+						# made weird just before it is cut (it and its four grass neighbours flip): every ripe
+						# tree yields weird substance in the same pass, from the first pass on
+						if num_items(Items.Weird_Substance) >= 1:
+							use_item(Items.Weird_Substance)
+						elif num_items(Items.Fertilizer) >= 1:
+							use_item(Items.Fertilizer)
 						harvest()
 						if get_water() < 0.25 and num_items(Items.Water) >= 1:
 							use_item(Items.Water)
@@ -882,11 +922,6 @@ def wsub_job(i, d, goal, b):
 				elif e != None:
 					if can_harvest():
 						harvest()
-				if (x + 2 * y) % 5 == 0:
-					if num_items(Items.Weird_Substance) >= 1:
-						use_item(Items.Weird_Substance)
-					elif num_items(Items.Fertilizer) >= 1:
-						use_item(Items.Fertilizer)
 				k += 1
 				if k < n:
 					move(dy)
@@ -1415,7 +1450,7 @@ def step_dir(x0, y0, x1, y1):
 # Water: a cell below PK_WLO gets one water whenever there is any. Water stays in the soil (it
 # loses about 1% a second), so it is spread thin over many cells rather than poured on a few.
 
-PK_WLO = 0.5
+PK_WLO = 0.3
 PK_FA = 2
 PK_RES = 6000
 PK_ALL = True
@@ -2214,7 +2249,7 @@ MZ_ORDER = -1
 MZ_RACE = 4
 MZ_PRUNE = True
 MZ_RACE2 = 0
-MZ_PRUNE_MIN = 4
+MZ_PRUNE_MIN = 2
 MZ_LOST = 3.0
 MZ_GX = 1
 MZ_GY = 1
@@ -4364,8 +4399,12 @@ def play():
 					j = sj[seg]
 					D = RDIR[j][sm[seg]]
 					n = len(D)
-					for q in range(i, n):
-						move(D[q])
+					if i == 0:
+						for q in D:
+							move(q)
+					else:
+						for q in range(i, n):
+							move(D[q])
 					e = seg + j
 					if e == nb - 1:
 						move(West)
