@@ -265,10 +265,10 @@ WT_LO = 0.12
 LPS = None
 LP_PW = 40
 # polyculture farm: a crop (not a companion cell) planted on soil below WM_LO gets one water
-WM_LO = 0.12
+WM_LO = 0.25
 # companion checks per planting (a failed check rerolls the plant), fewer while drones own few columns
-RR_N = 3
-RR_FEW = 2
+RR_N = 2
+RR_FEW = 1
 RR_FEW_D = 4
 WANT = {}
 REQ = {}
@@ -475,7 +475,11 @@ def mixed_job(i, d, need, flags):
 			co = p[1]
 			if ce == co and plant_on:
 				# a mix of crop types lets some plants find their companion (x5 even before polyculture)
-				if ce == Entities.Grass:
+				if ce == Entities.Grass and FL[2] and n != 3:
+					# hay wanted: grass on the odd cells and trees (not bushes) on the even ones,
+					# 5x the wood a cut, and trees already standing when the weird round starts
+					ce = Entities.Tree
+				elif ce == Entities.Grass:
 					co = Entities.Bush
 					if FL[2]:
 						# trees rather than bushes beside the grass: cut less often, and standing ready
@@ -860,7 +864,21 @@ def mixed_seg(i, d, need, flags):
 	COLS[1] = w
 	cx = -1
 	cs = []
-	for t in range(lo, hi):
+	todo = range(lo, hi)
+	if len(need) > 2:
+		# whole passes until the goal is on hand, checked every column
+		todo = []
+		for k in range(40):
+			for t in range(lo, hi):
+				todo.append(t)
+	for t in todo:
+		if t == lo or t % n == 0:
+			if len(need) > 2 and num_items(Items.Carrot) >= need[2][Items.Carrot]:
+				break
+			if t == lo:
+				cx = -1
+				for k in PEND:
+					PEND[k] = 0
 		x = t // n
 		y = t % n
 		if x % 2 == 1:
@@ -963,10 +981,7 @@ def wsub_job(i, d, goal, b):
 					if e != None and can_harvest():
 						harvest()
 					till()
-				elif e == Entities.Grass:
-					if can_harvest():
-						harvest()
-				elif e != None:
+				elif e != None and e != Entities.Grass:
 					if can_harvest():
 						harvest()
 				k += 1
@@ -1502,7 +1517,7 @@ PK_FA = 2
 PK_RES = 6000
 PK_ALL = True
 PK_PERS = True
-PK_PERS_MIN = 16
+PK_PERS_MIN = 4
 PK_PERS_C = 1.4
 
 
@@ -2228,8 +2243,17 @@ def cactus_round(weird):
 			# junction drones get CJ_D cells less per junction
 			k = len(CH)
 			acc = 0
+			adj = []
 			for t in range(d):
-				acc += (N + CJ_D * k) / d - CJ_D * len(OWN[t])
+				adj.append(0)
+			ad = {1616: [1, -1, 2, 0, 2, -4, -1, 0, 0, 0, 0, -1, 1, 3, 1, 0], 1204: [3, -2, -1, 0]}
+			if n * 100 + d in ad:
+				adj = ad[n * 100 + d]
+			ma = 0
+			for t in range(d):
+				ma += adj[t] / d
+			for t in range(d):
+				acc += (N + CJ_D * k) / d - CJ_D * len(OWN[t]) + adj[t] - ma
 				CUT[t + 1] = min(N, (acc + 0.5) // 1)
 			CUT[d] = N
 		for t in range(d):
@@ -3945,8 +3969,9 @@ def sides(c, o, low, need):
 
 
 def plan(ch, ax, ay, t, low, need):
-	# a Manhattan path (x then y, or y then x) to the apple, every cell free when it is reached
-	# and passing the split test; the path's cells are written into occ. Returns [cells, dirs].
+	# a path to the apple made of up to three straight runs (the two L shapes first, then Z shapes
+	# of the same length, then detours a little longer), every cell free when it is reached and
+	# passing the split test; the path's cells are written into occ. Returns [cells, dirs].
 	dx = ax - PX[ch]
 	dy = ay - PY[ch]
 	hd = 1
@@ -3957,23 +3982,43 @@ def plan(ch, ax, ay, t, low, need):
 	if dy < 0:
 		vd = 2
 		dy = -dy
-	n = dx + dy
-	for var in range(2):
-		if var == 1 and (dx == 0 or dy == 0):
-			return None
+	cs = [[hd, dx, vd, dy, 0, 0]]
+	if dx > 0 and dy > 0:
+		cs.append([vd, dy, hd, dx, 0, 0])
+	if dx > 0 and dy > 0:
+		for a in range(1, min(dy, 5)):
+			cs.append([vd, a, hd, dx, vd, dy - a])
+		for a in range(1, min(dx, 5)):
+			cs.append([hd, a, vd, dy, hd, dx - a])
+	for e in range(1, 3):
+		if dx > 0:
+			if dy > 0:
+				cs.append([(vd + 2) % 4, e, hd, dx, vd, dy + e])
+				cs.append([vd, dy + e, hd, dx, (vd + 2) % 4, e])
+			else:
+				cs.append([0, e, hd, dx, 2, e])
+				cs.append([2, e, hd, dx, 0, e])
+		if dy > 0:
+			if dx > 0:
+				cs.append([(hd + 2) % 4, e, vd, dy, hd, dx + e])
+				cs.append([hd, dx + e, vd, dy, (hd + 2) % 4, e])
+			else:
+				cs.append([1, e, vd, dy, 3, e])
+				cs.append([3, e, vd, dy, 1, e])
+	for sg in cs:
+		n1 = sg[1]
+		n2 = n1 + sg[3]
+		n = n2 + sg[5]
 		# every cell free when it is reached, before any split test
 		c = ch
 		ok = True
 		for i in range(1, n + 1):
-			if var == 0:
-				if i <= dx:
-					d = hd
-				else:
-					d = vd
-			elif i <= dy:
-				d = vd
+			if i <= n1:
+				d = sg[0]
+			elif i <= n2:
+				d = sg[2]
 			else:
-				d = hd
+				d = sg[4]
 			c = NB2[c][d]
 			if occ[c] >= low + i - 1:
 				ok = False
@@ -3987,15 +4032,12 @@ def plan(ch, ax, ay, t, low, need):
 		ok = True
 		nb = None
 		for i in range(1, n + 1):
-			if var == 0:
-				if i <= dx:
-					d = hd
-				else:
-					d = vd
-			elif i <= dy:
-				d = vd
+			if i <= n1:
+				d = sg[0]
+			elif i <= n2:
+				d = sg[2]
 			else:
-				d = hd
+				d = sg[4]
 			c = NB2[c][d]
 			li = low + i - 1
 			if occ[c] >= li:
@@ -4012,7 +4054,10 @@ def plan(ch, ax, ay, t, low, need):
 			ds.append(DIRS[d])
 			olds.append(occ[c])
 			occ[c] = t + i
-			nb = chk(c, li, need)
+			if i == n or i % 1000 == 0:
+				nb = chk(c, li, need)
+			else:
+				nb = NOM
 			if nb == None:
 				ok = False
 				break
@@ -4024,6 +4069,7 @@ def plan(ch, ax, ay, t, low, need):
 		for j in range(len(cells)):
 			occ[cells[j]] = olds[j]
 	return None
+
 
 
 def free_step(ch, ax, ay, low, need, t):
@@ -4697,9 +4743,9 @@ def carrots_for(n):
 		if num_unlocked(Unlocks.Polyculture) > 0 and max_drones() > width():
 			# more drones than columns: every drone tends a stretch of the field
 			d = min(max_drones(), width() * get_world_size())
-			spawn_node(0, d, d, (mixed_seg, (c, c), (False, False)))
+			spawn_node(0, d, d, (mixed_seg, (c, c, {Items.Carrot: n}), (False, False)))
 		else:
-			mixed_round((c, c))
+			mixed_round((c, c, {Items.Carrot: n}, 0))
 
 
 WSB = 60000
@@ -4868,6 +4914,29 @@ def opening():
 		while num_unlocked(u[0]) < u[1]:
 			n = get_world_size()
 			w = width()
+			if w == 1 and SW_ON:
+				# 1x3 strip: bushes on y 0 and 1 are cut the moment they ripen (the strip is
+				# growth-bound), and the drone sits on the grass at y 2 cutting hay in between
+				go(0, 0)
+				ta = get_time()
+				while num_unlocked(u[0]) < u[1]:
+					for y in range(2):
+						if get_entity_type() == Entities.Bush:
+							while not can_harvest():
+								pass
+						harvest()
+						plant(Entities.Bush)
+						if y == 0:
+							ta = get_time()
+						move(North)
+					if buy(u[0]):
+						break
+					ta = ta + SW_T
+					while get_time() < ta:
+						if can_harvest():
+							harvest()
+					move(North)
+				break
 			if w == 3:
 				# bushes on two columns, the third stays grass: the bushes' companion when they
 				# want grass, and never visited (2n cells for 2n moves: up a column, across, back)
@@ -4875,9 +4944,10 @@ def opening():
 					for k in range(2 * n):
 						e = get_entity_type()
 						if e == Entities.Bush:
-							if can_harvest():
-								harvest()
-								plant(Entities.Bush)
+							while not can_harvest():
+								pass
+							harvest()
+							plant(Entities.Bush)
 						else:
 							if e != None:
 								harvest()
@@ -4925,6 +4995,9 @@ def open_grass(x, y, w, n):
 
 
 OG1 = 2
+# strip: how long after planting the y 0 bush the drone leaves the grass (bushes ripen in 3.2-4.8 s)
+SW_ON = True
+SW_T = 3.6
 OG_H = True
 OG_M = 2
 # Speed 2 on the 1x3 strip, before Expand 2: the strip is growth-bound (two bushes), so the
@@ -5016,8 +5089,8 @@ PLAN = [
 	(Unlocks.Trees, 3),
 	(Unlocks.Mazes, 1),
 	(Unlocks.Megafarm, 1),
-	(Unlocks.Grass, 4),
 	(Unlocks.Watering, 4),
+	(Unlocks.Grass, 4),
 	(Unlocks.Speed, 5),
 	(Unlocks.Pumpkins, 1),
 	(Unlocks.Expand, 5),
