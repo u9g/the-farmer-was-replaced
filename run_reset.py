@@ -9,8 +9,8 @@
 # weird trees, then gold from one maze. Once polyculture is bought, crops grow on one
 # checkerboard colour and the other colour holds the companion each crop asks for.
 # After that the script works through PLAN: for each unlock it cannot afford yet it runs a round
-# for the first item it lacks, using every drone (pumpkin field watered for faster growth, sorted
-# cactus field, one maze shared by all drones and mapped by drones splitting at its forks, the
+# for the first item it lacks, using every drone (pumpkin field watered for faster growth, cactus
+# on sorted antidiagonal bands, one maze shared by all drones and mapped by drones splitting at its forks, the
 # dinosaur snake), with a sunflower round whenever power runs low.
 
 T0 = get_time()
@@ -1492,140 +1492,381 @@ def pumpkin_round(goal):
 
 
 # ---- cactus ------------------------------------------------------------------------------------
-# Entry point: cactus_round(weird). weird=True makes every cactus weird before the harvest.
-# Every drone owns whole columns and walks them as one snake path, back and forth. It plants its
-# path, then sorts in place with no barrier: on each cell it measures the cell and its four
-# neighbours (across other drones' columns too) and swaps the most inverted pair, staying on the
-# cell until it is in order, then steps on. A drone stops once every cell of its path was in order
-# when it last looked. Then the field is harvested from the south-west corner.
+# Entry point: cactus_round(weird). weird=True makes the cactus weird as they are planted (each
+# drone tracks its cactus' weird flags through its swaps, see bd_job).
+# The field is not sorted whole. Cactus go on 2-wide antidiagonal bands (cells with x + y = s or
+# s + 1) separated by an empty diagonal, the bands joined into one snake by a connector cell in
+# each empty diagonal, at the field edge. A band cell's band neighbours all lie on the other
+# diagonal of its band, so a cell on s is "pure low" (it only has to be no bigger than its
+# neighbours) and one on s + 1 "pure high": swapping an out-of-order pair of pure cells moves both
+# values the safe way and never breaks another pair, so each edge is fixed once, by one
+# compare-and-swap. Only the connectors and the cells next to them are "mixed" (smaller and bigger
+# neighbours both), a chain over five diagonals that is settled with a short work list. The harvest
+# pops the whole snake: about 45% of the cells (97 on 12x12, 172 on 16x16) for 45% of a full
+# field's yield, in a quarter of the time a full sort takes.
+# Every drone takes a stretch of the snake: it walks there, plants it forwards fixing each cell
+# against the ones before it, then walks back over the last part of the stretch fixing it while
+# the cactus grow (the 1 s growth wait is otherwise idle). Where two stretches meet, the earlier
+# drone fixes the shared edge once it has planted its last cell. BD_CUTS holds stretches and walk
+# backs planned offline for the field sizes and drone counts the run uses (a cost model of
+# travel, planting, fixes and connectors, fitted to the simulator, in bd_cuts); any other size cuts the snake
+# evenly, away from the connectors, and fixes everything while planting.
 
-def cactus_job(i, d, a):
-	n = get_world_size()
-	p = snake(i, d)
-	px = p[0]
-	py = p[1]
-	L = len(px)
-	F = []
+BANDS = {}
+BD_OFF = 0
+BD_GROW = 1.0
+
+
+def bd_cuts():
+	# n * 1000 + drones: (first cell of each stretch, cells fixed on the walk back). A function, so
+	# the table costs nothing until the first cactus round
+	return {12004: ([0, 24, 44, 72, 97], [9, 14, 5, 5]), 12008: ([0, 10, 20, 37, 53, 65, 73, 87, 97], [5, 4, 7, 5, 10, 2, 5, 5]), 16008: ([0, 20, 43, 66, 88, 112, 134, 159, 172], [8, 13, 15, 10, 8, 8, 8, 7]), 16016: ([0, 10, 19, 33, 46, 53, 69, 82, 97, 110, 126, 139, 146, 153, 159, 166, 172], [8, 3, 8, 11, 1, 14, 8, 13, 8, 14, 8, 5, 1, 4, 1, 1])}
+
+
+def bd_cells(n, s):
+	# the band on diagonals s and s + 1, as a staircase from the top-left end
+	r = []
+	for i in range(n):
+		if 0 <= s + 1 - i and s + 1 - i < n:
+			r.append((i, s + 1 - i))
+		if 0 <= s - i and s - i < n:
+			r.append((i, s - i))
+	return r
+
+
+def bd_path(n, o):
+	# the snake: bands on s = o - 3, o, o + 3, ..., every other one walked backwards, each joined
+	# to the next by a connector on s + 2 (dropping up to two cells at the band ends to reach it)
+	path = []
+	j = 0
+	ps = 0
+	s = o - 3
+	while s <= 2 * n - 2:
+		b = bd_cells(n, s)
+		if len(b) > 0:
+			if j % 2 == 1:
+				r = []
+				for k in range(len(b) - 1, -1, -1):
+					r.append(b[k])
+				b = r
+			if len(path) == 0:
+				path = b
+			else:
+				best = None
+				for da in range(3):
+					for db in range(3):
+						if da < len(path) and db < len(b):
+							E = path[len(path) - 1 - da]
+							F = b[db]
+							if E[0] + E[1] == ps + 1 and F[0] + F[1] == ps + 3:
+								for C in [(E[0] + 1, E[1]), (E[0], E[1] + 1)]:
+									if C[0] < n and C[1] < n and abs(C[0] - F[0]) + abs(C[1] - F[1]) == 1:
+										if best == None or da + db < best[0]:
+											best = (da + db, da, db, C)
+				if best == None:
+					return path
+				for _ in range(best[1]):
+					path.pop()
+				path.append(best[3])
+				for k in range(best[2], len(b)):
+					path.append(b[k])
+			ps = s
+			j += 1
+		s += 3
+	return path
+
+
+def bd_plan(n, d):
+	# (path, F, B, NB, MX, (cuts, walk backs), SP, LW, SQ, LO, UP), built once per size
+	key = n * 1000 + d
+	if key in BANDS:
+		return BANDS[key]
+	path = bd_path(n, BD_OFF)
+	L = len(path)
+	idx = {}
+	for k in range(L):
+		idx[path[k]] = k
+	F = [None]
 	B = [None]
-	DE = []
-	DN = []
-	DW = []
-	DS = []
+	NB = []
+	MX = []
 	for k in range(L):
-		x = px[k]
-		y = py[k]
+		x = path[k][0]
+		y = path[k][1]
 		if k < L - 1:
-			F.append(step_dir(x, y, px[k + 1], py[k + 1]))
-			B.append(step_dir(px[k + 1], py[k + 1], x, y))
-		else:
-			F.append(None)
-		DE.append(None)
-		DN.append(None)
-		DW.append(None)
-		DS.append(None)
-		if x < n - 1:
-			DE[k] = East
-		if y < n - 1:
-			DN[k] = North
-		if x > 0:
-			DW[k] = West
-		if y > 0:
-			DS[k] = South
-	go(px[0], py[0])
+			F.append(step_dir(x, y, path[k + 1][0], path[k + 1][1]))
+			B.append(step_dir(path[k + 1][0], path[k + 1][1], x, y))
+		# neighbours: (dir, index, is_lower)
+		nb = []
+		lo = 0
+		up = 0
+		if (x, y - 1) in idx:
+			nb.append((South, idx[(x, y - 1)], True))
+			lo += 1
+		if (x - 1, y) in idx:
+			nb.append((West, idx[(x - 1, y)], True))
+			lo += 1
+		if (x, y + 1) in idx:
+			nb.append((North, idx[(x, y + 1)], False))
+			up += 1
+		if (x + 1, y) in idx:
+			nb.append((East, idx[(x + 1, y)], False))
+			up += 1
+		NB.append(nb)
+		MX.append(lo > 0 and up > 0)
+	cuts = bd_cuts()
+	if key in cuts:
+		cut = cuts[key]
+	else:
+		# even stretches, cut away from mixed cells and their neighbours, nothing deferred
+		near = []
+		for k in range(L):
+			near.append(MX[k])
+		for k in range(L):
+			if MX[k]:
+				for e in NB[k]:
+					near[e[1]] = True
+		cs = [0]
+		cm = []
+		for i in range(1, d):
+			t = i * L // d
+			k = t
+			while k < L - 1 and (near[k] or near[k - 1]):
+				k += 1
+			k2 = t
+			while k2 > 1 and (near[k2] or near[k2 - 1]):
+				k2 -= 1
+			if t - k2 < k - t and not (near[k2] or near[k2 - 1]):
+				k = k2
+			if k <= cs[len(cs) - 1]:
+				k = cs[len(cs) - 1] + 1
+			cs.append(k)
+			cm.append(0)
+		cs.append(L)
+		cm.append(0)
+		cut = (cs, cm)
+	# SP / SQ: a pure cell whose only neighbour fixed before it is the previous cell (planting
+	# forwards) / the next cell (walking back), neither mixed: one compare-and-swap with it.
+	# LW: is cell k + 1 an upper neighbour of cell k? LO / UP: lower / upper neighbours (dir, index)
+	SP = []
+	SQ = []
+	LW = []
+	LO = []
+	UP = []
 	for k in range(L):
+		ear = []
+		lat = []
+		lo = []
+		up = []
+		lw = False
+		for e in NB[k]:
+			if e[1] < k:
+				ear.append(e)
+			else:
+				lat.append(e)
+			if e[2]:
+				lo.append((e[0], e[1]))
+			else:
+				up.append((e[0], e[1]))
+			if e[1] == k + 1:
+				lw = not e[2]
+		sp = None
+		if not MX[k] and len(ear) == 1 and ear[0][1] == k - 1 and not MX[k - 1]:
+			sp = (ear[0][0], ear[0][2])
+		sq = None
+		if not MX[k] and len(lat) == 1 and lat[0][1] == k + 1 and not MX[k + 1]:
+			sq = (lat[0][0], lat[0][2])
+		SP.append(sp)
+		SQ.append(sq)
+		LW.append(lw)
+		LO.append(lo)
+		UP.append(up)
+	plan = (path, F, B, NB, MX, cut, SP, LW, SQ, LO, UP)
+	BANDS[key] = plan
+	return plan
+
+
+def bd_settle(k, a, f, b, dfr, LO, UP, MX, path, wf):
+	# insert cell k: fix it against the cells already in place. Planting forwards (dfr False) those
+	# are the indices up to k; on the walk back (dfr True) the indices from k to b - 1 and those
+	# before f. A mixed cell's neighbours all lie in its own stretch (cuts are between pure cells).
+	# A swap moves a pure cell's value the safe way; a mixed cell can be broken on one side only
+	# (the side it moved towards), so it goes back on the work list for that side.
+	# 0: lower, 1: upper, 2: both. wf: the stretch's weird flags (index - a), or None
+	work = [(k, 2)]
+	cur = k
+	while len(work) > 0:
+		it = work.pop()
+		c = it[0]
+		sd = it[1]
+		if c != cur:
+			if abs(path[cur][0] - path[c][0]) + abs(path[cur][1] - path[c][1]) == 1:
+				move(step_dir(path[cur][0], path[cur][1], path[c][0], path[c][1]))
+			else:
+				go(path[c][0], path[c][1])
+			cur = c
+		v = measure()
+		bd = None
+		bq = -1
+		bv = 0
+		bl = False
+		if sd != 1:
+			for e in LO[c]:
+				q = e[1]
+				if (dfr and ((q >= k and q < b) or q < f)) or (not dfr and q <= k):
+					w = measure(e[0])
+					if w - v > bv:
+						bv = w - v
+						bd = e[0]
+						bq = q
+						bl = True
+		if sd != 0:
+			for e in UP[c]:
+				q = e[1]
+				if (dfr and ((q >= k and q < b) or q < f)) or (not dfr and q <= k):
+					w = measure(e[0])
+					if v - w > bv:
+						bv = v - w
+						bd = e[0]
+						bq = q
+						bl = False
+		if bd != None:
+			swap(bd)
+			if wf != None:
+				t = wf[c - a]
+				wf[c - a] = wf[bq - a]
+				wf[bq - a] = t
+			# swapped with a lower neighbour: this cell got bigger (check its uppers), the
+			# neighbour smaller (check its lowers); the other way round for an upper one
+			if bl:
+				if MX[bq]:
+					work.append((bq, 0))
+				if MX[c]:
+					work.append((c, 1))
+			else:
+				if MX[bq]:
+					work.append((bq, 1))
+				if MX[c]:
+					work.append((c, 0))
+	if cur != k:
+		go(path[k][0], path[k][1])
+
+
+def bd_job(i, d, x):
+	# stretch i: walk to its first cell a, plant forwards to b - 1 (fixing the cells before f as
+	# they are planted), fix the edge to the next stretch, walk back to f fixing the rest, then
+	# wait until the last cactus planted here has grown. x = (plan, weird)
+	pl = x[0]
+	wd = x[1]
+	path = pl[0]
+	F = pl[1]
+	B = pl[2]
+	MX = pl[4]
+	SP = pl[6]
+	SQ = pl[8]
+	LO = pl[9]
+	UP = pl[10]
+	a = pl[5][0][i]
+	b = pl[5][0][i + 1]
+	f = b - pl[5][1][i]
+	go(path[a][0], path[a][1])
+	tl = get_time()
+	wf = None
+	if wd:
+		# weird flags of this stretch's cactus, kept through the swaps (index - a)
+		wf = []
+		for k in range(a, b):
+			wf.append(False)
+	for k in range(a, b):
+		if k > a:
+			move(F[k])
 		if get_entity_type() != Entities.Cactus:
 			clear_cell()
 			soil()
 			plant(Entities.Cactus)
-		if k < L - 1:
-			move(F[k])
-	k = L - 1
-	st = -1
-	lo = L
-	hi = -1
-	ld = None
-	delay = 3 + 7 * (i % 5)
-	while lo > 0 or hi < L - 1:
-		h = measure()
-		e = measure(DE[k])
-		if e == None:
-			e = h
-		nn = measure(DN[k])
-		if nn == None:
-			nn = h
-		w = measure(DW[k])
-		if w == None:
-			w = h
-		s = measure(DS[k])
-		if s == None:
-			s = h
-		if e < nn:
-			mlo = e
-			dl = DE[k]
-		else:
-			mlo = nn
-			dl = DN[k]
-		if w > s:
-			mhi = w
-			dh = DW[k]
-		else:
-			mhi = s
-			dh = DS[k]
-		dd = None
-		if h - mlo > mhi - h:
-			if h > mlo:
-				dd = dl
-		elif mhi > h:
-			dd = dh
-		if dd != None:
-			swap(dd)
-			lo = L
-			hi = -1
-			if dd == ld:
-				t = get_tick_count() + delay
-				while get_tick_count() < t:
-					pass
-				ld = None
+			tl = get_time()
+		if k > a and k < f:
+			sp = SP[k]
+			if sp == None:
+				bd_settle(k, a, f, b, False, LO, UP, MX, path, wf)
 			else:
-				ld = dd
+				v = measure()
+				w = measure(sp[0])
+				if sp[1]:
+					if w > v:
+						swap(sp[0])
+						if wd:
+							t = wf[k - a]
+							wf[k - a] = wf[k - a - 1]
+							wf[k - a - 1] = t
+				elif w < v:
+					swap(sp[0])
+					if wd:
+						t = wf[k - a]
+						wf[k - a] = wf[k - a - 1]
+						wf[k - a - 1] = t
+		if wd and k > a and not wf[k - a - 1]:
+			# weird substance turns this cactus and its planted neighbours. Used whenever the
+			# cactus before this one is not weird yet: everything behind stays weird, and a
+			# cactus left plain here (it was weird, or a swap moved a weird one in) is paired
+			# with the next one
+			if num_items(Items.Weird_Substance) >= 1:
+				use_item(Items.Weird_Substance)
+			elif num_items(Items.Fertilizer) >= 1:
+				use_item(Items.Fertilizer)
+			wf[k - a] = not wf[k - a]
+			for e in LO[k]:
+				if e[1] >= a and e[1] < k:
+					wf[e[1] - a] = not wf[e[1] - a]
+			for e in UP[k]:
+				if e[1] >= a and e[1] < k:
+					wf[e[1] - a] = not wf[e[1] - a]
+	if b < len(path):
+		# the edge to the next stretch's first cell, planted when its drone arrived
+		v = measure()
+		dd = F[b]
+		w = measure(dd)
+		if w != None:
+			if pl[7][b - 1]:
+				if w < v:
+					swap(dd)
+			elif w > v:
+				swap(dd)
+	k = b - 1
+	while k >= f:
+		sp = SQ[k]
+		if sp == None or k == f or k == b - 1:
+			bd_settle(k, a, f, b, True, LO, UP, MX, path, wf)
 		else:
-			ld = None
-			if k < lo:
-				lo = k
-			if k > hi:
-				hi = k
-			if lo == 0 and hi == L - 1:
-				break
-			if k + st < 0 or k + st >= L:
-				st = -st
-			if st > 0:
-				move(F[k])
-			else:
-				move(B[k])
-			k += st
+			v = measure()
+			w = measure(sp[0])
+			if sp[1]:
+				if w > v:
+					swap(sp[0])
+			elif w < v:
+				swap(sp[0])
+			# (the flags are not needed after the forward pass: swaps keep the count)
+		if k > f:
+			move(B[k])
+		k -= 1
+	t = tl + BD_GROW
+	while get_time() < t:
+		pass
 	return 0
 
 
-def weird_job(i, d, a):
-	# toggle weirdness on plus shapes: centres at (x + 2y) % 5 == 0 cover the plane once
-	n = get_world_size()
-	for x in my_cols(i, d):
-		for y in range(n):
-			if (x + 2 * y) % 5 == 0:
-				go(x, y)
-				if num_items(Items.Weird_Substance) >= 1:
-					use_item(Items.Weird_Substance)
-				elif num_items(Items.Fertilizer) >= 1:
-					use_item(Items.Fertilizer)
-	return 0
+def bd_cells_n():
+	# cactus in one round, for yield estimates (cells squared times the cactus multiplier)
+	return len(bd_plan(get_world_size(), drones())[0])
 
 
 def cactus_round(weird):
 	d = drones()
-	fan(cactus_job, 0, d, d, 0)
-	if weird:
-		fan(weird_job, 0, d, d, 0)
-	go(0, 0)
+	pl = bd_plan(get_world_size(), d)
+	fan(bd_job, 0, d, d, (pl, weird))
+	# drone 0 ended its walk back on a cactus of the snake
+	if get_entity_type() != Entities.Cactus:
+		go(pl[0][0][0], pl[0][0][1])
 	harvest()
 
 
@@ -4123,19 +4364,24 @@ WEIRD_EARLY = True
 
 
 def weird_early(u, mf):
+	# make this cactus round weird (about half its yield as the next maze's weird substance) when
+	# that does not add a round: rounds left counting the cactus u still lacks and the maze's weird
+	# substance, either way
 	n = get_world_size()
-	y = n * n * n * n * lvl_mult(Unlocks.Cactus)
-	short_c = get_cost(u)[Items.Cactus] - num_items(Items.Cactus)
-	if short_c * 2 > y:
-		return False
+	y = bd_cells_n() * bd_cells_n() * lvl_mult(Unlocks.Cactus)
+	c = get_cost(u)[Items.Cactus] - num_items(Items.Cactus)
 	m = lvl_mult(Unlocks.Mazes)
 	if u == Unlocks.Mazes:
 		m = m * 2
 	g = get_cost(mf)[Items.Gold]
 	if MERGE_MF:
 		g = g * 5
-	w = (g // (n * n * m) + 2) * n * m
-	return num_items(Items.Weird_Substance) < w and y // 2 >= w - num_items(Items.Weird_Substance)
+	w = (g // (n * n * m) + 2) * n * m - num_items(Items.Weird_Substance)
+	if w <= 0:
+		return False
+	rn = (max(c - y, 0) + w + y - 1) // y
+	rw = (max(c - y // 2, 0) + max(w - y // 2, 0) + y - 1) // y
+	return rw <= rn
 
 
 def run_plan(plan):
