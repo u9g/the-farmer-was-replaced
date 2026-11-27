@@ -20467,7 +20467,7 @@ def w0():
 	while get_time() < wuT:
 		pass
 	while num_drones() > 1:
-		pass
+		q = 0
 	harvest()
 
 w0()
