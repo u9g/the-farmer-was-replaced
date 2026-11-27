@@ -1,11 +1,6 @@
 WDT = 0.0390625
 NSIG = 43
 
-def wait_until(e):
-	while get_time() < e:
-		pass
-
-
 def xcasw(d, up):
 	w = measure(d)
 	while w == None:
@@ -58,14 +53,14 @@ KP = 6
 PD = False
 
 
-def pk_East_North_None_0_0():
+def pkA(x, y):
 	global PD
 	plant(Entities.Cactus)
 	if PD:
-		swap(East)
+		swap(x)
 		plant(Entities.Cactus)
 		PD = False
-	swap(North)
+	swap(y)
 	plant(Entities.Cactus)
 
 
@@ -83,21 +78,21 @@ def pkq():
 	return t
 
 
-def pk_East_North_West_0_1():
+def pkB(x):
 	global PD
 	plant(Entities.Cactus)
 	if PD:
 		if measure() <= 3:
 			swap(West)
 			plant(Entities.Cactus)
-			swap(East)
+			swap(x)
 			plant(Entities.Cactus)
 			PD = False
 			move(North)
 			plant(Entities.Cactus)
 			move(West)
 			return
-		swap(East)
+		swap(x)
 		plant(Entities.Cactus)
 		PD = False
 	v = measure()
@@ -120,58 +115,21 @@ def pk_East_North_West_0_1():
 		PD = True
 
 
-def pk_None_North_West_0_1():
-	global PD
-	plant(Entities.Cactus)
-	if PD:
-		if measure() <= 3:
-			swap(West)
-			plant(Entities.Cactus)
-			swap(None)
-			plant(Entities.Cactus)
-			PD = False
-			move(North)
-			plant(Entities.Cactus)
-			move(West)
-			return
-		swap(None)
-		plant(Entities.Cactus)
-		PD = False
-	v = measure()
-	if v >= 6:
-		swap(North)
-		plant(Entities.Cactus)
-		move(West)
-		plant(Entities.Cactus)
-		move(North)
-	elif v <= 3:
-		swap(West)
-		plant(Entities.Cactus)
-		move(North)
-		plant(Entities.Cactus)
-		move(West)
-	else:
-		move(West)
-		plant(Entities.Cactus)
-		move(North)
-		PD = True
-
-
-def pk_None_South_East_1_1():
+def pkC(x):
 	global PD
 	plant(Entities.Cactus)
 	if PD:
 		if measure() >= 6:
 			swap(East)
 			plant(Entities.Cactus)
-			swap(None)
+			swap(x)
 			plant(Entities.Cactus)
 			PD = False
 			move(South)
 			plant(Entities.Cactus)
 			move(East)
 			return
-		swap(None)
+		swap(x)
 		plant(Entities.Cactus)
 		PD = False
 	v = measure()
@@ -192,54 +150,6 @@ def pk_None_South_East_1_1():
 		plant(Entities.Cactus)
 		move(South)
 		PD = True
-
-
-def pk_West_South_East_1_1():
-	global PD
-	plant(Entities.Cactus)
-	if PD:
-		if measure() >= 6:
-			swap(East)
-			plant(Entities.Cactus)
-			swap(West)
-			plant(Entities.Cactus)
-			PD = False
-			move(South)
-			plant(Entities.Cactus)
-			move(East)
-			return
-		swap(West)
-		plant(Entities.Cactus)
-		PD = False
-	v = measure()
-	if v <= 3:
-		swap(South)
-		plant(Entities.Cactus)
-		move(East)
-		plant(Entities.Cactus)
-		move(South)
-	elif v >= 6:
-		swap(East)
-		plant(Entities.Cactus)
-		move(South)
-		plant(Entities.Cactus)
-		move(East)
-	else:
-		move(East)
-		plant(Entities.Cactus)
-		move(South)
-		PD = True
-
-
-def pk_West_South_None_1_0():
-	global PD
-	plant(Entities.Cactus)
-	if PD:
-		swap(West)
-		plant(Entities.Cactus)
-		PD = False
-	swap(South)
-	plant(Entities.Cactus)
 
 
 def hlp(FS, MS, RS, j, lo, e):
@@ -268,34 +178,6 @@ def own(FS, MS, RS, j, e, DL):
 			move(d)
 		j += 1
 	FS[e]()
-
-
-def fS_NE():
-	v = measure()
-	s = measure(South)
-	if s > v:
-		swap(South)
-		q = s
-		s = v
-		v = q
-	a = measure(North)
-	b = measure(East)
-	while not a >= v <= b:
-		if b < a:
-			swap(East)
-			q = b
-			b = v
-			v = q
-		else:
-			swap(North)
-			q = a
-			a = v
-			v = q
-		if s > v:
-			swap(South)
-			q = s
-			s = v
-			v = q
 
 
 def fsS_NE():
@@ -334,40 +216,6 @@ def fsS_NE():
 			swap(East)
 		else:
 			swap(North)
-
-
-def fSW_E():
-	v = measure()
-	s = measure(South)
-	w = measure(West)
-	if not s <= v >= w:
-		if w > s:
-			swap(West)
-			q = w
-			w = v
-			v = q
-		else:
-			swap(South)
-			q = s
-			s = v
-			v = q
-	a = measure(East)
-	while a < v:
-		swap(East)
-		q = a
-		a = v
-		v = q
-		if not s <= v >= w:
-			if w > s:
-				swap(West)
-				q = w
-				w = v
-				v = q
-			else:
-				swap(South)
-				q = s
-				s = v
-				v = q
 
 
 def fsSW_E():
@@ -1428,7 +1276,9 @@ def w0():
 										P.append((South, South, South, South,))
 								else:
 									P.append((West, South, South, South, South,))
-							wait_until(tl + 0.9676)
+							wuT = tl + 0.9676
+							while get_time() < wuT:
+								pass
 							if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 								if get_entity_type() == Entities.Cactus:
 									harvest()
@@ -1856,7 +1706,9 @@ def w0():
 											break
 										swap(East)
 							if tl + 0.9676 > hb + 2.6:
-								wait_until(tl + 0.9676)
+								wuT = tl + 0.9676
+								while get_time() < wuT:
+									pass
 						spawn_drone(w31)
 						move(West)
 						move(West)
@@ -2456,7 +2308,9 @@ def w0():
 									P.append((South, South, South, South, South, South, South,))
 							else:
 								P.append((East, South, South, South, South, South, South, South,))
-						wait_until(tl + 0.9676)
+						wuT = tl + 0.9676
+						while get_time() < wuT:
+							pass
 						if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 							if get_entity_type() == Entities.Cactus:
 								harvest()
@@ -2885,7 +2739,9 @@ def w0():
 						if measure() > measure(East):
 							swap(East)
 						if tl + 0.9676 > hb + 2.6:
-							wait_until(tl + 0.9676)
+							wuT = tl + 0.9676
+							while get_time() < wuT:
+								pass
 					spawn_drone(w30)
 					move(West)
 					move(West)
@@ -3482,7 +3338,9 @@ def w0():
 								P.append((West, West, West, North, North, North, North,))
 						else:
 							P.append((West, West, West, West, North, North, North, North,))
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 						if get_entity_type() == Entities.Cactus:
 							harvest()
@@ -3912,7 +3770,9 @@ def w0():
 									break
 								swap(North)
 					if tl + 0.9676 > hb + 2.6:
-						wait_until(tl + 0.9676)
+						wuT = tl + 0.9676
+						while get_time() < wuT:
+							pass
 				spawn_drone(w29)
 				def w28():
 					move(West)
@@ -4420,7 +4280,9 @@ def w0():
 								P.append((South,))
 						else:
 							P.append((South, South,))
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 						if get_entity_type() == Entities.Cactus:
 							harvest()
@@ -4546,7 +4408,9 @@ def w0():
 					if measure() < measure(West):
 						swap(West)
 					if tl + 0.9676 > hb + 2.6:
-						wait_until(tl + 0.9676)
+						wuT = tl + 0.9676
+						while get_time() < wuT:
+							pass
 				spawn_drone(w28)
 				move(West)
 				move(West)
@@ -5031,7 +4895,9 @@ def w0():
 						P.append((West, West, North,))
 				else:
 					P.append((West, West, West, North,))
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 					if get_entity_type() == Entities.Cactus:
 						harvest()
@@ -5152,7 +5018,9 @@ def w0():
 				if measure() < measure(South):
 					swap(South)
 				if tl + 0.9676 > hb + 2.6:
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 			spawn_drone(w27)
 			def w26():
 				move(West)
@@ -5329,7 +5197,9 @@ def w0():
 						P.append((North,))
 				else:
 					P.append((East, North,))
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 					if get_entity_type() == Entities.Cactus:
 						harvest()
@@ -5741,7 +5611,9 @@ def w0():
 								break
 							swap(North)
 				if tl + 0.9676 > hb + 2.6:
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 			spawn_drone(w26)
 			def w25():
 				move(East)
@@ -6253,7 +6125,9 @@ def w0():
 							P.append((East, South,))
 					else:
 						P.append((East, East, South,))
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 					if get_entity_type() == Entities.Cactus:
 						harvest()
@@ -6301,8 +6175,8 @@ def w0():
 				move(East)
 				plant(Entities.Cactus)
 				move(South)
-				pk_None_South_East_1_1()
-				pk_West_South_None_1_0()
+				pkC(None)
+				pkA(West, South)
 				move(East)
 				plant(Entities.Cactus)
 				tl = get_time()
@@ -6644,7 +6518,9 @@ def w0():
 								break
 							swap(East)
 				if tl + 0.9676 > hb + 2.6:
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 			spawn_drone(w25)
 			move(South)
 			move(South)
@@ -6772,7 +6648,9 @@ def w0():
 					P.append((South,))
 			else:
 				P.append((East, South,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -6792,13 +6670,13 @@ def w0():
 			move(East)
 			plant(Entities.Cactus)
 			swap(North)
-			pk_None_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_None_1_0()
+			pkC(None)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkA(West, South)
 			tl = get_time()
 			DL = tl + 0.9676
 			if DL < hb + 2.6:
@@ -6853,7 +6731,9 @@ def w0():
 									move(North)
 									fsSW_NE()
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w24)
 		def w21():
 			def w22():
@@ -6981,7 +6861,9 @@ def w0():
 						move(East)
 					else:
 						P.append((East,))
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 						if get_entity_type() == Entities.Cactus:
 							harvest()
@@ -6997,13 +6879,13 @@ def w0():
 						hb = get_time()
 					plant(Entities.Cactus)
 					move(South)
-					pk_None_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_None_1_0()
+					pkC(None)
+					pkC(West)
+					pkC(West)
+					pkC(West)
+					pkC(West)
+					pkC(West)
+					pkA(West, South)
 					move(East)
 					plant(Entities.Cactus)
 					move(South)
@@ -7062,7 +6944,9 @@ def w0():
 											move(North)
 											fsSW_NE()
 					if tl + 0.9676 > hb + 2.6:
-						wait_until(tl + 0.9676)
+						wuT = tl + 0.9676
+						while get_time() < wuT:
+							pass
 				spawn_drone(w23)
 				move(West)
 				move(West)
@@ -7649,7 +7533,9 @@ def w0():
 						P.append((South, South, South, South, South, South, South, South,))
 				else:
 					P.append((South, South, South, South, South, South, South, South, South,))
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 					if get_entity_type() == Entities.Cactus:
 						harvest()
@@ -7691,9 +7577,9 @@ def w0():
 				move(West)
 				plant(Entities.Cactus)
 				swap(South)
-				pk_None_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_None_0_0()
+				pkB(None)
+				pkB(East)
+				pkA(East, North)
 				move(West)
 				plant(Entities.Cactus)
 				tl = get_time()
@@ -8015,7 +7901,9 @@ def w0():
 							else:
 								swap(North)
 				if tl + 0.9676 > hb + 2.6:
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 			spawn_drone(w22)
 			move(West)
 			move(West)
@@ -8147,7 +8035,9 @@ def w0():
 					P.append((East, East,))
 			else:
 				P.append((East, East, East,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -8192,8 +8082,8 @@ def w0():
 			move(West)
 			plant(Entities.Cactus)
 			swap(South)
-			pk_None_North_West_0_1()
-			pk_East_North_None_0_0()
+			pkB(None)
+			pkA(East, North)
 			tl = get_time()
 			fsSW_NE()
 			move(East)
@@ -8640,7 +8530,9 @@ def w0():
 							break
 						swap(North)
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w21)
 		def w18():
 			def w19():
@@ -8785,7 +8677,9 @@ def w0():
 							P.append((East, South, South, South, South, South,))
 					else:
 						P.append((East, East, South, South, South, South, South,))
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 						if get_entity_type() == Entities.Cactus:
 							harvest()
@@ -8801,14 +8695,14 @@ def w0():
 						hb = get_time()
 					plant(Entities.Cactus)
 					move(South)
-					pk_None_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_East_1_1()
-					pk_West_South_None_1_0()
+					pkC(None)
+					pkC(West)
+					pkC(West)
+					pkC(West)
+					pkC(West)
+					pkC(West)
+					pkC(West)
+					pkA(West, South)
 					move(East)
 					plant(Entities.Cactus)
 					move(South)
@@ -8881,7 +8775,9 @@ def w0():
 												move(North)
 												fsSW_NE()
 					if tl + 0.9676 > hb + 2.6:
-						wait_until(tl + 0.9676)
+						wuT = tl + 0.9676
+						while get_time() < wuT:
+							pass
 				spawn_drone(w20)
 				move(East)
 				move(East)
@@ -9017,7 +8913,9 @@ def w0():
 						P.append((South, South, South, South,))
 				else:
 					P.append((South, South, South, South, South,))
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 					if get_entity_type() == Entities.Cactus:
 						harvest()
@@ -9039,14 +8937,14 @@ def w0():
 				move(East)
 				plant(Entities.Cactus)
 				swap(North)
-				pk_None_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_East_1_1()
-				pk_West_South_None_1_0()
+				pkC(None)
+				pkC(West)
+				pkC(West)
+				pkC(West)
+				pkC(West)
+				pkC(West)
+				pkC(West)
+				pkA(West, South)
 				tl = get_time()
 				if use_item(Items.Water, 4):
 					tl = get_time() - 0.0988
@@ -9103,7 +9001,9 @@ def w0():
 										move(North)
 										fsSW_NE()
 				if tl + 0.9676 > hb + 2.6:
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 			spawn_drone(w19)
 			move(East)
 			move(East)
@@ -9699,7 +9599,9 @@ def w0():
 						P.append((South, South,))
 				else:
 					P.append((West, South, South,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -9715,14 +9617,14 @@ def w0():
 				hb = get_time()
 			plant(Entities.Cactus)
 			move(South)
-			pk_None_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_None_1_0()
+			pkC(None)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkA(West, South)
 			move(East)
 			plant(Entities.Cactus)
 			move(South)
@@ -9795,7 +9697,9 @@ def w0():
 										move(North)
 										fsS_NE()
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w18)
 		move(East)
 		move(East)
@@ -9937,7 +9841,9 @@ def w0():
 					P.append((North, North, North, North,))
 			else:
 				P.append((East, North, North, North, North,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -9955,9 +9861,9 @@ def w0():
 			move(West)
 			plant(Entities.Cactus)
 			swap(South)
-			pk_None_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_None_0_0()
+			pkB(None)
+			pkB(East)
+			pkA(East, North)
 			move(West)
 			plant(Entities.Cactus)
 			move(North)
@@ -10443,7 +10349,9 @@ def w0():
 			move(South)
 			fsSW_NE()
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w17)
 		move(East)
 		move(East)
@@ -10563,7 +10471,9 @@ def w0():
 				P.append((North, North, North,))
 		else:
 			P.append((East, North, North, North,))
-		wait_until(tl + 0.9676)
+		wuT = tl + 0.9676
+		while get_time() < wuT:
+			pass
 		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 			if get_entity_type() == Entities.Cactus:
 				harvest()
@@ -10583,13 +10493,13 @@ def w0():
 		move(West)
 		plant(Entities.Cactus)
 		swap(South)
-		pk_None_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_None_0_0()
+		pkB(None)
+		pkB(East)
+		pkB(East)
+		pkB(East)
+		pkB(East)
+		pkB(East)
+		pkA(East, North)
 		move(West)
 		plant(Entities.Cactus)
 		move(North)
@@ -10655,7 +10565,9 @@ def w0():
 									move(South)
 									fsSW_NE()
 		if tl + 0.9676 > hb + 2.6:
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 	spawn_drone(w16)
 	def w12():
 		def w14():
@@ -10794,7 +10706,9 @@ def w0():
 						P.append((East, East,))
 				else:
 					P.append((East, East, East,))
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 					if get_entity_type() == Entities.Cactus:
 						harvest()
@@ -10810,14 +10724,14 @@ def w0():
 					hb = get_time()
 				plant(Entities.Cactus)
 				move(North)
-				pk_None_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_West_0_1()
-				pk_East_North_None_0_0()
+				pkB(None)
+				pkB(East)
+				pkB(East)
+				pkB(East)
+				pkB(East)
+				pkB(East)
+				pkB(East)
+				pkA(East, North)
 				move(West)
 				if use_item(Items.Water, 4):
 					plant(Entities.Cactus)
@@ -10882,7 +10796,9 @@ def w0():
 										move(South)
 										fsSW_NE()
 				if tl + 0.9676 > hb + 2.6:
-					wait_until(tl + 0.9676)
+					wuT = tl + 0.9676
+					while get_time() < wuT:
+						pass
 			spawn_drone(w15)
 			move(West)
 			move(West)
@@ -11352,7 +11268,9 @@ def w0():
 						P.append((South, South, South,))
 				else:
 					P.append((East, South, South, South,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -12095,7 +12013,9 @@ def w0():
 							break
 						swap(East)
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w14)
 		def w13():
 			move(West)
@@ -12235,7 +12155,9 @@ def w0():
 					P.append((East, South, South,))
 			else:
 				P.append((East, East, South, South,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -12255,13 +12177,13 @@ def w0():
 			move(West)
 			plant(Entities.Cactus)
 			swap(South)
-			pk_None_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_None_0_0()
+			pkB(None)
+			pkB(East)
+			pkB(East)
+			pkB(East)
+			pkB(East)
+			pkB(East)
+			pkA(East, North)
 			move(West)
 			plant(Entities.Cactus)
 			move(North)
@@ -12329,7 +12251,9 @@ def w0():
 										move(South)
 										fsSW_NE()
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w13)
 		move(East)
 		move(East)
@@ -12464,7 +12388,9 @@ def w0():
 				P.append((East, South,))
 		else:
 			P.append((East, East, South,))
-		wait_until(tl + 0.9676)
+		wuT = tl + 0.9676
+		while get_time() < wuT:
+			pass
 		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 			if get_entity_type() == Entities.Cactus:
 				harvest()
@@ -12482,13 +12408,13 @@ def w0():
 		move(West)
 		plant(Entities.Cactus)
 		swap(South)
-		pk_None_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
+		pkB(None)
+		pkB(East)
+		pkB(East)
+		pkB(East)
+		pkB(East)
+		pkB(East)
+		pkB(East)
 		tq = pkq()
 		tl = get_time()
 		if use_item(Items.Water, 4):
@@ -12548,7 +12474,9 @@ def w0():
 								move(South)
 								fsSW_NE()
 		if tl + 0.9676 > hb + 2.6:
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 	spawn_drone(w12)
 	def w9():
 		def w11():
@@ -12983,7 +12911,37 @@ def w0():
 				move(East)
 				move(East)
 				move(South)
-			fSW_E()
+			i_v = measure()
+			i_s = measure(South)
+			i_w = measure(West)
+			if not i_s <= i_v >= i_w:
+				if i_w > i_s:
+					swap(West)
+					i_q = i_w
+					i_w = i_v
+					i_v = i_q
+				else:
+					swap(South)
+					i_q = i_s
+					i_s = i_v
+					i_v = i_q
+			i_a = measure(East)
+			while i_a < i_v:
+				swap(East)
+				i_q = i_a
+				i_a = i_v
+				i_v = i_q
+				if not i_s <= i_v >= i_w:
+					if i_w > i_s:
+						swap(West)
+						i_q = i_w
+						i_w = i_v
+						i_v = i_q
+					else:
+						swap(South)
+						i_q = i_s
+						i_s = i_v
+						i_v = i_q
 			move(East)
 			move(South)
 			fSW_NE()
@@ -12999,7 +12957,9 @@ def w0():
 				move(South)
 			else:
 				P.append((South,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -13015,9 +12975,9 @@ def w0():
 				hb = get_time()
 			plant(Entities.Cactus)
 			move(North)
-			pk_None_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_None_0_0()
+			pkB(None)
+			pkB(East)
+			pkA(East, North)
 			move(West)
 			plant(Entities.Cactus)
 			move(North)
@@ -13395,7 +13355,9 @@ def w0():
 			move(South)
 			fsSW_NE()
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w11)
 		def w10():
 			move(East)
@@ -13528,7 +13490,9 @@ def w0():
 					P.append((North, North,))
 			else:
 				P.append((West, North, North,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -13544,14 +13508,14 @@ def w0():
 				hb = get_time()
 			plant(Entities.Cactus)
 			move(South)
-			pk_None_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_None_1_0()
+			pkC(None)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkA(West, South)
 			move(East)
 			plant(Entities.Cactus)
 			tl = get_time()
@@ -13611,7 +13575,9 @@ def w0():
 									move(North)
 									fsS_NE()
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w10)
 		move(East)
 		move(East)
@@ -13739,7 +13705,9 @@ def w0():
 				P.append((North,))
 		else:
 			P.append((West, North,))
-		wait_until(tl + 0.9676)
+		wuT = tl + 0.9676
+		while get_time() < wuT:
+			pass
 		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 			if get_entity_type() == Entities.Cactus:
 				harvest()
@@ -13759,13 +13727,13 @@ def w0():
 		move(East)
 		plant(Entities.Cactus)
 		swap(North)
-		pk_None_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_East_1_1()
-		pk_West_South_None_1_0()
+		pkC(None)
+		pkC(West)
+		pkC(West)
+		pkC(West)
+		pkC(West)
+		pkC(West)
+		pkA(West, South)
 		move(East)
 		plant(Entities.Cactus)
 		move(South)
@@ -13831,7 +13799,9 @@ def w0():
 									move(North)
 									fsSW_NE()
 		if tl + 0.9676 > hb + 2.6:
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 	spawn_drone(w9)
 	def w6():
 		def w8():
@@ -14280,7 +14250,9 @@ def w0():
 				move(West)
 			else:
 				P.append((West,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -14298,10 +14270,10 @@ def w0():
 			move(East)
 			plant(Entities.Cactus)
 			swap(North)
-			pk_None_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_None_1_0()
+			pkC(None)
+			pkC(West)
+			pkC(West)
+			pkA(West, South)
 			move(East)
 			move(South)
 			plant(Entities.Cactus)
@@ -14673,7 +14645,9 @@ def w0():
 			move(North)
 			fsSW_NE()
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w8)
 		def w7():
 			move(West)
@@ -14795,7 +14769,9 @@ def w0():
 				move(East)
 			else:
 				P.append((East,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -14817,13 +14793,13 @@ def w0():
 			move(West)
 			plant(Entities.Cactus)
 			swap(South)
-			pk_None_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_West_0_1()
-			pk_East_North_None_0_0()
+			pkB(None)
+			pkB(East)
+			pkB(East)
+			pkB(East)
+			pkB(East)
+			pkB(East)
+			pkA(East, North)
 			move(West)
 			plant(Entities.Cactus)
 			tl = get_time()
@@ -14881,7 +14857,9 @@ def w0():
 									move(South)
 									fsW_NE()
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w7)
 		move(East)
 		move(East)
@@ -14995,7 +14973,9 @@ def w0():
 		move(East)
 		move(South)
 		fsSW_NE()
-		wait_until(tl + 0.9676)
+		wuT = tl + 0.9676
+		while get_time() < wuT:
+			pass
 		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 			if get_entity_type() == Entities.Cactus:
 				harvest()
@@ -15012,13 +14992,13 @@ def w0():
 		move(West)
 		plant(Entities.Cactus)
 		swap(South)
-		pk_None_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_West_0_1()
-		pk_East_North_None_0_0()
+		pkB(None)
+		pkB(East)
+		pkB(East)
+		pkB(East)
+		pkB(East)
+		pkB(East)
+		pkA(East, North)
 		move(West)
 		plant(Entities.Cactus)
 		move(North)
@@ -15084,7 +15064,9 @@ def w0():
 									move(South)
 									fsSW_NE()
 		if tl + 0.9676 > hb + 2.6:
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 	spawn_drone(w6)
 	def w3():
 		def w5():
@@ -15179,7 +15161,31 @@ def w0():
 			fsSW_NE()
 			move(West)
 			move(North)
-			fS_NE()
+			i_v = measure()
+			i_s = measure(South)
+			if i_s > i_v:
+				swap(South)
+				i_q = i_s
+				i_s = i_v
+				i_v = i_q
+			i_a = measure(North)
+			i_b = measure(East)
+			while not i_a >= i_v <= i_b:
+				if i_b < i_a:
+					swap(East)
+					i_q = i_b
+					i_b = i_v
+					i_v = i_q
+				else:
+					swap(North)
+					i_q = i_a
+					i_a = i_v
+					i_v = i_q
+				if i_s > i_v:
+					swap(South)
+					i_q = i_s
+					i_s = i_v
+					i_v = i_q
 			move(North)
 			move(North)
 			move(North)
@@ -15519,7 +15525,37 @@ def w0():
 				move(East)
 				move(East)
 				move(South)
-			fSW_E()
+			i_v = measure()
+			i_s = measure(South)
+			i_w = measure(West)
+			if not i_s <= i_v >= i_w:
+				if i_w > i_s:
+					swap(West)
+					i_q = i_w
+					i_w = i_v
+					i_v = i_q
+				else:
+					swap(South)
+					i_q = i_s
+					i_s = i_v
+					i_v = i_q
+			i_a = measure(East)
+			while i_a < i_v:
+				swap(East)
+				i_q = i_a
+				i_a = i_v
+				i_v = i_q
+				if not i_s <= i_v >= i_w:
+					if i_w > i_s:
+						swap(West)
+						i_q = i_w
+						i_w = i_v
+						i_v = i_q
+					else:
+						swap(South)
+						i_q = i_s
+						i_s = i_v
+						i_v = i_q
 			move(East)
 			move(South)
 			fsSW_NE()
@@ -15537,7 +15573,9 @@ def w0():
 					P.append((West, North,))
 			else:
 				P.append((West, West, North,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -15582,9 +15620,9 @@ def w0():
 			move(East)
 			plant(Entities.Cactus)
 			move(South)
-			pk_None_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_None_1_0()
+			pkC(None)
+			pkC(West)
+			pkA(West, South)
 			tl = get_time()
 			fsSW_NE()
 			move(West)
@@ -15917,7 +15955,9 @@ def w0():
 						else:
 							swap(North)
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w5)
 		def w4():
 			move(East)
@@ -16045,7 +16085,9 @@ def w0():
 					P.append((East, South,))
 			else:
 				P.append((East, East, South,))
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 				if get_entity_type() == Entities.Cactus:
 					harvest()
@@ -16061,14 +16103,14 @@ def w0():
 				hb = get_time()
 			plant(Entities.Cactus)
 			move(South)
-			pk_None_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_East_1_1()
-			pk_West_South_None_1_0()
+			pkC(None)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkC(West)
+			pkA(West, South)
 			move(East)
 			plant(Entities.Cactus)
 			move(South)
@@ -16136,7 +16178,9 @@ def w0():
 										move(North)
 										fsSW_NE()
 			if tl + 0.9676 > hb + 2.6:
-				wait_until(tl + 0.9676)
+				wuT = tl + 0.9676
+				while get_time() < wuT:
+					pass
 		spawn_drone(w4)
 		move(East)
 		move(East)
@@ -16595,7 +16639,9 @@ def w0():
 				P.append((East, South, South, South,))
 		else:
 			P.append((East, East, South, South, South,))
-		wait_until(tl + 0.9676)
+		wuT = tl + 0.9676
+		while get_time() < wuT:
+			pass
 		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 			if get_entity_type() == Entities.Cactus:
 				harvest()
@@ -17009,7 +17055,9 @@ def w0():
 					else:
 						swap(North)
 		if tl + 0.9676 > hb + 2.6:
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 	spawn_drone(w3)
 	def w2():
 		move(East)
@@ -17487,7 +17535,9 @@ def w0():
 				P.append((East, South, South,))
 		else:
 			P.append((East, East, South, South,))
-		wait_until(tl + 0.9676)
+		wuT = tl + 0.9676
+		while get_time() < wuT:
+			pass
 		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 			if get_entity_type() == Entities.Cactus:
 				harvest()
@@ -17911,7 +17961,9 @@ def w0():
 					else:
 						swap(North)
 		if tl + 0.9676 > hb + 2.6:
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 	spawn_drone(w2)
 	def w1():
 		move(East)
@@ -18404,7 +18456,9 @@ def w0():
 				P.append((West, West, West, West, West, West, West, South,))
 		else:
 			P.append((West, West, West, West, West, West, West, West, South,))
-		wait_until(tl + 0.9676)
+		wuT = tl + 0.9676
+		while get_time() < wuT:
+			pass
 		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 			if get_entity_type() == Entities.Cactus:
 				harvest()
@@ -19129,7 +19183,9 @@ def w0():
 					else:
 						swap(North)
 		if tl + 0.9676 > hb + 2.6:
-			wait_until(tl + 0.9676)
+			wuT = tl + 0.9676
+			while get_time() < wuT:
+				pass
 	spawn_drone(w1)
 	move(East)
 	move(East)
@@ -19929,7 +19985,9 @@ def w0():
 				P.append((South,))
 		else:
 			P.append((East, South,))
-	wait_until(tl + 0.9676)
+	wuT = tl + 0.9676
+	while get_time() < wuT:
+		pass
 	if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
 		if get_entity_type() == Entities.Cactus:
 			harvest()
@@ -20345,8 +20403,12 @@ def w0():
 					swap(East)
 				else:
 					swap(North)
-	wait_until(tl + 0.9676)
-	wait_until(hm + 2.6)
+	wuT = tl + 0.9676
+	while get_time() < wuT:
+		pass
+	wuT = hm + 2.6
+	while get_time() < wuT:
+		pass
 	while num_drones() > 1:
 		pass
 	harvest()
