@@ -259,7 +259,11 @@ def chunks(paths, entry):
                 if sig:
                     f = sig[0]
                 else:
-                    f = max(es[-1][0] + act, lp + 1.0)
+                    # round B: work done and the last of the drone's own plants grown (a watered
+                    # last plant grows sooner than lp + 1, and the early exit skips the wait)
+                    mine = {(e[3], e[4]) for e in plants}
+                    g = [t for t, x, y in grown if a <= t <= b and (x, y) in mine]
+                    f = max(es[-1][0] + act, max(g) if g else lp + 1.0)
                 rows.append((f - a, rn))
                 fin[ri][rn].append(f - a)
                 lastp[ri][rn].append(lp - a)
