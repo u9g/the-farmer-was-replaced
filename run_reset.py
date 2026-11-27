@@ -1284,7 +1284,9 @@ SUN_GRADED = True
 SUN_WSAFE = 1.06
 # the snake's neighbour tables are built during a power round's wait for its flowers
 SUN_DINO = True
-SUN_MARGIN = 1.04
+# the cut drones' schedule counts actions at their exact length (-3.4 s ± 0.9 on 64 seeds against
+# 1.04, faster on 44 of 64; 0.96 and 1.02 both slower)
+SUN_MARGIN = 1.0
 SUN_SLACK = 0
 SUN_GROW = 0.05
 SUN_NEW = True

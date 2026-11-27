@@ -53,6 +53,9 @@ cargo +nightly -Zscript path/to/tfwr_sim.rs cactus.py cactus_new.py --seed 1 --s
 | `--profile` | report where the time goes, by drone, unlock, function and line |
 | `--whatif` | leaderboard runs: what a 20% improvement in each of ticks, compute, growth and each item would save |
 | `--tweak name=factor` | change a rule for a what-if: `speed`, `compute`, `grow`, `cost.<item>`, `yield.<item>` |
+| `script.py@NAME=value` | run the script with the top-level `NAME = ...` replaced (several: `@A=1@B=2`; a multi-line list too), no file written |
+| `--sweep NAME=v1,v2,...` | add one `@NAME=v` variant per value after each script, paired against the first (repeat to scan several names) |
+| `--crn` | common random numbers: each plant's random draws come from a stream of its own cell, so versions of a script see the same luck and paired differences are less noisy (not the game's draws) |
 
 ### Leaderboard runs
 

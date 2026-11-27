@@ -68,6 +68,9 @@ The first run after the file changes takes about 25 s to build (one fully optimi
 | `--whatif-step F` | the improvement `--whatif` tries (default 0.2) |
 | `--tweak name=factor` | change a game rule for a what-if: `speed`, `compute`, `grow`, `cost.<item>`, `yield.<item>` |
 | `--until unlock[=level]` | leaderboard runs: end each run the moment that unlock reaches that level (default 1) and score it by that time, e.g. `--until megafarm` |
+| `script.py@NAME=value` | run the script with every top-level `NAME = ...` assignment's value replaced, no file written (several: `@A=1@B=[2, 3]`; a multi-line list such as `PLAN` is replaced whole; a launcher passes them to the file it runs; a name with no such assignment is an error; split at the first `.py@`) |
+| `--sweep NAME=v1,v2,...` | after each script, one `@NAME=v` variant per value, paired against the first script; repeat it to scan several names one at a time (a coordinate scan) |
+| `--crn` | common random numbers, a search aid that is not the game: see Searching many variants fast |
 
 World size and drone limit come from the save's `expand` and `megafarm` levels unless overridden.
 
@@ -171,8 +174,13 @@ A simulator run takes well under a second. An agent's step of thinking takes mos
 a search is fast when each step tests many variants, and slow when it tests one.
 
 1. Put every number you might tune (slot lengths, phase counts, deadlines, block sizes) in
-   constants at the top of the script, and write a few lines of Python that stamp out one file per
-   combination into a scratch folder (not the save folder: the game deletes unknown `.py` files).
+   constants at the top of the script, then give the variants as `script.py@NAME=value` or
+   `--sweep NAME=v1,v2,...` instead of writing files (a reset scan of 50 names, two values each,
+   is one command: `run_reset_lb.py --sweep A=1,3 --sweep B=0.2,0.3 ... --seeds 8`). For changes
+   that are not one constant, write a few lines of Python that stamp out one file per variant into
+   a scratch folder (not the save folder: the game deletes unknown `.py` files). A variant that
+   reads exactly +0.0000s on every seed changes nothing: that constant is dead in the current code
+   (a fastest-reset scan found 36 of 95 such).
 2. Run all of them in one command with `--brief`. Fifty variants at 8 seeds is one command and a
    few seconds; read the top of the sorted list.
 3. Screen with `--seeds 4` or `8`, then confirm the best few with `--seeds 32`. A script with a
@@ -189,6 +197,18 @@ a search is fast when each step tests many variants, and slow when it tests one.
 6. For ideas about schedules rather than code (how many sort rounds, which formation), a twenty
    line Python model of the grid screens thousands of options before any script is written. Check
    the winner in the simulator; the model has no tick costs.
+
+### Less noise: --crn
+
+In the game every plant draws its growth time, companion wish, cactus size and sunflower petals
+from a few streams shared by the whole farm (water decay draws from the growth stream every 0.1 s
+too), in the order things happen. So a change that adds a tick early hands every later plant
+different luck, and two versions of a fastest reset differ by ±10-20 s a seed for reasons that have
+nothing to do with the change. `--crn` gives each kind of plant draw a stream of its own cell (the
+n-th planting on a cell gets the same draws in every version) and water decay a stream of its own.
+Mazes and the snake keep theirs. On fastest-reset variants it cut the paired standard error 1.3 to
+1.7 times (2 to 3 times fewer seeds for the same certainty). Screen with `--crn`, then confirm the
+winner without it, since its draws are not the game's.
 
 ## Finding where to speed up a run (--profile, --whatif)
 

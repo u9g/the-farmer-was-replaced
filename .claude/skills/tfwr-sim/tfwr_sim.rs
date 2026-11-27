@@ -3757,14 +3757,94 @@ struct Shared {
 thread_local! {
     static SOURCES: RefCell<HashMap<std::path::PathBuf, Option<Rc<String>>>> = RefCell::new(HashMap::new());
 }
-/// an imported file's text, read once per thread (files do not change during a command)
+/// an imported file's text, read once per thread (files do not change during a command).
+/// A variant path `file.py@NAME=value@NAME2=value` reads file.py with those top-level
+/// assignments' values replaced (see split_variant / apply_defines).
 fn read_source(path: &std::path::Path) -> Option<Rc<String>> {
     if let Some(c) = SOURCES.with(|s| s.borrow().get(path).cloned()) {
         return c;
     }
-    let c = std::fs::read_to_string(path).ok().map(Rc::new);
+    let (real, defines) = split_variant(path);
+    let c = std::fs::read_to_string(&real).ok().map(|t| {
+        if defines.is_empty() {
+            return Rc::new(t);
+        }
+        match apply_defines(&t, &defines) {
+            Ok(t) => Rc::new(t),
+            Err(e) => {
+                eprintln!("{}: {}", path.display(), e);
+                std::process::exit(2);
+            }
+        }
+    });
     SOURCES.with(|s| s.borrow_mut().insert(path.to_path_buf(), c.clone()));
     c
+}
+
+/// `dir/file.py@A=1@B=[2, 3]` -> (`dir/file.py`, [(A, 1), (B, [2, 3])]), split at the first
+/// `.py@`; a plain path has no defines
+fn split_variant(path: &std::path::Path) -> (std::path::PathBuf, Vec<(String, String)>) {
+    let s = path.to_string_lossy();
+    let at = match s.find(".py@") {
+        Some(i) => i + 3,
+        None => return (path.to_path_buf(), Vec::new()),
+    };
+    let mut defines = Vec::new();
+    for d in s[at + 1..].split('@') {
+        if let Some((k, v)) = d.split_once('=') {
+            defines.push((k.trim().to_string(), v.trim().to_string()));
+        }
+    }
+    (std::path::PathBuf::from(&s[..at]), defines)
+}
+
+/// Replaces the value of every top-level (column 0) `NAME = ...` assignment of each define, the
+/// old value's continuation lines included (an open bracket runs on until it closes). The new
+/// value's text goes in as it is. A name with no such assignment is an error, so a typo cannot
+/// pass for a variant that changes nothing.
+fn apply_defines(text: &str, defines: &[(String, String)]) -> Result<String, String> {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mut out: Vec<String> = Vec::with_capacity(lines.len());
+    let mut found = vec![false; defines.len()];
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        let hit = defines.iter().position(|(k, _)| {
+            line.strip_prefix(k.as_str()).map(|r| {
+                let r = r.trim_start_matches([' ', '\t']);
+                r.starts_with('=') && !r.starts_with("==")
+            }) == Some(true)
+        });
+        let Some(di) = hit else {
+            out.push(line.to_string());
+            i += 1;
+            continue;
+        };
+        found[di] = true;
+        out.push(format!("{} = {}", defines[di].0, defines[di].1));
+        // skip the old value's lines: until its brackets close
+        let mut depth: i32 = 0;
+        loop {
+            let l = lines[i].split('#').next().unwrap_or("");
+            for c in l.chars() {
+                match c {
+                    '(' | '[' | '{' => depth += 1,
+                    ')' | ']' | '}' => depth -= 1,
+                    _ => {}
+                }
+            }
+            i += 1;
+            if depth <= 0 || i >= lines.len() {
+                break;
+            }
+        }
+    }
+    for (di, f) in found.iter().enumerate() {
+        if !f {
+            return Err(format!("no top-level assignment to {} to replace", defines[di].0));
+        }
+    }
+    Ok(out.join("\n"))
 }
 
 thread_local! {
@@ -9213,6 +9293,10 @@ struct Sim {
     random_pumpkin: SysRandom,
     random_poly: SysRandom,
     random_random: SysRandom,
+    /// --crn: one stream per (kind, cell) for the plant draws, empty when off
+    crn_rngs: Vec<SysRandom>,
+    /// --crn: water decay's own stream (in the game it shares random_various with the plants)
+    random_water: SysRandom,
     execution: Option<Execution>,
     // Farm
     drones: Vec<Option<Drone>>,
@@ -9299,6 +9383,8 @@ impl Sim {
             random_pumpkin,
             random_poly,
             random_random,
+            crn_rngs: Vec::new(),
+            random_water: SysRandom::new(seed ^ 0x5bd1e995),
             execution: None,
             drones: Vec::new(),
             main_drone_id: 0,
@@ -9943,16 +10029,50 @@ impl Sim {
         }
     }
 
+    /// --crn (common random numbers, a search aid, not the game): every plant draw comes from a
+    /// stream of its own kind and cell (on a fixed 32x32 grid), and water decay from a stream of
+    /// its own, instead of one stream shared by every cell in the order things happen. Two
+    /// versions of a script then see the same luck for the same plant (the n-th planting on a
+    /// cell grows as fast and wants the same companion in both), so a change that shifts the
+    /// timing of everything after it no longer reshuffles every later draw, and paired
+    /// differences between versions are less noisy. Mazes and the snake keep their streams.
+    fn enable_crn(&mut self, seed: i32) {
+        let mut r = SysRandom::new(seed ^ 0x2545f491);
+        self.crn_rngs = (0..5 * 1024).map(|_| SysRandom::new(r.next())).collect();
+    }
+    /// the stream a plant draw of this kind (0 various, 1 poly, 2 cactus, 3 sunflower, 4 pumpkin)
+    /// on cell (x, y) comes from
+    #[inline]
+    fn plant_rng(&mut self, kind: usize, x: i32, y: i32) -> &mut SysRandom {
+        if self.crn_rngs.is_empty() {
+            return match kind {
+                0 => &mut self.random_various,
+                1 => &mut self.random_poly,
+                2 => &mut self.random_cactus,
+                3 => &mut self.random_sunflower,
+                _ => &mut self.random_pumpkin,
+            };
+        }
+        let i = kind * 1024 + (x.rem_euclid(32) * 32 + y.rem_euclid(32)) as usize;
+        &mut self.crn_rngs[i]
+    }
+
     fn water_decay(&mut self) {
         // A dry cell stays dry (0 * 0.99 is 0): with no water anywhere only the draws matter.
+        let crn = !self.crn_rngs.is_empty();
         if self.wet_cells == 0 {
-            self.random_various.advance((self.wx * self.wy) as usize);
+            if crn {
+                self.random_water.advance((self.wx * self.wy) as usize);
+            } else {
+                self.random_various.advance((self.wx * self.wy) as usize);
+            }
             self.start_timer(TimerFn::WaterDecay, dur_from_seconds(0.1));
             return;
         }
         for j in 0..self.wy {
             for k in 0..self.wx {
-                if self.random_various.next_double() < 0.1 {
+                let r = if crn { self.random_water.next_double() } else { self.random_various.next_double() };
+                if r < 0.1 {
                     let w = self.cells[self.idx(k, j)].water_volume;
                     self.set_water_volume(k, j, w * 0.99);
                 }
@@ -10178,7 +10298,7 @@ impl Sim {
                 self.cells[i].cactus_number = -1;
             }
             EC::Pumpkin => {
-                if self.random_pumpkin.next_double() <= 0.2 {
+                if self.plant_rng(4, x, y).next_double() <= 0.2 {
                     self.set_entity(x, y, "dead_pumpkin");
                 } else {
                     self.add_pumpkin(e);
@@ -10199,7 +10319,11 @@ impl Sim {
     }
 
     fn restart_growth(&mut self, e: &E) {
-        let r = self.random_various.next_double() as f32;
+        let (ex, ey) = {
+            let b = e.borrow();
+            (b.x, b.y)
+        };
+        let r = self.plant_rng(0, ex, ey).next_double() as f32;
         {
             let mut b = e.borrow_mut();
             b.is_grown = false;
@@ -10233,7 +10357,7 @@ impl Sim {
             b.weird = !b.weird;
             (b.x, b.y)
         };
-        self.random_various.next_max(1);
+        self.plant_rng(0, x, y).next_max(1);
         for n in self.neighbors(x, y).iter().flatten() {
             let ok = {
                 let b = n.borrow();
@@ -10242,8 +10366,9 @@ impl Sim {
             if ok {
                 let mut b = n.borrow_mut();
                 b.weird = !b.weird;
+                let (nx, ny) = (b.x, b.y);
                 drop(b);
-                self.random_various.next_max(1);
+                self.plant_rng(0, nx, ny).next_max(1);
             }
         }
     }
@@ -10256,7 +10381,7 @@ impl Sim {
         let num = 3;
         let mut cp;
         loop {
-            cp = (self.random_poly.next_range(-num, num + 1), self.random_poly.next_range(-num, num + 1));
+            cp = (self.plant_rng(1, x, y).next_range(-num, num + 1), self.plant_rng(1, x, y).next_range(-num, num + 1));
             let w = self.wrap(x + cp.0, y + cp.1);
             if !((w == (x, y) || cp.0.abs() + cp.1.abs() > num) && self.wy != 1) {
                 break;
@@ -10265,7 +10390,7 @@ impl Sim {
         let pos = self.wrap(x + cp.0, y + cp.1);
         let mut ty;
         loop {
-            ty = match self.random_poly.next_max(4) {
+            ty = match self.plant_rng(1, x, y).next_max(4) {
                 2 => "carrot",
                 1 => "bush",
                 0 => "grass",
@@ -10408,11 +10533,11 @@ impl Sim {
             (b.so, b.class, b.x, b.y)
         };
         // Entity.OnRestart
-        let orientation = if so.random_rotation { self.random_various.next_range(0, 4) as u8 } else { 2 };
+        let orientation = if so.random_rotation { self.plant_rng(0, x, y).next_range(0, 4) as u8 } else { 2 };
         e.borrow_mut().orientation = orientation;
         if is_growable(class) {
             // gooIndex = randomVarious.Next(gooMeshes.Count - 1)
-            self.random_various.next_max(1);
+            self.plant_rng(0, x, y).next_max(1);
             if so.companion {
                 self.choose_companion(e);
             }
@@ -10422,7 +10547,7 @@ impl Sim {
             EC::Cactus => {
                 let i = self.idx(x, y);
                 if self.cells[i].cactus_number == -1 {
-                    self.cells[i].cactus_number = self.random_cactus.next_max(10);
+                    self.cells[i].cactus_number = self.plant_rng(2, x, y).next_max(10);
                 }
                 let mut b = e.borrow_mut();
                 b.number = self.cells[i].cactus_number;
@@ -10435,7 +10560,7 @@ impl Sim {
                 e.borrow_mut().mysterious_number = n;
             }
             EC::Sunflower => {
-                let n = self.random_sunflower.next_range(7, 16);
+                let n = self.plant_rng(3, x, y).next_range(7, 16);
                 e.borrow_mut().number = n;
             }
             EC::Treasure => {
@@ -12611,10 +12736,12 @@ struct Tweak {
     cost_mul: Vec<f64>,
     /// --until: a leaderboard run ends (and counts as met) when this unlock reaches this level
     until: Option<(&'static str, i32)>,
+    /// --crn: common random numbers (see Sim::enable_crn); not the game's draws
+    crn: bool,
 }
 impl Tweak {
     fn none() -> Tweak {
-        Tweak { speed: 1.0, compute: 1.0, ascale: 1.0, grow: 1.0, power: 1.0, yields: false, yield_mul: vec![1.0; ITEM_NAMES.len()], yield_carry: vec![0.0; ITEM_NAMES.len()], costs: false, cost_mul: vec![1.0; ITEM_NAMES.len()], until: None }
+        Tweak { speed: 1.0, compute: 1.0, ascale: 1.0, grow: 1.0, power: 1.0, yields: false, yield_mul: vec![1.0; ITEM_NAMES.len()], yield_carry: vec![0.0; ITEM_NAMES.len()], costs: false, cost_mul: vec![1.0; ITEM_NAMES.len()], until: None, crn: false }
     }
     #[inline]
     fn action_scale(&self) -> f64 {
@@ -13386,7 +13513,7 @@ fn prof_report(script: &std::path::Path, outs: &[&ProfOut]) {
 
     // ---- lines
     let mut sources: HashMap<String, Vec<String>> = HashMap::new();
-    let dir = script.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let dir = split_variant(script).0.parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let mut ls: Vec<((String, usize), [f64; NPC], [f64; NPC])> = lines.into_iter().map(|(k, (mut m, mut a))| {
         scale(&mut m);
         scale(&mut a);
@@ -13745,7 +13872,7 @@ thread_local! {
 fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     // dropped last, once everything else of the run is gone
     let _sweep = ScopeSweep;
-    let name = cfg.script.file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string();
+    let name = split_variant(&cfg.script).0.file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string();
     let code = match read_source(&cfg.script) {
         Some(c) => c,
         None => {
@@ -13758,7 +13885,7 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
         op_duration_ns: Cell::new(2500000),
         current_time: Cell::new(0),
         echo: cfg.echo,
-        dir: cfg.script.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
+        dir: split_variant(&cfg.script).0.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
         output: RefCell::new(Vec::new()),
         warnings: RefCell::new(HashMap::new()),
         lb_nodes: Cell::new(cfg.leaderboard.map(|_| 0)),
@@ -13770,6 +13897,9 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
         None => (0, 0),
     };
     let mut sim = Sim::new(sh.clone(), &cfg.unlocks, cfg.items.clone(), seed, override_size, cfg.max_drones);
+    if cfg.tweak.crn {
+        sim.enable_crn(seed);
+    }
     if cfg.tweak.speed != 1.0 || cfg.tweak.compute != 1.0 || cfg.tweak.grow != 1.0 || cfg.tweak.power != 1.0 || cfg.tweak.yields || cfg.tweak.costs || cfg.tweak.until.is_some() {
         sim.tweak = cfg.tweak.clone();
         let sf = sim.speed_factor;
@@ -13789,7 +13919,7 @@ fn run_once(cfg: &Config, seed: i32) -> R<RunResult> {
     let mut fork_tree: Option<Rc<Node>> = None;
     match &cfg.fork {
         Some((base, n, l)) => {
-            let bname = base.file_stem().and_then(|s| s.to_str()).unwrap_or("base").to_string();
+            let bname = split_variant(base).0.file_stem().and_then(|s| s.to_str()).unwrap_or("base").to_string();
             let bcode = read_source(base).ok_or_else(|| format!("cannot read {}", base.display()))?;
             let btree = parse_kept_source(&bname, &bcode)?;
             sh.trees.borrow_mut().push(btree.clone());
@@ -14564,7 +14694,15 @@ reset's early game) without the noise of everything after it.
 and its spawned drones have ended, then stops it and starts each given script from its top on
 that farm: same field, items, unlocks, time, drone position and random state. Every script then
 shares the first part exactly, so a rewrite of the later game (new code anywhere, new farms) is
-compared without the early game's noise. Combine with --until to score only the part between.";
+compared without the early game's noise. Combine with --until to score only the part between.
+
+A script given as file.py@NAME=value@NAME2=value runs file.py with the value of every top-level
+`NAME = ...` assignment replaced (a multi-line list included), without writing a file; a launcher
+passes its defines on to the file it runs. --sweep NAME=v1,v2,... adds one such variant per value
+after each script (repeat it to scan several names, one at a time), paired against the first.
+--crn (common random numbers, not the game's draws) gives every plant's random draws a stream of
+their own cell and kind, so versions of a script see the same luck for the same plants and their
+paired differences are less noisy; confirm a winner without it.";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -14589,6 +14727,7 @@ fn main() {
     let mut whatif_step = 0.2;
     let mut fork_at: Option<(&'static str, i32)> = None;
     let mut fork_from: Option<String> = None;
+    let mut sweeps: Vec<(String, Vec<String>)> = Vec::new();
     let mut i = 0;
     let fail = |msg: &str| -> ! {
         eprintln!("{}\n\n{}", msg, USAGE);
@@ -14668,6 +14807,14 @@ fn main() {
                 }
             }
             "--fork-from" => fork_from = Some(val()),
+            "--sweep" => {
+                let v = val();
+                match v.split_once('=') {
+                    Some((k, vals)) if !k.trim().is_empty() && !vals.is_empty() => sweeps.push((k.trim().to_string(), vals.split(',').map(|x| x.trim().to_string()).collect())),
+                    _ => fail("--sweep needs NAME=v1,v2,..."),
+                }
+            }
+            "--crn" => tweak.crn = true,
             "--profile" => profile = true,
             "--whatif" => whatif = true,
             "--whatif-step" => whatif_step = val().parse().unwrap_or_else(|_| fail("--whatif-step needs a number")),
@@ -14688,14 +14835,28 @@ fn main() {
     if scripts.is_empty() {
         fail("no script given");
     }
+    if !sweeps.is_empty() {
+        // each script as it is, then one variant per value of each --sweep (one name at a time,
+        // the others left as they are): a coordinate scan, paired against the first script
+        let mut all = Vec::new();
+        for s in scripts.iter() {
+            all.push(s.clone());
+            for (k, vals) in sweeps.iter() {
+                for v in vals.iter() {
+                    all.push(format!("{}@{}={}", s, k, v));
+                }
+            }
+        }
+        scripts = all;
+    }
     let scripts: Vec<std::path::PathBuf> = scripts
         .iter()
         .map(|s| {
             let p = std::path::PathBuf::from(s);
-            if p.exists() { p } else { std::path::PathBuf::from(".").join(&p) }
+            if split_variant(&p).0.exists() { p } else { std::path::PathBuf::from(".").join(&p) }
         })
         .collect();
-    let dir = scripts[0].parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let dir = split_variant(&scripts[0]).0.parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let save_path = match save {
         Some(s) => std::path::PathBuf::from(s),
         None => dir.join("save.json"),
@@ -14760,8 +14921,13 @@ fn main() {
             // A leaderboard run: from --leaderboard, or from a launcher script's leaderboard_run().
             let (script, lb) = match lb_opt {
                 Some(lb) => (script, Some(lb)),
-                None => match std::fs::read_to_string(&script).ok().as_deref().and_then(leaderboard_call) {
-                    Some((lb, file)) => (script.parent().map(|p| p.to_path_buf()).unwrap_or_default().join(format!("{}.py", file)), Some(lb)),
+                None => match std::fs::read_to_string(split_variant(&script).0).ok().as_deref().and_then(leaderboard_call) {
+                    Some((lb, file)) => {
+                        // a launcher's @defines go to the file it runs
+                        let s = script.to_string_lossy().to_string();
+                        let suffix = s.find(".py@").map(|i| s[i + 3..].to_string()).unwrap_or_default();
+                        (split_variant(&script).0.parent().map(|p| p.to_path_buf()).unwrap_or_default().join(format!("{}.py{}", file, suffix)), Some(lb))
+                    }
                     None => (script, None),
                 },
             };
