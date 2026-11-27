@@ -1039,6 +1039,10 @@ SUN_PER = 1
 
 def power_round():
 	n = width() * get_world_size()
+	if max_drones() == 1:
+		if n >= 12:
+			power_mini()
+		return
 	if num_items(Items.Carrot) < n:
 		return
 	if SUN_NEW:
@@ -1065,7 +1069,7 @@ def power_round():
 		spawn_node(0, k, k, (sun_cut_job, lists, v))
 
 
-SUN_STRIP = True
+SUN_STRIP = False
 SUN_COLS = 2
 
 SUN_WET = 1.0
@@ -1424,7 +1428,51 @@ def power_need(need):
 		SUN_TARGET = 0
 
 
+def power_mini():
+	# one drone on a small farm: every cell a sunflower, then the highest cut while at least 10
+	# stand (8x power each); the rest are left for the next farm pass
+	n = get_world_size()
+	w = width()
+	sf = {}
+	for i in range(w):
+		for k in range(n):
+			e = get_entity_type()
+			pos = (get_pos_x(), get_pos_y())
+			if e == Entities.Sunflower:
+				sf[pos] = measure()
+			else:
+				if e != None:
+					harvest()
+				soil()
+				if plant(Entities.Sunflower):
+					sf[pos] = measure()
+			if k < n - 1:
+				move(North)
+		move(North)
+		move(East)
+	while len(sf) >= PM_MIN:
+		mp = None
+		m = 0
+		for q in sf:
+			if sf[q] > m:
+				m = sf[q]
+				mp = q
+		go(mp[0], mp[1])
+		while not can_harvest():
+			pass
+		harvest()
+		sf.pop(mp)
+
+
+PM_LO = 10
+PM_MIN = 10
+
+
 def power_check():
+	if num_unlocked(Unlocks.Sunflowers) > 0 and drones() == 1 and width() * get_world_size() >= 12:
+		if num_items(Items.Power) < PM_LO:
+			power_mini()
+		return
 	if num_unlocked(Unlocks.Sunflowers) == 0 or width() < 6 or (SUN_STRIP and drones() == 1):
 		return
 	lim = 75 * drones()
@@ -2389,6 +2437,9 @@ MZ_HOME = True
 MZ_HEALN = 24
 # with at least this many cells of my own, ways only to my cells and those a race takes me to
 MZ_PRX = 24
+# for these drone counts (bits: 2, 4, 8, 16) half the drones map the maze, then each hands half
+# of its cells (cut at one tree edge, so the halves are even) to a new drone
+MZ_HALF = 2
 
 
 def mz_starts(n, d):
@@ -3112,6 +3163,29 @@ def mz_kid(goal, per, cost, g0, park):
 	global MZ_MD
 	MZ_MD = max_drones()
 	r = mz_serve(goal, per, cost, g0, park)
+	while r == 3:
+		sp = MZ_SPENT
+		goal -= sp
+		g0 -= sp
+		MZ_MD = max_drones()
+		mz_split(goal, per, cost, g0, park)
+		MZ_MD = max_drones()
+		r = mz_serve(goal, per, cost, g0, park)
+	if r == 2:
+		# I emptied the maze: make the next one here once the others can be on their starts
+		n = MZ_N
+		g = num_items(Items.Gold)
+		finds = (goal - g) // per + 1
+		if g < goal and num_items(Items.Weird_Substance) >= cost * (min(finds, 300) + 1):
+			act = 200 / (400 * 1.5 ** num_unlocked(Unlocks.Speed))
+			t0 = get_time()
+			plant(Entities.Bush)
+			until = t0 + act * (MZ_WAIT + n)
+			while get_time() < until:
+				pass
+			use_item(Items.Weird_Substance, cost)
+	if MZ_KID != None:
+		wait_for(MZ_KID)
 	return 0
 
 
@@ -3174,6 +3248,10 @@ def mz_life2(me, goal, stop, st, start_at, park):
 		if get_pos_x() + get_pos_y() * n != root:
 			mz_seek(root, False)
 		mz_explore(si)
+		if MZ_HALF > 0 and 2 * len(st) <= max_drones() and (MZ_HALF // (2 * len(st))) % 2 == 1:
+			keep = MZ_BUY
+			mz_split(goal, per, cost, g0, park)
+			MZ_BUY = keep
 		r = mz_serve(goal, per, cost, g0, park)
 		while r == 3:
 			# the next Megafarm level is bought: its gold is gone, and there are drones to spare
@@ -3238,8 +3316,10 @@ def maze_round(s, goal):
 	stop = get_time() + MAZE_SECS
 	n = get_world_size()
 	d = min(max_drones(), n * n)
-	st = mz_starts(n, d)
 	park = MZ_PARKING and d >= MZ_PARK_MIN
+	if MZ_HALF > 0 and (MZ_HALF // d) % 2 == 1:
+		d = d // 2
+	st = mz_starts(n, d)
 	global MZ_MD
 	MZ_MD = 0
 	if MZ_BUY > 0:
@@ -4004,6 +4084,8 @@ def plan(ch, ax, ay, t, low, need):
 	# a path to the apple made of up to three straight runs (the two L shapes first, then Z shapes
 	# of the same length, then detours a little longer), every cell free when it is reached and
 	# passing the split test; the path's cells are written into occ. Returns [cells, dirs].
+	# (the L shapes are tried before the other shapes are listed, and every shape is checked
+	# run by run: the same paths as checking cell by cell, for fewer ticks)
 	dx = ax - PX[ch]
 	dy = ay - PY[ch]
 	hd = 1
@@ -4017,42 +4099,77 @@ def plan(ch, ax, ay, t, low, need):
 	cs = [[hd, dx, vd, dy, 0, 0]]
 	if dx > 0 and dy > 0:
 		cs.append([vd, dy, hd, dx, 0, 0])
-	if dx > 0 and dy > 0:
-		for a in range(1, min(dy, 5)):
-			cs.append([vd, a, hd, dx, vd, dy - a])
-		for a in range(1, min(dx, 5)):
-			cs.append([hd, a, vd, dy, hd, dx - a])
-	for e in range(1, 3):
-		if dx > 0:
-			if dy > 0:
-				cs.append([(vd + 2) % 4, e, hd, dx, vd, dy + e])
-				cs.append([vd, dy + e, hd, dx, (vd + 2) % 4, e])
-			else:
-				cs.append([0, e, hd, dx, 2, e])
-				cs.append([2, e, hd, dx, 0, e])
-		if dy > 0:
-			if dx > 0:
-				cs.append([(hd + 2) % 4, e, vd, dy, hd, dx + e])
-				cs.append([hd, dx + e, vd, dy, (hd + 2) % 4, e])
-			else:
-				cs.append([1, e, vd, dy, 3, e])
-				cs.append([3, e, vd, dy, 1, e])
-	for sg in cs:
+	built = False
+	q = 0
+	while True:
+		if q >= len(cs):
+			if built:
+				return None
+			built = True
+			if dx > 0 and dy > 0:
+				for a in range(1, min(dy, 5)):
+					cs.append([vd, a, hd, dx, vd, dy - a])
+				for a in range(1, min(dx, 5)):
+					cs.append([hd, a, vd, dy, hd, dx - a])
+			for e in range(1, 3):
+				if dx > 0:
+					if dy > 0:
+						cs.append([(vd + 2) % 4, e, hd, dx, vd, dy + e])
+						cs.append([vd, dy + e, hd, dx, (vd + 2) % 4, e])
+					else:
+						cs.append([0, e, hd, dx, 2, e])
+						cs.append([2, e, hd, dx, 0, e])
+				if dy > 0:
+					if dx > 0:
+						cs.append([(hd + 2) % 4, e, vd, dy, hd, dx + e])
+						cs.append([hd, dx + e, vd, dy, (hd + 2) % 4, e])
+					else:
+						cs.append([1, e, vd, dy, 3, e])
+						cs.append([3, e, vd, dy, 1, e])
+			if q >= len(cs):
+				return None
+		sg = cs[q]
+		q += 1
+		d0 = sg[0]
 		n1 = sg[1]
-		n2 = n1 + sg[3]
-		n = n2 + sg[5]
+		d1 = sg[2]
+		n2 = sg[3]
+		d2 = sg[4]
+		n3 = sg[5]
+		n = n1 + n2 + n3
+		if n == 0:
+			continue
+		f = d2
+		if n1 > 0:
+			f = d0
+		elif n2 > 0:
+			f = d1
+		if bad[NB2[ch][f]] == t:
+			continue
 		# every cell free when it is reached, before any split test
 		c = ch
+		lim = low - 1
 		ok = True
-		for i in range(1, n + 1):
-			if i <= n1:
-				d = sg[0]
-			elif i <= n2:
-				d = sg[2]
-			else:
-				d = sg[4]
-			c = NB2[c][d]
-			if occ[c] >= low + i - 1:
+		for j in range(n1):
+			c = NB2[c][d0]
+			lim += 1
+			if occ[c] >= lim:
+				ok = False
+				break
+		if not ok:
+			continue
+		for j in range(n2):
+			c = NB2[c][d1]
+			lim += 1
+			if occ[c] >= lim:
+				ok = False
+				break
+		if not ok:
+			continue
+		for j in range(n3):
+			c = NB2[c][d2]
+			lim += 1
+			if occ[c] >= lim:
 				ok = False
 				break
 		if not ok:
@@ -4061,46 +4178,38 @@ def plan(ch, ax, ay, t, low, need):
 		olds = []
 		ds = []
 		c = ch
-		ok = True
-		nb = None
-		for i in range(1, n + 1):
-			if i <= n1:
-				d = sg[0]
-			elif i <= n2:
-				d = sg[2]
-			else:
-				d = sg[4]
-			c = NB2[c][d]
-			li = low + i - 1
-			if occ[c] >= li:
-				ok = False
-				break
-			if i == 1:
-				if bad[c] == t:
-					ok = False
-					break
-			elif c in nb:
-				ok = False
-				break
+		i = t
+		w = DIRS[d0]
+		for j in range(n1):
+			c = NB2[c][d0]
+			i += 1
 			cells.append(c)
-			ds.append(DIRS[d])
+			ds.append(w)
 			olds.append(occ[c])
-			occ[c] = t + i
-			if i == n or i % 1000 == 0:
-				nb = chk(c, li, need)
-			else:
-				nb = NOM
-			if nb == None:
-				ok = False
-				break
-		if ok:
-			if nb != None:
-				for x in nb:
-					bad[x] = t + n
+			occ[c] = i
+		w = DIRS[d1]
+		for j in range(n2):
+			c = NB2[c][d1]
+			i += 1
+			cells.append(c)
+			ds.append(w)
+			olds.append(occ[c])
+			occ[c] = i
+		w = DIRS[d2]
+		for j in range(n3):
+			c = NB2[c][d2]
+			i += 1
+			cells.append(c)
+			ds.append(w)
+			olds.append(occ[c])
+			occ[c] = i
+		nb = chk(c, lim, need)
+		if nb != None:
+			for x in nb:
+				bad[x] = t + n
 			return [cells, ds]
-		for j in range(len(cells)):
+		for j in range(n):
 			occ[cells[j]] = olds[j]
-	return None
 
 
 
@@ -4845,6 +4954,8 @@ def farm(item, amount):
 			if MZ_BUY > 0:
 				f1 = (MZ_BUY - num_items(Items.Gold)) // (n * n * m) + 1
 				pw = min(max_drones(), n * n) * (f1 * 0.22 + 12) + 2 * min(max_drones(), n * n) * ((finds - f1) * 0.22 + 12)
+			if max_drones() == 1:
+				pw = max(pw, 60)
 			if num_unlocked(Unlocks.Sunflowers) > 0 and num_items(Items.Power) < pw:
 				if num_unlocked(Unlocks.Mazes) >= 4 and SUN_PART:
 					# the last maze: a power round just big enough for it
@@ -5126,10 +5237,10 @@ PLAN = [
 	(Unlocks.Sunflowers, 1),
 	(Unlocks.Expand, 4),
 	(Unlocks.Speed, 4),
-	(Unlocks.Watering, 3),
 	(Unlocks.Fertilizer, 1),
 	(Unlocks.Trees, 3),
 	(Unlocks.Mazes, 1),
+	(Unlocks.Watering, 3),
 	(Unlocks.Megafarm, 1),
 	(Unlocks.Watering, 4),
 	(Unlocks.Grass, 4),
@@ -5143,6 +5254,7 @@ PLAN = [
 	(Unlocks.Watering, 5),
 	(Unlocks.Pumpkins, 3),
 	(Unlocks.Carrots, 5),
+	(Unlocks.Watering, 6),
 	(Unlocks.Pumpkins, 4),
 	(Unlocks.Megafarm, 2),
 	(Unlocks.Cactus, 1),
