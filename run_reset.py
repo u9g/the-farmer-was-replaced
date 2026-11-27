@@ -447,6 +447,22 @@ def mixed_job(i, d, need, flags):
 				else:
 					go(x, get_pos_y())
 			if sun_on and x < SUN_COLS:
+				if len(SUN) >= SUN_COLS * n:
+					# the strip is full: only its highest flower is ever cut, so walk past the rest
+					while len(SUN) >= 10:
+						mp = None
+						m = 0
+						for q in SUN:
+							if SUN[q] > m:
+								m = SUN[q]
+								mp = q
+						if mp[0] != x:
+							break
+						go(x, mp[1])
+						if not can_harvest():
+							break
+						sun_cell()
+					continue
 				for k in range(n):
 					sun_cell()
 					if k < n - 1 or w == 1:
@@ -877,6 +893,35 @@ def mixed_seg(i, d, need, flags):
 
 def wsub_job(i, d, goal, b):
 	n = get_world_size()
+	if d == 1:
+		# one drone: unripe trees are walked past instead of waited for, each ripe tree is made weird
+		# just before it is cut, and the grass between them is cut on every pass
+		while True:
+			for k in range(n):
+				e = get_entity_type()
+				if (get_pos_x() + get_pos_y()) % 2 == 0:
+					if e != Entities.Tree or can_harvest():
+						if e == Entities.Tree:
+							if num_items(Items.Weird_Substance) >= 1:
+								use_item(Items.Weird_Substance)
+							elif num_items(Items.Fertilizer) >= 1:
+								use_item(Items.Fertilizer)
+						if e != None:
+							harvest()
+						if get_water() < 0.1 and num_items(Items.Water) >= 1:
+							use_item(Items.Water)
+						plant(Entities.Tree)
+				elif get_ground_type() == Grounds.Soil:
+					if e != None and can_harvest():
+						harvest()
+					till()
+				elif e != None and can_harvest():
+					harvest()
+				if num_items(Items.Weird_Substance) >= goal:
+					return 0
+				if k < n - 1:
+					move(North)
+			move(East)
 	cols = my_cols(i, d)
 	while num_items(Items.Weird_Substance) < goal:
 		for x in cols:
@@ -4779,20 +4824,46 @@ def with_seeds(need):
 
 def opening():
 	# the first unlocks with tight loops: grass on 1x1, then a 1x3 strip, then bushes for wood
-	while not (num_unlocked(Unlocks.Speed) >= 1 and num_unlocked(Unlocks.Expand) >= 1):
-		if can_harvest():
-			harvest()
-			# Speed 1 costs 20 hay, Expand 1 30: try to buy only once that is on hand
-			if num_items(Items.Hay) >= 20:
-				if num_unlocked(Unlocks.Speed) == 0:
-					buy(Unlocks.Speed)
-				elif num_items(Items.Hay) >= 30:
-					buy(Unlocks.Expand)
+	# Plant before Expand 1 and Speed 1: a 1x1 grass cell gives 2 hay/s at any speed, and on
+	# the 1x3 strip the grass can then want one of the bushes as its companion (x5 hay)
 	while num_unlocked(Unlocks.Plant) == 0:
-		# grass regrows in 0.5 s, faster than a harvest and a move: stay on one cell
 		if can_harvest():
 			harvest()
-			buy(Unlocks.Plant)
+			if num_items(Items.Hay) >= 50:
+				buy(Unlocks.Plant)
+	while num_unlocked(Unlocks.Expand) == 0:
+		if can_harvest():
+			harvest()
+			if num_items(Items.Hay) >= 30:
+				buy(Unlocks.Expand)
+	# 1x3: bushes at y 0 and 1; the drone sits on the grass at y 2 while they grow
+	due = 0
+	while num_unlocked(Unlocks.Expand) < 2:
+		y = get_pos_y()
+		if y == OG1:
+			while get_time() < due:
+				if can_harvest():
+					harvest()
+					if num_unlocked(Unlocks.Speed) == 0 and num_items(Items.Hay) >= 20:
+						buy(Unlocks.Speed)
+			if can_harvest():
+				harvest()
+		else:
+			e = get_entity_type()
+			if e == Entities.Bush:
+				while not can_harvest():
+					pass
+				harvest()
+			elif e != None:
+				harvest()
+			plant(Entities.Bush)
+			if y == (OG1 + 1) % 3:
+				due = get_time() + 4.5
+			if num_unlocked(Unlocks.Speed) > 0:
+				buy(Unlocks.Expand)
+			elif num_items(Items.Hay) >= 20:
+				buy(Unlocks.Speed)
+		move(North)
 	for u in OPENING_WOOD:
 		while num_unlocked(u[0]) < u[1]:
 			n = get_world_size()
@@ -4858,7 +4929,7 @@ OG_H = True
 OG_M = 2
 # Speed 2 on the 1x3 strip, before Expand 2: the strip is growth-bound (two bushes), so the
 # speed costs it little, and the 3x3 farm runs at Speed 2 from its start (~6 s a run)
-OPENING_WOOD = [(Unlocks.Speed, 2), (Unlocks.Expand, 2), (Unlocks.Carrots, 1)]
+OPENING_WOOD = [(Unlocks.Expand, 2), (Unlocks.Speed, 2), (Unlocks.Carrots, 1)]
 
 
 
