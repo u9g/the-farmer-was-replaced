@@ -37,7 +37,7 @@ def run(job):
     d = os.path.join(HERE, 'work', os.path.basename(cand)[:-3])
     os.makedirs(d, exist_ok=True)
     tag = re.sub(r'\W', '', name)
-    f = os.path.join(d, f'h_{tag}.py')
+    f = os.path.join(d, f'h_{tag}_s{seed}.py')
     open(f, 'w').write(src + DRIVER % ', '.join(f'Items.{k}: {v}' for k, v in need.items()))
     args = ['cargo', '+nightly', '-Zscript', SIM, f, '--leaderboard', 'fastest_reset', '--seed', str(seed), '--seeds', '1', '--jobs', '1']
     for k, v in st.items(): args += ['--set', f'{k}={v}']
