@@ -369,9 +369,9 @@ def mixed_job(i, d, need, flags):
 	if POLY or d > 1 or strip or weird:
 		cl = my_cols(i, d)
 		m = len(cl)
-		# two drones on an unlock's round: pass after pass until it is affordable, checked every
+		# two or more drones on an unlock's round: pass after pass until it is affordable, checked every
 		# column (as one drone does), each drone carrying on from the column it stopped at last round
-		lp = d == 2 and len(NEED) > 2
+		lp = d >= 2 and len(NEED) > 2
 		k = 0
 		if lp and len(flags) > 2 and flags[2] != None and len(flags[2]) == d and flags[2][i][1] == POLY:
 			k = flags[2][i][0]
