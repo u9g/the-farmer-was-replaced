@@ -625,9 +625,17 @@ def w0():
 							move(South)
 							wk = [0, 1, 2, 3]
 							cur = 0
-							while len(wk) > 0:
-								cx = wk.pop(0)
+							qi = 0
+							qn = 4
+							q0 = True
+							q1 = True
+							q2 = True
+							q3 = True
+							while qi < qn:
+								cx = wk[qi]
+								qi += 1
 								if cx == 0:
+									q0 = False
 									if cur == 1:
 										move(West)
 										move(North)
@@ -658,11 +666,14 @@ def w0():
 												ja = measure(East)
 											if ja < v:
 												swap(East)
-												if not (2 in wk):
+												if not q2:
 													wk.append(2)
+													qn += 1
+													q2 = True
 											else:
 												break
 								elif cx == 1:
+									q1 = False
 									if cur == 0:
 										move(East)
 										move(South)
@@ -693,11 +704,14 @@ def w0():
 												ja = measure(North)
 											if ja < v:
 												swap(North)
-												if not (2 in wk):
+												if not q2:
 													wk.append(2)
+													qn += 1
+													q2 = True
 											else:
 												break
 								elif cx == 2:
+									q2 = False
 									if cur == 0:
 										move(East)
 									elif cur == 1:
@@ -716,27 +730,36 @@ def w0():
 										if ja > v:
 											if jb > ja:
 												swap(West)
-												if not (0 in wk):
+												if not q0:
 													wk.append(0)
+													qn += 1
+													q0 = True
 											else:
 												swap(South)
-												if not (1 in wk):
+												if not q1:
 													wk.append(1)
+													qn += 1
+													q1 = True
 										elif jb > v:
 											swap(West)
-											if not (0 in wk):
+											if not q0:
 												wk.append(0)
+												qn += 1
+												q0 = True
 										else:
 											ja = measure(North)
 											while ja == None:
 												ja = measure(North)
 											if ja < v:
 												swap(North)
-												if not (3 in wk):
+												if not q3:
 													wk.append(3)
+													qn += 1
+													q3 = True
 											else:
 												break
-								elif cx == 3:
+								else:
+									q3 = False
 									if cur == 0:
 										move(East)
 										move(North)
@@ -753,8 +776,10 @@ def w0():
 											ja = measure(South)
 										if ja > v:
 											swap(South)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											ja = measure(North)
 											while ja == None:
@@ -778,9 +803,17 @@ def w0():
 							move(North)
 							wk = [0, 1, 2, 3]
 							cur = 0
-							while len(wk) > 0:
-								cx = wk.pop(0)
+							qi = 0
+							qn = 4
+							q0 = True
+							q1 = True
+							q2 = True
+							q3 = True
+							while qi < qn:
+								cx = wk[qi]
+								qi += 1
 								if cx == 0:
+									q0 = False
 									if cur == 1:
 										move(East)
 										move(South)
@@ -811,11 +844,14 @@ def w0():
 												ja = measure(North)
 											if ja < v:
 												swap(North)
-												if not (2 in wk):
+												if not q2:
 													wk.append(2)
+													qn += 1
+													q2 = True
 											else:
 												break
 								elif cx == 1:
+									q1 = False
 									if cur == 0:
 										move(West)
 										move(North)
@@ -846,11 +882,14 @@ def w0():
 												ja = measure(East)
 											if ja < v:
 												swap(East)
-												if not (2 in wk):
+												if not q2:
 													wk.append(2)
+													qn += 1
+													q2 = True
 											else:
 												break
 								elif cx == 2:
+									q2 = False
 									if cur == 0:
 										move(North)
 									elif cur == 1:
@@ -869,27 +908,36 @@ def w0():
 										if ja > v:
 											if jb > ja:
 												swap(West)
-												if not (1 in wk):
+												if not q1:
 													wk.append(1)
+													qn += 1
+													q1 = True
 											else:
 												swap(South)
-												if not (0 in wk):
+												if not q0:
 													wk.append(0)
+													qn += 1
+													q0 = True
 										elif jb > v:
 											swap(West)
-											if not (1 in wk):
+											if not q1:
 												wk.append(1)
+												qn += 1
+												q1 = True
 										else:
 											ja = measure(East)
 											while ja == None:
 												ja = measure(East)
 											if ja < v:
 												swap(East)
-												if not (3 in wk):
+												if not q3:
 													wk.append(3)
+													qn += 1
+													q3 = True
 											else:
 												break
-								elif cx == 3:
+								else:
+									q3 = False
 									if cur == 0:
 										move(East)
 										move(North)
@@ -906,8 +954,10 @@ def w0():
 											ja = measure(West)
 										if ja > v:
 											swap(West)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											ja = measure(East)
 											while ja == None:
@@ -922,55 +972,62 @@ def w0():
 							if c == 0:
 								if get_time() < e:
 									move(East)
+									if get_time() < e:
+										move(East)
+									else:
+										P.append((East,))
 								else:
-									P.append(East)
-								if get_time() < e:
-									move(East)
-								else:
-									P.append(East)
+									P.append((East, East,))
 							elif c == 1:
 								if get_time() < e:
 									move(East)
+									if get_time() < e:
+										move(East)
+										if get_time() < e:
+											move(East)
+											if get_time() < e:
+												move(South)
+											else:
+												P.append((South,))
+										else:
+											P.append((East, South,))
+									else:
+										P.append((East, East, South,))
 								else:
-									P.append(East)
-								if get_time() < e:
-									move(East)
-								else:
-									P.append(East)
-								if get_time() < e:
-									move(East)
-								else:
-									P.append(East)
-								if get_time() < e:
-									move(South)
-								else:
-									P.append(South)
+									P.append((East, East, East, South,))
 							elif c == 2:
 								if get_time() < e:
 									move(East)
+									if get_time() < e:
+										move(East)
+										if get_time() < e:
+											move(South)
+										else:
+											P.append((South,))
+									else:
+										P.append((East, South,))
 								else:
-									P.append(East)
-								if get_time() < e:
-									move(East)
-								else:
-									P.append(East)
-								if get_time() < e:
-									move(South)
-								else:
-									P.append(South)
+									P.append((East, East, South,))
 							elif c == 3:
 								if get_time() < e:
 									move(East)
+									if get_time() < e:
+										move(South)
+									else:
+										P.append((South,))
 								else:
-									P.append(East)
-								if get_time() < e:
-									move(South)
-								else:
-									P.append(South)
+									P.append((East, South,))
 							wait_until(tl + 0.9676)
-							use_item(Items.Water)
-							for d in P:
-								move(d)
+							if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+								if get_entity_type() == Entities.Cactus:
+									harvest()
+								else:
+									use_item(Items.Water)
+							else:
+								use_item(Items.Water)
+							for q in P:
+								for d in q:
+									move(d)
 							while num_items(Items.Cactus) <= 0:
 								pass
 							plant(Entities.Cactus)
@@ -1024,9 +1081,17 @@ def w0():
 							move(East)
 							wk = [0, 1, 2, 3]
 							cur = 0
-							while len(wk) > 0:
-								cx = wk.pop(0)
+							qi = 0
+							qn = 4
+							q0 = True
+							q1 = True
+							q2 = True
+							q3 = True
+							while qi < qn:
+								cx = wk[qi]
+								qi += 1
 								if cx == 0:
+									q0 = False
 									if cur == 1:
 										move(West)
 										move(North)
@@ -1057,11 +1122,14 @@ def w0():
 												ja = measure(East)
 											if ja < v:
 												swap(East)
-												if not (2 in wk):
+												if not q2:
 													wk.append(2)
+													qn += 1
+													q2 = True
 											else:
 												break
 								elif cx == 1:
+									q1 = False
 									if cur == 0:
 										move(East)
 										move(South)
@@ -1092,11 +1160,14 @@ def w0():
 												ja = measure(North)
 											if ja < v:
 												swap(North)
-												if not (2 in wk):
+												if not q2:
 													wk.append(2)
+													qn += 1
+													q2 = True
 											else:
 												break
 								elif cx == 2:
+									q2 = False
 									if cur == 0:
 										move(East)
 									elif cur == 1:
@@ -1115,27 +1186,36 @@ def w0():
 										if ja > v:
 											if jb > ja:
 												swap(West)
-												if not (0 in wk):
+												if not q0:
 													wk.append(0)
+													qn += 1
+													q0 = True
 											else:
 												swap(South)
-												if not (1 in wk):
+												if not q1:
 													wk.append(1)
+													qn += 1
+													q1 = True
 										elif jb > v:
 											swap(West)
-											if not (0 in wk):
+											if not q0:
 												wk.append(0)
+												qn += 1
+												q0 = True
 										else:
 											ja = measure(North)
 											while ja == None:
 												ja = measure(North)
 											if ja < v:
 												swap(North)
-												if not (3 in wk):
+												if not q3:
 													wk.append(3)
+													qn += 1
+													q3 = True
 											else:
 												break
-								elif cx == 3:
+								else:
+									q3 = False
 									if cur == 0:
 										move(East)
 										move(North)
@@ -1152,8 +1232,10 @@ def w0():
 											ja = measure(South)
 										if ja > v:
 											swap(South)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											ja = measure(North)
 											while ja == None:
@@ -1177,9 +1259,17 @@ def w0():
 							move(North)
 							wk = [0, 1, 2, 3]
 							cur = 0
-							while len(wk) > 0:
-								cx = wk.pop(0)
+							qi = 0
+							qn = 4
+							q0 = True
+							q1 = True
+							q2 = True
+							q3 = True
+							while qi < qn:
+								cx = wk[qi]
+								qi += 1
 								if cx == 0:
+									q0 = False
 									if cur == 1:
 										move(East)
 										move(South)
@@ -1210,11 +1300,14 @@ def w0():
 												ja = measure(North)
 											if ja < v:
 												swap(North)
-												if not (2 in wk):
+												if not q2:
 													wk.append(2)
+													qn += 1
+													q2 = True
 											else:
 												break
 								elif cx == 1:
+									q1 = False
 									if cur == 0:
 										move(West)
 										move(North)
@@ -1245,11 +1338,14 @@ def w0():
 												ja = measure(East)
 											if ja < v:
 												swap(East)
-												if not (2 in wk):
+												if not q2:
 													wk.append(2)
+													qn += 1
+													q2 = True
 											else:
 												break
 								elif cx == 2:
+									q2 = False
 									if cur == 0:
 										move(North)
 									elif cur == 1:
@@ -1268,27 +1364,36 @@ def w0():
 										if ja > v:
 											if jb > ja:
 												swap(West)
-												if not (1 in wk):
+												if not q1:
 													wk.append(1)
+													qn += 1
+													q1 = True
 											else:
 												swap(South)
-												if not (0 in wk):
+												if not q0:
 													wk.append(0)
+													qn += 1
+													q0 = True
 										elif jb > v:
 											swap(West)
-											if not (1 in wk):
+											if not q1:
 												wk.append(1)
+												qn += 1
+												q1 = True
 										else:
 											ja = measure(East)
 											while ja == None:
 												ja = measure(East)
 											if ja < v:
 												swap(East)
-												if not (3 in wk):
+												if not q3:
 													wk.append(3)
+													qn += 1
+													q3 = True
 											else:
 												break
-								elif cx == 3:
+								else:
+									q3 = False
 									if cur == 0:
 										move(East)
 										move(North)
@@ -1305,8 +1410,10 @@ def w0():
 											ja = measure(West)
 										if ja > v:
 											swap(West)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											ja = measure(East)
 											while ja == None:
@@ -1357,10 +1464,6 @@ def w0():
 						till()
 						plant(Entities.Cactus)
 						move(West)
-						move(West)
-						till()
-						plant(Entities.Cactus)
-						move(East)
 						till()
 						plant(Entities.Cactus)
 						move(South)
@@ -1449,9 +1552,17 @@ def w0():
 						move(North)
 						wk = [0, 1, 2, 3]
 						cur = 0
-						while len(wk) > 0:
-							cx = wk.pop(0)
+						qi = 0
+						qn = 4
+						q0 = True
+						q1 = True
+						q2 = True
+						q3 = True
+						while qi < qn:
+							cx = wk[qi]
+							qi += 1
 							if cx == 0:
+								q0 = False
 								if cur == 1:
 									move(East)
 									move(South)
@@ -1482,11 +1593,14 @@ def w0():
 											ja = measure(North)
 										if ja < v:
 											swap(North)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 1:
+								q1 = False
 								if cur == 0:
 									move(West)
 									move(North)
@@ -1517,11 +1631,14 @@ def w0():
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 2:
+								q2 = False
 								if cur == 0:
 									move(North)
 								elif cur == 1:
@@ -1540,27 +1657,36 @@ def w0():
 									if ja > v:
 										if jb > ja:
 											swap(West)
-											if not (1 in wk):
+											if not q1:
 												wk.append(1)
+												qn += 1
+												q1 = True
 										else:
 											swap(South)
-											if not (0 in wk):
+											if not q0:
 												wk.append(0)
+												qn += 1
+												q0 = True
 									elif jb > v:
 										swap(West)
-										if not (1 in wk):
+										if not q1:
 											wk.append(1)
+											qn += 1
+											q1 = True
 									else:
 										ja = measure(East)
 										while ja == None:
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (3 in wk):
+											if not q3:
 												wk.append(3)
+												qn += 1
+												q3 = True
 										else:
 											break
-							elif cx == 3:
+							else:
+								q3 = False
 								if cur == 0:
 									move(East)
 									move(North)
@@ -1577,8 +1703,10 @@ def w0():
 										ja = measure(West)
 									if ja > v:
 										swap(West)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										ja = measure(East)
 										while ja == None:
@@ -1593,151 +1721,158 @@ def w0():
 						if c == 0:
 							if get_time() < e:
 								move(East)
+								if get_time() < e:
+									move(East)
+									if get_time() < e:
+										move(South)
+										if get_time() < e:
+											move(South)
+											if get_time() < e:
+												move(South)
+												if get_time() < e:
+													move(South)
+													if get_time() < e:
+														move(South)
+														if get_time() < e:
+															move(South)
+														else:
+															P.append((South,))
+													else:
+														P.append((South, South,))
+												else:
+													P.append((South, South, South,))
+											else:
+												P.append((South, South, South, South,))
+										else:
+											P.append((South, South, South, South, South,))
+									else:
+										P.append((South, South, South, South, South, South,))
+								else:
+									P.append((East, South, South, South, South, South, South,))
 							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
+								P.append((East, East, South, South, South, South, South, South,))
 						elif c == 1:
 							if get_time() < e:
 								move(East)
+								if get_time() < e:
+									move(East)
+									if get_time() < e:
+										move(East)
+										if get_time() < e:
+											move(South)
+											if get_time() < e:
+												move(South)
+												if get_time() < e:
+													move(South)
+													if get_time() < e:
+														move(South)
+														if get_time() < e:
+															move(South)
+															if get_time() < e:
+																move(South)
+																if get_time() < e:
+																	move(South)
+																else:
+																	P.append((South,))
+															else:
+																P.append((South, South,))
+														else:
+															P.append((South, South, South,))
+													else:
+														P.append((South, South, South, South,))
+												else:
+													P.append((South, South, South, South, South,))
+											else:
+												P.append((South, South, South, South, South, South,))
+										else:
+											P.append((South, South, South, South, South, South, South,))
+									else:
+										P.append((East, South, South, South, South, South, South, South,))
+								else:
+									P.append((East, East, South, South, South, South, South, South, South,))
 							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
+								P.append((East, East, East, South, South, South, South, South, South, South,))
 						elif c == 2:
 							if get_time() < e:
 								move(East)
+								if get_time() < e:
+									move(East)
+									if get_time() < e:
+										move(South)
+										if get_time() < e:
+											move(South)
+											if get_time() < e:
+												move(South)
+												if get_time() < e:
+													move(South)
+													if get_time() < e:
+														move(South)
+														if get_time() < e:
+															move(South)
+															if get_time() < e:
+																move(South)
+															else:
+																P.append((South,))
+														else:
+															P.append((South, South,))
+													else:
+														P.append((South, South, South,))
+												else:
+													P.append((South, South, South, South,))
+											else:
+												P.append((South, South, South, South, South,))
+										else:
+											P.append((South, South, South, South, South, South,))
+									else:
+										P.append((South, South, South, South, South, South, South,))
+								else:
+									P.append((East, South, South, South, South, South, South, South,))
 							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
+								P.append((East, East, South, South, South, South, South, South, South,))
 						elif c == 3:
 							if get_time() < e:
 								move(East)
+								if get_time() < e:
+									move(South)
+									if get_time() < e:
+										move(South)
+										if get_time() < e:
+											move(South)
+											if get_time() < e:
+												move(South)
+												if get_time() < e:
+													move(South)
+													if get_time() < e:
+														move(South)
+														if get_time() < e:
+															move(South)
+														else:
+															P.append((South,))
+													else:
+														P.append((South, South,))
+												else:
+													P.append((South, South, South,))
+											else:
+												P.append((South, South, South, South,))
+										else:
+											P.append((South, South, South, South, South,))
+									else:
+										P.append((South, South, South, South, South, South,))
+								else:
+									P.append((South, South, South, South, South, South, South,))
 							else:
-								P.append(East)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
+								P.append((East, South, South, South, South, South, South, South,))
 						wait_until(tl + 0.9676)
-						use_item(Items.Water)
-						for d in P:
-							move(d)
+						if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+							if get_entity_type() == Entities.Cactus:
+								harvest()
+							else:
+								use_item(Items.Water)
+						else:
+							use_item(Items.Water)
+						for q in P:
+							for d in q:
+								move(d)
 						while num_items(Items.Cactus) <= 0:
 							pass
 						plant(Entities.Cactus)
@@ -1800,9 +1935,17 @@ def w0():
 						move(North)
 						wk = [0, 1, 2, 3]
 						cur = 0
-						while len(wk) > 0:
-							cx = wk.pop(0)
+						qi = 0
+						qn = 4
+						q0 = True
+						q1 = True
+						q2 = True
+						q3 = True
+						while qi < qn:
+							cx = wk[qi]
+							qi += 1
 							if cx == 0:
+								q0 = False
 								if cur == 1:
 									move(East)
 									move(South)
@@ -1833,11 +1976,14 @@ def w0():
 											ja = measure(North)
 										if ja < v:
 											swap(North)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 1:
+								q1 = False
 								if cur == 0:
 									move(West)
 									move(North)
@@ -1868,11 +2014,14 @@ def w0():
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 2:
+								q2 = False
 								if cur == 0:
 									move(North)
 								elif cur == 1:
@@ -1891,27 +2040,36 @@ def w0():
 									if ja > v:
 										if jb > ja:
 											swap(West)
-											if not (1 in wk):
+											if not q1:
 												wk.append(1)
+												qn += 1
+												q1 = True
 										else:
 											swap(South)
-											if not (0 in wk):
+											if not q0:
 												wk.append(0)
+												qn += 1
+												q0 = True
 									elif jb > v:
 										swap(West)
-										if not (1 in wk):
+										if not q1:
 											wk.append(1)
+											qn += 1
+											q1 = True
 									else:
 										ja = measure(East)
 										while ja == None:
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (3 in wk):
+											if not q3:
 												wk.append(3)
+												qn += 1
+												q3 = True
 										else:
 											break
-							elif cx == 3:
+							else:
+								q3 = False
 								if cur == 0:
 									move(East)
 									move(North)
@@ -1928,8 +2086,10 @@ def w0():
 										ja = measure(West)
 									if ja > v:
 										swap(West)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										ja = measure(East)
 										while ja == None:
@@ -2100,9 +2260,17 @@ def w0():
 						move(South)
 						wk = [0, 1, 2, 3]
 						cur = 0
-						while len(wk) > 0:
-							cx = wk.pop(0)
+						qi = 0
+						qn = 4
+						q0 = True
+						q1 = True
+						q2 = True
+						q3 = True
+						while qi < qn:
+							cx = wk[qi]
+							qi += 1
 							if cx == 0:
+								q0 = False
 								if cur == 1:
 									move(West)
 									move(North)
@@ -2133,11 +2301,14 @@ def w0():
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 1:
+								q1 = False
 								if cur == 0:
 									move(East)
 									move(South)
@@ -2168,11 +2339,14 @@ def w0():
 											ja = measure(North)
 										if ja < v:
 											swap(North)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 2:
+								q2 = False
 								if cur == 0:
 									move(East)
 								elif cur == 1:
@@ -2191,27 +2365,36 @@ def w0():
 									if ja > v:
 										if jb > ja:
 											swap(West)
-											if not (0 in wk):
+											if not q0:
 												wk.append(0)
+												qn += 1
+												q0 = True
 										else:
 											swap(South)
-											if not (1 in wk):
+											if not q1:
 												wk.append(1)
+												qn += 1
+												q1 = True
 									elif jb > v:
 										swap(West)
-										if not (0 in wk):
+										if not q0:
 											wk.append(0)
+											qn += 1
+											q0 = True
 									else:
 										ja = measure(North)
 										while ja == None:
 											ja = measure(North)
 										if ja < v:
 											swap(North)
-											if not (3 in wk):
+											if not q3:
 												wk.append(3)
+												qn += 1
+												q3 = True
 										else:
 											break
-							elif cx == 3:
+							else:
+								q3 = False
 								if cur == 0:
 									move(East)
 									move(North)
@@ -2228,8 +2411,10 @@ def w0():
 										ja = measure(South)
 									if ja > v:
 										swap(South)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										ja = measure(North)
 										while ja == None:
@@ -2244,151 +2429,158 @@ def w0():
 						if c == 0:
 							if get_time() < e:
 								move(West)
+								if get_time() < e:
+									move(North)
+									if get_time() < e:
+										move(North)
+										if get_time() < e:
+											move(North)
+											if get_time() < e:
+												move(North)
+												if get_time() < e:
+													move(North)
+													if get_time() < e:
+														move(North)
+														if get_time() < e:
+															move(North)
+														else:
+															P.append((North,))
+													else:
+														P.append((North, North,))
+												else:
+													P.append((North, North, North,))
+											else:
+												P.append((North, North, North, North,))
+										else:
+											P.append((North, North, North, North, North,))
+									else:
+										P.append((North, North, North, North, North, North,))
+								else:
+									P.append((North, North, North, North, North, North, North,))
 							else:
-								P.append(West)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
+								P.append((West, North, North, North, North, North, North, North,))
 						elif c == 1:
 							if get_time() < e:
 								move(West)
+								if get_time() < e:
+									move(West)
+									if get_time() < e:
+										move(North)
+										if get_time() < e:
+											move(North)
+											if get_time() < e:
+												move(North)
+												if get_time() < e:
+													move(North)
+													if get_time() < e:
+														move(North)
+														if get_time() < e:
+															move(North)
+															if get_time() < e:
+																move(North)
+																if get_time() < e:
+																	move(North)
+																else:
+																	P.append((North,))
+															else:
+																P.append((North, North,))
+														else:
+															P.append((North, North, North,))
+													else:
+														P.append((North, North, North, North,))
+												else:
+													P.append((North, North, North, North, North,))
+											else:
+												P.append((North, North, North, North, North, North,))
+										else:
+											P.append((North, North, North, North, North, North, North,))
+									else:
+										P.append((North, North, North, North, North, North, North, North,))
+								else:
+									P.append((West, North, North, North, North, North, North, North, North,))
 							else:
-								P.append(West)
-							if get_time() < e:
-								move(West)
-							else:
-								P.append(West)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
+								P.append((West, West, North, North, North, North, North, North, North, North,))
 						elif c == 2:
 							if get_time() < e:
 								move(West)
+								if get_time() < e:
+									move(West)
+									if get_time() < e:
+										move(North)
+										if get_time() < e:
+											move(North)
+											if get_time() < e:
+												move(North)
+												if get_time() < e:
+													move(North)
+													if get_time() < e:
+														move(North)
+														if get_time() < e:
+															move(North)
+															if get_time() < e:
+																move(North)
+															else:
+																P.append((North,))
+														else:
+															P.append((North, North,))
+													else:
+														P.append((North, North, North,))
+												else:
+													P.append((North, North, North, North,))
+											else:
+												P.append((North, North, North, North, North,))
+										else:
+											P.append((North, North, North, North, North, North,))
+									else:
+										P.append((North, North, North, North, North, North, North,))
+								else:
+									P.append((West, North, North, North, North, North, North, North,))
 							else:
-								P.append(West)
-							if get_time() < e:
-								move(West)
-							else:
-								P.append(West)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
+								P.append((West, West, North, North, North, North, North, North, North,))
 						elif c == 3:
 							if get_time() < e:
 								move(West)
+								if get_time() < e:
+									move(West)
+									if get_time() < e:
+										move(North)
+										if get_time() < e:
+											move(North)
+											if get_time() < e:
+												move(North)
+												if get_time() < e:
+													move(North)
+													if get_time() < e:
+														move(North)
+														if get_time() < e:
+															move(North)
+														else:
+															P.append((North,))
+													else:
+														P.append((North, North,))
+												else:
+													P.append((North, North, North,))
+											else:
+												P.append((North, North, North, North,))
+										else:
+											P.append((North, North, North, North, North,))
+									else:
+										P.append((North, North, North, North, North, North,))
+								else:
+									P.append((West, North, North, North, North, North, North,))
 							else:
-								P.append(West)
-							if get_time() < e:
-								move(West)
-							else:
-								P.append(West)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
-							if get_time() < e:
-								move(North)
-							else:
-								P.append(North)
+								P.append((West, West, North, North, North, North, North, North,))
 						wait_until(tl + 0.9676)
-						use_item(Items.Water)
-						for d in P:
-							move(d)
+						if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+							if get_entity_type() == Entities.Cactus:
+								harvest()
+							else:
+								use_item(Items.Water)
+						else:
+							use_item(Items.Water)
+						for q in P:
+							for d in q:
+								move(d)
 						while num_items(Items.Cactus) <= 0:
 							pass
 						plant(Entities.Cactus)
@@ -2480,9 +2672,17 @@ def w0():
 						move(North)
 						wk = [0, 1, 2, 3]
 						cur = 0
-						while len(wk) > 0:
-							cx = wk.pop(0)
+						qi = 0
+						qn = 4
+						q0 = True
+						q1 = True
+						q2 = True
+						q3 = True
+						while qi < qn:
+							cx = wk[qi]
+							qi += 1
 							if cx == 0:
+								q0 = False
 								if cur == 1:
 									move(East)
 									move(South)
@@ -2513,11 +2713,14 @@ def w0():
 											ja = measure(North)
 										if ja < v:
 											swap(North)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 1:
+								q1 = False
 								if cur == 0:
 									move(West)
 									move(North)
@@ -2548,11 +2751,14 @@ def w0():
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 2:
+								q2 = False
 								if cur == 0:
 									move(North)
 								elif cur == 1:
@@ -2571,27 +2777,36 @@ def w0():
 									if ja > v:
 										if jb > ja:
 											swap(West)
-											if not (1 in wk):
+											if not q1:
 												wk.append(1)
+												qn += 1
+												q1 = True
 										else:
 											swap(South)
-											if not (0 in wk):
+											if not q0:
 												wk.append(0)
+												qn += 1
+												q0 = True
 									elif jb > v:
 										swap(West)
-										if not (1 in wk):
+										if not q1:
 											wk.append(1)
+											qn += 1
+											q1 = True
 									else:
 										ja = measure(East)
 										while ja == None:
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (3 in wk):
+											if not q3:
 												wk.append(3)
+												qn += 1
+												q3 = True
 										else:
 											break
-							elif cx == 3:
+							else:
+								q3 = False
 								if cur == 0:
 									move(East)
 									move(North)
@@ -2608,8 +2823,10 @@ def w0():
 										ja = measure(West)
 									if ja > v:
 										swap(West)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										ja = measure(East)
 										while ja == None:
@@ -2750,9 +2967,17 @@ def w0():
 					move(North)
 					wk = [0, 1, 2, 3]
 					cur = 0
-					while len(wk) > 0:
-						cx = wk.pop(0)
+					qi = 0
+					qn = 4
+					q0 = True
+					q1 = True
+					q2 = True
+					q3 = True
+					while qi < qn:
+						cx = wk[qi]
+						qi += 1
 						if cx == 0:
+							q0 = False
 							if cur == 1:
 								move(East)
 								move(South)
@@ -2783,11 +3008,14 @@ def w0():
 										ja = measure(North)
 									if ja < v:
 										swap(North)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										break
 						elif cx == 1:
+							q1 = False
 							if cur == 0:
 								move(West)
 								move(North)
@@ -2818,11 +3046,14 @@ def w0():
 										ja = measure(East)
 									if ja < v:
 										swap(East)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										break
 						elif cx == 2:
+							q2 = False
 							if cur == 0:
 								move(North)
 							elif cur == 1:
@@ -2841,27 +3072,36 @@ def w0():
 								if ja > v:
 									if jb > ja:
 										swap(West)
-										if not (1 in wk):
+										if not q1:
 											wk.append(1)
+											qn += 1
+											q1 = True
 									else:
 										swap(South)
-										if not (0 in wk):
+										if not q0:
 											wk.append(0)
+											qn += 1
+											q0 = True
 								elif jb > v:
 									swap(West)
-									if not (1 in wk):
+									if not q1:
 										wk.append(1)
+										qn += 1
+										q1 = True
 								else:
 									ja = measure(East)
 									while ja == None:
 										ja = measure(East)
 									if ja < v:
 										swap(East)
-										if not (3 in wk):
+										if not q3:
 											wk.append(3)
+											qn += 1
+											q3 = True
 									else:
 										break
-						elif cx == 3:
+						else:
+							q3 = False
 							if cur == 0:
 								move(East)
 								move(North)
@@ -2878,8 +3118,10 @@ def w0():
 									ja = measure(West)
 								if ja > v:
 									swap(West)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									ja = measure(East)
 									while ja == None:
@@ -2894,55 +3136,62 @@ def w0():
 					if c == 0:
 						if get_time() < e:
 							move(East)
+							if get_time() < e:
+								move(South)
+							else:
+								P.append((South,))
 						else:
-							P.append(East)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
+							P.append((East, South,))
 					elif c == 1:
 						if get_time() < e:
 							move(East)
+							if get_time() < e:
+								move(East)
+								if get_time() < e:
+									move(South)
+									if get_time() < e:
+										move(South)
+									else:
+										P.append((South,))
+								else:
+									P.append((South, South,))
+							else:
+								P.append((East, South, South,))
 						else:
-							P.append(East)
-						if get_time() < e:
-							move(East)
-						else:
-							P.append(East)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
+							P.append((East, East, South, South,))
 					elif c == 2:
 						if get_time() < e:
 							move(East)
+							if get_time() < e:
+								move(South)
+								if get_time() < e:
+									move(South)
+								else:
+									P.append((South,))
+							else:
+								P.append((South, South,))
 						else:
-							P.append(East)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
+							P.append((East, South, South,))
 					elif c == 3:
 						if get_time() < e:
 							move(South)
+							if get_time() < e:
+								move(South)
+							else:
+								P.append((South,))
 						else:
-							P.append(South)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
+							P.append((South, South,))
 					wait_until(tl + 0.9676)
-					use_item(Items.Water)
-					for d in P:
-						move(d)
+					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+						if get_entity_type() == Entities.Cactus:
+							harvest()
+						else:
+							use_item(Items.Water)
+					else:
+						use_item(Items.Water)
+					for q in P:
+						for d in q:
+							move(d)
 					while num_items(Items.Cactus) <= 0:
 						pass
 					plant(Entities.Cactus)
@@ -3173,9 +3422,17 @@ def w0():
 					move(East)
 					wk = [0, 1, 2, 3]
 					cur = 0
-					while len(wk) > 0:
-						cx = wk.pop(0)
+					qi = 0
+					qn = 4
+					q0 = True
+					q1 = True
+					q2 = True
+					q3 = True
+					while qi < qn:
+						cx = wk[qi]
+						qi += 1
 						if cx == 0:
+							q0 = False
 							if cur == 1:
 								move(West)
 								move(North)
@@ -3206,11 +3463,14 @@ def w0():
 										ja = measure(East)
 									if ja < v:
 										swap(East)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										break
 						elif cx == 1:
+							q1 = False
 							if cur == 0:
 								move(East)
 								move(South)
@@ -3241,11 +3501,14 @@ def w0():
 										ja = measure(North)
 									if ja < v:
 										swap(North)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										break
 						elif cx == 2:
+							q2 = False
 							if cur == 0:
 								move(East)
 							elif cur == 1:
@@ -3264,27 +3527,36 @@ def w0():
 								if ja > v:
 									if jb > ja:
 										swap(West)
-										if not (0 in wk):
+										if not q0:
 											wk.append(0)
+											qn += 1
+											q0 = True
 									else:
 										swap(South)
-										if not (1 in wk):
+										if not q1:
 											wk.append(1)
+											qn += 1
+											q1 = True
 								elif jb > v:
 									swap(West)
-									if not (0 in wk):
+									if not q0:
 										wk.append(0)
+										qn += 1
+										q0 = True
 								else:
 									ja = measure(North)
 									while ja == None:
 										ja = measure(North)
 									if ja < v:
 										swap(North)
-										if not (3 in wk):
+										if not q3:
 											wk.append(3)
+											qn += 1
+											q3 = True
 									else:
 										break
-						elif cx == 3:
+						else:
+							q3 = False
 							if cur == 0:
 								move(East)
 								move(North)
@@ -3301,8 +3573,10 @@ def w0():
 									ja = measure(South)
 								if ja > v:
 									swap(South)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									ja = measure(North)
 									while ja == None:
@@ -3343,40 +3617,47 @@ def w0():
 					P = []
 					if get_time() < e:
 						move(West)
+						if get_time() < e:
+							move(North)
+							if get_time() < e:
+								move(North)
+								if get_time() < e:
+									move(North)
+									if get_time() < e:
+										move(North)
+										if get_time() < e:
+											move(North)
+											if get_time() < e:
+												move(North)
+												if get_time() < e:
+													move(North)
+												else:
+													P.append((North,))
+											else:
+												P.append((North, North,))
+										else:
+											P.append((North, North, North,))
+									else:
+										P.append((North, North, North, North,))
+								else:
+									P.append((North, North, North, North, North,))
+							else:
+								P.append((North, North, North, North, North, North,))
+						else:
+							P.append((North, North, North, North, North, North, North,))
 					else:
-						P.append(West)
-					if get_time() < e:
-						move(North)
-					else:
-						P.append(North)
-					if get_time() < e:
-						move(North)
-					else:
-						P.append(North)
-					if get_time() < e:
-						move(North)
-					else:
-						P.append(North)
-					if get_time() < e:
-						move(North)
-					else:
-						P.append(North)
-					if get_time() < e:
-						move(North)
-					else:
-						P.append(North)
-					if get_time() < e:
-						move(North)
-					else:
-						P.append(North)
-					if get_time() < e:
-						move(North)
-					else:
-						P.append(North)
+						P.append((West, North, North, North, North, North, North, North,))
 					wait_until(tl + 0.9676)
-					use_item(Items.Water)
-					for d in P:
-						move(d)
+					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+						if get_entity_type() == Entities.Cactus:
+							harvest()
+						else:
+							use_item(Items.Water)
+					else:
+						use_item(Items.Water)
+					for q in P:
+						for d in q:
+							move(d)
 					while num_items(Items.Cactus) <= 0:
 						pass
 					plant(Entities.Cactus)
@@ -3436,8 +3717,15 @@ def w0():
 					move(West)
 					plant(Entities.Cactus)
 					move(North)
-					plant(Entities.Cactus)
+					if use_item(Items.Water, 4):
+						plant(Entities.Cactus)
+						tw = get_time() - 0.0988
+					else:
+						plant(Entities.Cactus)
+						tw = 0
 					tl = get_time()
+					if tw:
+						tl = tw
 					if measure() < measure(South):
 						swap(South)
 					xcas(West, 0)
@@ -3463,9 +3751,17 @@ def w0():
 					move(South)
 					wk = [0, 1, 2, 3]
 					cur = 0
-					while len(wk) > 0:
-						cx = wk.pop(0)
+					qi = 0
+					qn = 4
+					q0 = True
+					q1 = True
+					q2 = True
+					q3 = True
+					while qi < qn:
+						cx = wk[qi]
+						qi += 1
 						if cx == 0:
+							q0 = False
 							if cur == 1:
 								move(West)
 								move(North)
@@ -3496,11 +3792,14 @@ def w0():
 										ja = measure(East)
 									if ja < v:
 										swap(East)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										break
 						elif cx == 1:
+							q1 = False
 							if cur == 0:
 								move(East)
 								move(South)
@@ -3531,11 +3830,14 @@ def w0():
 										ja = measure(North)
 									if ja < v:
 										swap(North)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										break
 						elif cx == 2:
+							q2 = False
 							if cur == 0:
 								move(East)
 							elif cur == 1:
@@ -3554,27 +3856,36 @@ def w0():
 								if ja > v:
 									if jb > ja:
 										swap(West)
-										if not (0 in wk):
+										if not q0:
 											wk.append(0)
+											qn += 1
+											q0 = True
 									else:
 										swap(South)
-										if not (1 in wk):
+										if not q1:
 											wk.append(1)
+											qn += 1
+											q1 = True
 								elif jb > v:
 									swap(West)
-									if not (0 in wk):
+									if not q0:
 										wk.append(0)
+										qn += 1
+										q0 = True
 								else:
 									ja = measure(North)
 									while ja == None:
 										ja = measure(North)
 									if ja < v:
 										swap(North)
-										if not (3 in wk):
+										if not q3:
 											wk.append(3)
+											qn += 1
+											q3 = True
 									else:
 										break
-						elif cx == 3:
+						else:
+							q3 = False
 							if cur == 0:
 								move(East)
 								move(North)
@@ -3591,8 +3902,10 @@ def w0():
 									ja = measure(South)
 								if ja > v:
 									swap(South)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									ja = measure(North)
 									while ja == None:
@@ -3771,32 +4084,39 @@ def w0():
 				P = []
 				if get_time() < e:
 					move(West)
+					if get_time() < e:
+						move(West)
+						if get_time() < e:
+							move(West)
+							if get_time() < e:
+								move(North)
+								if get_time() < e:
+									move(North)
+									if get_time() < e:
+										move(North)
+									else:
+										P.append((North,))
+								else:
+									P.append((North, North,))
+							else:
+								P.append((North, North, North,))
+						else:
+							P.append((West, North, North, North,))
+					else:
+						P.append((West, West, North, North, North,))
 				else:
-					P.append(West)
-				if get_time() < e:
-					move(West)
-				else:
-					P.append(West)
-				if get_time() < e:
-					move(West)
-				else:
-					P.append(West)
-				if get_time() < e:
-					move(North)
-				else:
-					P.append(North)
-				if get_time() < e:
-					move(North)
-				else:
-					P.append(North)
-				if get_time() < e:
-					move(North)
-				else:
-					P.append(North)
+					P.append((West, West, West, North, North, North,))
 				wait_until(tl + 0.9676)
-				use_item(Items.Water)
-				for d in P:
-					move(d)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
 				while num_items(Items.Cactus) <= 0:
 					pass
 				plant(Entities.Cactus)
@@ -3926,6 +4246,8 @@ def w0():
 						move(East)
 						move(East)
 						move(East)
+						till()
+						plant(Entities.Cactus)
 						move(South)
 						move(South)
 						move(South)
@@ -4026,9 +4348,17 @@ def w0():
 						move(North)
 						wk = [0, 1, 2, 3]
 						cur = 0
-						while len(wk) > 0:
-							cx = wk.pop(0)
+						qi = 0
+						qn = 4
+						q0 = True
+						q1 = True
+						q2 = True
+						q3 = True
+						while qi < qn:
+							cx = wk[qi]
+							qi += 1
 							if cx == 0:
+								q0 = False
 								if cur == 1:
 									move(East)
 									move(South)
@@ -4059,11 +4389,14 @@ def w0():
 											ja = measure(North)
 										if ja < v:
 											swap(North)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 1:
+								q1 = False
 								if cur == 0:
 									move(West)
 									move(North)
@@ -4094,11 +4427,14 @@ def w0():
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 2:
+								q2 = False
 								if cur == 0:
 									move(North)
 								elif cur == 1:
@@ -4117,27 +4453,36 @@ def w0():
 									if ja > v:
 										if jb > ja:
 											swap(West)
-											if not (1 in wk):
+											if not q1:
 												wk.append(1)
+												qn += 1
+												q1 = True
 										else:
 											swap(South)
-											if not (0 in wk):
+											if not q0:
 												wk.append(0)
+												qn += 1
+												q0 = True
 									elif jb > v:
 										swap(West)
-										if not (1 in wk):
+										if not q1:
 											wk.append(1)
+											qn += 1
+											q1 = True
 									else:
 										ja = measure(East)
 										while ja == None:
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (3 in wk):
+											if not q3:
 												wk.append(3)
+												qn += 1
+												q3 = True
 										else:
 											break
-							elif cx == 3:
+							else:
+								q3 = False
 								if cur == 0:
 									move(East)
 									move(North)
@@ -4154,8 +4499,10 @@ def w0():
 										ja = measure(West)
 									if ja > v:
 										swap(West)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										ja = measure(East)
 										while ja == None:
@@ -4170,71 +4517,78 @@ def w0():
 						if c == 0:
 							if get_time() < e:
 								move(East)
+								if get_time() < e:
+									move(East)
+									if get_time() < e:
+										move(East)
+									else:
+										P.append((East,))
+								else:
+									P.append((East, East,))
 							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
+								P.append((East, East, East,))
 						elif c == 1:
 							if get_time() < e:
 								move(East)
+								if get_time() < e:
+									move(East)
+									if get_time() < e:
+										move(East)
+										if get_time() < e:
+											move(East)
+											if get_time() < e:
+												move(South)
+											else:
+												P.append((South,))
+										else:
+											P.append((East, South,))
+									else:
+										P.append((East, East, South,))
+								else:
+									P.append((East, East, East, South,))
 							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
+								P.append((East, East, East, East, South,))
 						elif c == 2:
 							if get_time() < e:
 								move(East)
+								if get_time() < e:
+									move(East)
+									if get_time() < e:
+										move(East)
+										if get_time() < e:
+											move(South)
+										else:
+											P.append((South,))
+									else:
+										P.append((East, South,))
+								else:
+									P.append((East, East, South,))
 							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
+								P.append((East, East, East, South,))
 						elif c == 3:
 							if get_time() < e:
 								move(East)
+								if get_time() < e:
+									move(East)
+									if get_time() < e:
+										move(South)
+									else:
+										P.append((South,))
+								else:
+									P.append((East, South,))
 							else:
-								P.append(East)
-							if get_time() < e:
-								move(East)
-							else:
-								P.append(East)
-							if get_time() < e:
-								move(South)
-							else:
-								P.append(South)
+								P.append((East, East, South,))
 						wait_until(tl + 0.9676)
-						use_item(Items.Water)
-						for d in P:
-							move(d)
+						if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+							if get_entity_type() == Entities.Cactus:
+								harvest()
+							else:
+								use_item(Items.Water)
+						else:
+							use_item(Items.Water)
+						for q in P:
+							for d in q:
+								move(d)
 						while num_items(Items.Cactus) <= 0:
 							pass
 						plant(Entities.Cactus)
@@ -4289,9 +4643,17 @@ def w0():
 						move(North)
 						wk = [0, 1, 2, 3]
 						cur = 0
-						while len(wk) > 0:
-							cx = wk.pop(0)
+						qi = 0
+						qn = 4
+						q0 = True
+						q1 = True
+						q2 = True
+						q3 = True
+						while qi < qn:
+							cx = wk[qi]
+							qi += 1
 							if cx == 0:
+								q0 = False
 								if cur == 1:
 									move(East)
 									move(South)
@@ -4322,11 +4684,14 @@ def w0():
 											ja = measure(North)
 										if ja < v:
 											swap(North)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 1:
+								q1 = False
 								if cur == 0:
 									move(West)
 									move(North)
@@ -4357,11 +4722,14 @@ def w0():
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (2 in wk):
+											if not q2:
 												wk.append(2)
+												qn += 1
+												q2 = True
 										else:
 											break
 							elif cx == 2:
+								q2 = False
 								if cur == 0:
 									move(North)
 								elif cur == 1:
@@ -4380,27 +4748,36 @@ def w0():
 									if ja > v:
 										if jb > ja:
 											swap(West)
-											if not (1 in wk):
+											if not q1:
 												wk.append(1)
+												qn += 1
+												q1 = True
 										else:
 											swap(South)
-											if not (0 in wk):
+											if not q0:
 												wk.append(0)
+												qn += 1
+												q0 = True
 									elif jb > v:
 										swap(West)
-										if not (1 in wk):
+										if not q1:
 											wk.append(1)
+											qn += 1
+											q1 = True
 									else:
 										ja = measure(East)
 										while ja == None:
 											ja = measure(East)
 										if ja < v:
 											swap(East)
-											if not (3 in wk):
+											if not q3:
 												wk.append(3)
+												qn += 1
+												q3 = True
 										else:
 											break
-							elif cx == 3:
+							else:
+								q3 = False
 								if cur == 0:
 									move(East)
 									move(North)
@@ -4417,8 +4794,10 @@ def w0():
 										ja = measure(West)
 									if ja > v:
 										swap(West)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										ja = measure(East)
 										while ja == None:
@@ -4548,16 +4927,23 @@ def w0():
 					P = []
 					if get_time() < e:
 						move(East)
+						if get_time() < e:
+							move(South)
+						else:
+							P.append((South,))
 					else:
-						P.append(East)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
+						P.append((East, South,))
 					wait_until(tl + 0.9676)
-					use_item(Items.Water)
-					for d in P:
-						move(d)
+					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+						if get_entity_type() == Entities.Cactus:
+							harvest()
+						else:
+							use_item(Items.Water)
+					else:
+						use_item(Items.Water)
+					for q in P:
+						for d in q:
+							move(d)
 					while num_items(Items.Cactus) <= 0:
 						pass
 					plant(Entities.Cactus)
@@ -4634,6 +5020,8 @@ def w0():
 				move(West)
 				move(West)
 				move(South)
+				till()
+				plant(Entities.Cactus)
 				move(South)
 				move(South)
 				move(South)
@@ -4741,11 +5129,18 @@ def w0():
 				if get_time() < e:
 					move(East)
 				else:
-					P.append(East)
+					P.append((East,))
 				wait_until(tl + 0.9676)
-				use_item(Items.Water)
-				for d in P:
-					move(d)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
 				while num_items(Items.Cactus) <= 0:
 					pass
 				plant(Entities.Cactus)
@@ -4900,9 +5295,18 @@ def w0():
 				move(South)
 				wk = [0, 1, 2, 3, 4]
 				cur = 0
-				while len(wk) > 0:
-					cx = wk.pop(0)
+				qi = 0
+				qn = 5
+				q0 = True
+				q1 = True
+				q2 = True
+				q3 = True
+				q4 = True
+				while qi < qn:
+					cx = wk[qi]
+					qi += 1
 					if cx == 0:
+						q0 = False
 						if cur == 1:
 							move(West)
 							move(North)
@@ -4937,11 +5341,14 @@ def w0():
 									ja = measure(East)
 								if ja < v:
 									swap(East)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									break
 					elif cx == 1:
+						q1 = False
 						if cur == 0:
 							move(East)
 							move(South)
@@ -4976,11 +5383,14 @@ def w0():
 									ja = measure(North)
 								if ja < v:
 									swap(North)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									break
 					elif cx == 2:
+						q2 = False
 						if cur == 0:
 							move(East)
 						elif cur == 1:
@@ -5002,27 +5412,36 @@ def w0():
 							if ja > v:
 								if jb > ja:
 									swap(West)
-									if not (0 in wk):
+									if not q0:
 										wk.append(0)
+										qn += 1
+										q0 = True
 								else:
 									swap(South)
-									if not (1 in wk):
+									if not q1:
 										wk.append(1)
+										qn += 1
+										q1 = True
 							elif jb > v:
 								swap(West)
-								if not (0 in wk):
+								if not q0:
 									wk.append(0)
+									qn += 1
+									q0 = True
 							else:
 								ja = measure(North)
 								while ja == None:
 									ja = measure(North)
 								if ja < v:
 									swap(North)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 								else:
 									break
 					elif cx == 3:
+						q3 = False
 						if cur == 0:
 							move(East)
 							move(North)
@@ -5041,19 +5460,24 @@ def w0():
 								ja = measure(South)
 							if ja > v:
 								swap(South)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								ja = measure(North)
 								while ja == None:
 									ja = measure(North)
 								if ja < v:
 									swap(North)
-									if not (4 in wk):
+									if not q4:
 										wk.append(4)
+										qn += 1
+										q4 = True
 								else:
 									break
-					elif cx == 4:
+					else:
+						q4 = False
 						if cur == 0:
 							move(East)
 							move(North)
@@ -5081,8 +5505,10 @@ def w0():
 									swap(West)
 								else:
 									swap(South)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 							elif jb > v:
 								swap(West)
 							else:
@@ -5116,44 +5542,51 @@ def w0():
 				P = []
 				if get_time() < e:
 					move(South)
+					if get_time() < e:
+						move(South)
+						if get_time() < e:
+							move(South)
+							if get_time() < e:
+								move(South)
+								if get_time() < e:
+									move(South)
+									if get_time() < e:
+										move(South)
+										if get_time() < e:
+											move(South)
+											if get_time() < e:
+												move(South)
+												if get_time() < e:
+													move(South)
+												else:
+													P.append((South,))
+											else:
+												P.append((South, South,))
+										else:
+											P.append((South, South, South,))
+									else:
+										P.append((South, South, South, South,))
+								else:
+									P.append((South, South, South, South, South,))
+							else:
+								P.append((South, South, South, South, South, South,))
+						else:
+							P.append((South, South, South, South, South, South, South,))
+					else:
+						P.append((South, South, South, South, South, South, South, South,))
 				else:
-					P.append(South)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
+					P.append((South, South, South, South, South, South, South, South, South,))
 				wait_until(tl + 0.9676)
-				use_item(Items.Water)
-				for d in P:
-					move(d)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
 				while num_items(Items.Cactus) <= 0:
 					pass
 				plant(Entities.Cactus)
@@ -5208,9 +5641,17 @@ def w0():
 				move(North)
 				wk = [3, 2, 1, 0]
 				cur = 3
-				while len(wk) > 0:
-					cx = wk.pop(0)
+				qi = 0
+				qn = 4
+				q3 = True
+				q2 = True
+				q1 = True
+				q0 = True
+				while qi < qn:
+					cx = wk[qi]
+					qi += 1
 					if cx == 0:
+						q0 = False
 						if cur == 1:
 							move(West)
 						elif cur == 2:
@@ -5233,11 +5674,14 @@ def w0():
 									ja = measure(East)
 								if ja < v:
 									swap(East)
-									if not (1 in wk):
+									if not q1:
 										wk.append(1)
+										qn += 1
+										q1 = True
 								else:
 									break
 					elif cx == 1:
+						q1 = False
 						if cur == 0:
 							move(East)
 						elif cur == 2:
@@ -5252,8 +5696,10 @@ def w0():
 								ja = measure(West)
 							if ja > v:
 								swap(West)
-								if not (0 in wk):
+								if not q0:
 									wk.append(0)
+									qn += 1
+									q0 = True
 							else:
 								ja = measure(North)
 								while ja == None:
@@ -5264,19 +5710,26 @@ def w0():
 								if ja < v:
 									if jb < ja:
 										swap(East)
-										if not (2 in wk):
+										if not q2:
 											wk.append(2)
+											qn += 1
+											q2 = True
 									else:
 										swap(North)
-										if not (3 in wk):
+										if not q3:
 											wk.append(3)
+											qn += 1
+											q3 = True
 								elif jb < v:
 									swap(East)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									break
 					elif cx == 2:
+						q2 = False
 						if cur == 0:
 							move(East)
 							move(East)
@@ -5293,8 +5746,10 @@ def w0():
 								ja = measure(West)
 							if ja > v:
 								swap(West)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 							else:
 								ja = measure(North)
 								while ja == None:
@@ -5303,7 +5758,8 @@ def w0():
 									swap(North)
 								else:
 									break
-					elif cx == 3:
+					else:
+						q3 = False
 						if cur == 0:
 							move(East)
 							move(North)
@@ -5320,8 +5776,10 @@ def w0():
 								ja = measure(South)
 							if ja > v:
 								swap(South)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 							else:
 								ja = measure(North)
 								while ja == None:
@@ -5461,20 +5919,27 @@ def w0():
 			P = []
 			if get_time() < e:
 				move(East)
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(East)
+					else:
+						P.append((East,))
+				else:
+					P.append((East, East,))
 			else:
-				P.append(East)
-			if get_time() < e:
-				move(East)
-			else:
-				P.append(East)
-			if get_time() < e:
-				move(East)
-			else:
-				P.append(East)
+				P.append((East, East, East,))
 			wait_until(tl + 0.9676)
-			use_item(Items.Water)
-			for d in P:
-				move(d)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
 			while num_items(Items.Cactus) <= 0:
 				pass
 			plant(Entities.Cactus)
@@ -5523,9 +5988,18 @@ def w0():
 			move(South)
 			wk = [0, 1, 2, 3, 4]
 			cur = 0
-			while len(wk) > 0:
-				cx = wk.pop(0)
+			qi = 0
+			qn = 5
+			q0 = True
+			q1 = True
+			q2 = True
+			q3 = True
+			q4 = True
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
 				if cx == 0:
+					q0 = False
 					if cur == 1:
 						move(West)
 						move(North)
@@ -5560,11 +6034,14 @@ def w0():
 								ja = measure(East)
 							if ja < v:
 								swap(East)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								break
 				elif cx == 1:
+					q1 = False
 					if cur == 0:
 						move(East)
 						move(South)
@@ -5599,11 +6076,14 @@ def w0():
 								ja = measure(North)
 							if ja < v:
 								swap(North)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								break
 				elif cx == 2:
+					q2 = False
 					if cur == 0:
 						move(East)
 					elif cur == 1:
@@ -5625,27 +6105,36 @@ def w0():
 						if ja > v:
 							if jb > ja:
 								swap(West)
-								if not (0 in wk):
+								if not q0:
 									wk.append(0)
+									qn += 1
+									q0 = True
 							else:
 								swap(South)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 						elif jb > v:
 							swap(West)
-							if not (0 in wk):
+							if not q0:
 								wk.append(0)
+								qn += 1
+								q0 = True
 						else:
 							ja = measure(North)
 							while ja == None:
 								ja = measure(North)
 							if ja < v:
 								swap(North)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								break
 				elif cx == 3:
+					q3 = False
 					if cur == 0:
 						move(East)
 						move(North)
@@ -5664,19 +6153,24 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							ja = measure(North)
 							while ja == None:
 								ja = measure(North)
 							if ja < v:
 								swap(North)
-								if not (4 in wk):
+								if not q4:
 									wk.append(4)
+									qn += 1
+									q4 = True
 							else:
 								break
-				elif cx == 4:
+				else:
+					q4 = False
 					if cur == 0:
 						move(East)
 						move(North)
@@ -5704,8 +6198,10 @@ def w0():
 								swap(West)
 							else:
 								swap(South)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 						elif jb > v:
 							swap(West)
 						else:
@@ -5730,6 +6226,8 @@ def w0():
 						move(West)
 						move(West)
 						move(West)
+						till()
+						plant(Entities.Cactus)
 						move(West)
 						move(West)
 						move(West)
@@ -5776,10 +6274,6 @@ def w0():
 						till()
 						plant(Entities.Cactus)
 						move(West)
-						move(South)
-						till()
-						plant(Entities.Cactus)
-						move(North)
 						till()
 						plant(Entities.Cactus)
 						move(North)
@@ -5836,36 +6330,43 @@ def w0():
 						P = []
 						if get_time() < e:
 							move(East)
+							if get_time() < e:
+								move(East)
+								if get_time() < e:
+									move(South)
+									if get_time() < e:
+										move(South)
+										if get_time() < e:
+											move(South)
+											if get_time() < e:
+												move(South)
+												if get_time() < e:
+													move(South)
+												else:
+													P.append((South,))
+											else:
+												P.append((South, South,))
+										else:
+											P.append((South, South, South,))
+									else:
+										P.append((South, South, South, South,))
+								else:
+									P.append((South, South, South, South, South,))
+							else:
+								P.append((East, South, South, South, South, South,))
 						else:
-							P.append(East)
-						if get_time() < e:
-							move(East)
-						else:
-							P.append(East)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
-						if get_time() < e:
-							move(South)
-						else:
-							P.append(South)
+							P.append((East, East, South, South, South, South, South,))
 						wait_until(tl + 0.9676)
-						use_item(Items.Water)
-						for d in P:
-							move(d)
+						if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+							if get_entity_type() == Entities.Cactus:
+								harvest()
+							else:
+								use_item(Items.Water)
+						else:
+							use_item(Items.Water)
+						for q in P:
+							for d in q:
+								move(d)
 						while num_items(Items.Cactus) <= 0:
 							pass
 						plant(Entities.Cactus)
@@ -5881,8 +6382,15 @@ def w0():
 						move(East)
 						plant(Entities.Cactus)
 						move(South)
-						plant(Entities.Cactus)
+						if use_item(Items.Water, 4):
+							plant(Entities.Cactus)
+							tw = get_time() - 0.0988
+						else:
+							plant(Entities.Cactus)
+							tw = 0
 						tl = get_time()
+						if tw:
+							tl = tw
 						h = spawn_drone(hlp, 41, 0, 7, 8)
 						if h != None:
 							own(41, 0, 6)
@@ -5948,6 +6456,8 @@ def w0():
 					move(East)
 					move(East)
 					move(East)
+					till()
+					plant(Entities.Cactus)
 					move(East)
 					move(East)
 					move(East)
@@ -6052,28 +6562,38 @@ def w0():
 					P = []
 					if get_time() < e:
 						move(South)
+						if get_time() < e:
+							move(South)
+							if get_time() < e:
+								move(South)
+								if get_time() < e:
+									move(South)
+									if get_time() < e:
+										move(South)
+									else:
+										P.append((South,))
+								else:
+									P.append((South, South,))
+							else:
+								P.append((South, South, South,))
+						else:
+							P.append((South, South, South, South,))
 					else:
-						P.append(South)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
+						P.append((South, South, South, South, South,))
 					wait_until(tl + 0.9676)
-					use_item(Items.Water)
-					for d in P:
-						move(d)
+					if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+						if get_entity_type() == Entities.Cactus:
+							harvest()
+						else:
+							use_item(Items.Water)
+					else:
+						use_item(Items.Water)
+					for q in P:
+						for d in q:
+							move(d)
+					while num_items(Items.Cactus) <= 0:
+						if (get_time() // WDT) - num_items(Items.Water) >= NSIG + 1:
+							harvest()
 					while num_items(Items.Cactus) <= 0:
 						pass
 					plant(Entities.Cactus)
@@ -6141,6 +6661,8 @@ def w0():
 				move(East)
 				move(East)
 				move(East)
+				till()
+				plant(Entities.Cactus)
 				move(East)
 				move(East)
 				move(South)
@@ -6233,9 +6755,18 @@ def w0():
 				move(North)
 				wk = [0, 1, 2, 3, 4]
 				cur = 0
-				while len(wk) > 0:
-					cx = wk.pop(0)
+				qi = 0
+				qn = 5
+				q0 = True
+				q1 = True
+				q2 = True
+				q3 = True
+				q4 = True
+				while qi < qn:
+					cx = wk[qi]
+					qi += 1
 					if cx == 0:
+						q0 = False
 						if cur == 1:
 							move(East)
 							move(South)
@@ -6270,11 +6801,14 @@ def w0():
 									ja = measure(North)
 								if ja < v:
 									swap(North)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									break
 					elif cx == 1:
+						q1 = False
 						if cur == 0:
 							move(West)
 							move(North)
@@ -6309,11 +6843,14 @@ def w0():
 									ja = measure(East)
 								if ja < v:
 									swap(East)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									break
 					elif cx == 2:
+						q2 = False
 						if cur == 0:
 							move(North)
 						elif cur == 1:
@@ -6335,27 +6872,36 @@ def w0():
 							if ja > v:
 								if jb > ja:
 									swap(West)
-									if not (1 in wk):
+									if not q1:
 										wk.append(1)
+										qn += 1
+										q1 = True
 								else:
 									swap(South)
-									if not (0 in wk):
+									if not q0:
 										wk.append(0)
+										qn += 1
+										q0 = True
 							elif jb > v:
 								swap(West)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 							else:
 								ja = measure(East)
 								while ja == None:
 									ja = measure(East)
 								if ja < v:
 									swap(East)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 								else:
 									break
 					elif cx == 3:
+						q3 = False
 						if cur == 0:
 							move(East)
 							move(North)
@@ -6374,19 +6920,24 @@ def w0():
 								ja = measure(West)
 							if ja > v:
 								swap(West)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								ja = measure(East)
 								while ja == None:
 									ja = measure(East)
 								if ja < v:
 									swap(East)
-									if not (4 in wk):
+									if not q4:
 										wk.append(4)
+										qn += 1
+										q4 = True
 								else:
 									break
-					elif cx == 4:
+					else:
+						q4 = False
 						if cur == 0:
 							move(East)
 							move(East)
@@ -6412,14 +6963,18 @@ def w0():
 							if ja > v:
 								if jb > ja:
 									swap(West)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 								else:
 									swap(South)
 							elif jb > v:
 								swap(West)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								ja = measure(East)
 								while ja == None:
@@ -6434,68 +6989,75 @@ def w0():
 				if c == 0:
 					if get_time() < e:
 						move(East)
+						if get_time() < e:
+							move(South)
+						else:
+							P.append((South,))
 					else:
-						P.append(East)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
+						P.append((East, South,))
 				elif c == 1:
 					if get_time() < e:
 						move(East)
+						if get_time() < e:
+							move(East)
+							if get_time() < e:
+								move(South)
+								if get_time() < e:
+									move(South)
+								else:
+									P.append((South,))
+							else:
+								P.append((South, South,))
+						else:
+							P.append((East, South, South,))
 					else:
-						P.append(East)
-					if get_time() < e:
-						move(East)
-					else:
-						P.append(East)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
+						P.append((East, East, South, South,))
 				elif c == 2:
 					if get_time() < e:
 						move(East)
+						if get_time() < e:
+							move(South)
+							if get_time() < e:
+								move(South)
+							else:
+								P.append((South,))
+						else:
+							P.append((South, South,))
 					else:
-						P.append(East)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
+						P.append((East, South, South,))
 				elif c == 3:
 					if get_time() < e:
 						move(South)
+						if get_time() < e:
+							move(South)
+						else:
+							P.append((South,))
 					else:
-						P.append(South)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
+						P.append((South, South,))
 				elif c == 4:
 					if get_time() < e:
 						move(West)
+						if get_time() < e:
+							move(South)
+							if get_time() < e:
+								move(South)
+							else:
+								P.append((South,))
+						else:
+							P.append((South, South,))
 					else:
-						P.append(West)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
-					if get_time() < e:
-						move(South)
-					else:
-						P.append(South)
+						P.append((West, South, South,))
 				wait_until(tl + 0.9676)
-				use_item(Items.Water)
-				for d in P:
-					move(d)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
 				while num_items(Items.Cactus) <= 0:
 					pass
 				plant(Entities.Cactus)
@@ -6690,28 +7252,35 @@ def w0():
 				P = []
 				if get_time() < e:
 					move(East)
+					if get_time() < e:
+						move(North)
+						if get_time() < e:
+							move(North)
+							if get_time() < e:
+								move(North)
+								if get_time() < e:
+									move(North)
+								else:
+									P.append((North,))
+							else:
+								P.append((North, North,))
+						else:
+							P.append((North, North, North,))
+					else:
+						P.append((North, North, North, North,))
 				else:
-					P.append(East)
-				if get_time() < e:
-					move(North)
-				else:
-					P.append(North)
-				if get_time() < e:
-					move(North)
-				else:
-					P.append(North)
-				if get_time() < e:
-					move(North)
-				else:
-					P.append(North)
-				if get_time() < e:
-					move(North)
-				else:
-					P.append(North)
+					P.append((East, North, North, North, North,))
 				wait_until(tl + 0.9676)
-				use_item(Items.Water)
-				for d in P:
-					move(d)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
 				while num_items(Items.Cactus) <= 0:
 					pass
 				plant(Entities.Cactus)
@@ -6744,9 +7313,18 @@ def w0():
 				move(North)
 				wk = [0, 1, 2, 3, 4]
 				cur = 0
-				while len(wk) > 0:
-					cx = wk.pop(0)
+				qi = 0
+				qn = 5
+				q0 = True
+				q1 = True
+				q2 = True
+				q3 = True
+				q4 = True
+				while qi < qn:
+					cx = wk[qi]
+					qi += 1
 					if cx == 0:
+						q0 = False
 						if cur == 1:
 							move(East)
 							move(South)
@@ -6781,11 +7359,14 @@ def w0():
 									ja = measure(North)
 								if ja < v:
 									swap(North)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									break
 					elif cx == 1:
+						q1 = False
 						if cur == 0:
 							move(West)
 							move(North)
@@ -6820,11 +7401,14 @@ def w0():
 									ja = measure(East)
 								if ja < v:
 									swap(East)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 								else:
 									break
 					elif cx == 2:
+						q2 = False
 						if cur == 0:
 							move(North)
 						elif cur == 1:
@@ -6846,27 +7430,36 @@ def w0():
 							if ja > v:
 								if jb > ja:
 									swap(West)
-									if not (1 in wk):
+									if not q1:
 										wk.append(1)
+										qn += 1
+										q1 = True
 								else:
 									swap(South)
-									if not (0 in wk):
+									if not q0:
 										wk.append(0)
+										qn += 1
+										q0 = True
 							elif jb > v:
 								swap(West)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 							else:
 								ja = measure(East)
 								while ja == None:
 									ja = measure(East)
 								if ja < v:
 									swap(East)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 								else:
 									break
 					elif cx == 3:
+						q3 = False
 						if cur == 0:
 							move(East)
 							move(North)
@@ -6885,19 +7478,24 @@ def w0():
 								ja = measure(West)
 							if ja > v:
 								swap(West)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								ja = measure(East)
 								while ja == None:
 									ja = measure(East)
 								if ja < v:
 									swap(East)
-									if not (4 in wk):
+									if not q4:
 										wk.append(4)
+										qn += 1
+										q4 = True
 								else:
 									break
-					elif cx == 4:
+					else:
+						q4 = False
 						if cur == 0:
 							move(East)
 							move(East)
@@ -6923,14 +7521,18 @@ def w0():
 							if ja > v:
 								if jb > ja:
 									swap(West)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 								else:
 									swap(South)
 							elif jb > v:
 								swap(West)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								ja = measure(East)
 								while ja == None:
@@ -6977,6 +7579,8 @@ def w0():
 			move(South)
 			move(South)
 			move(South)
+			till()
+			plant(Entities.Cactus)
 			move(South)
 			move(South)
 			till()
@@ -7063,24 +7667,31 @@ def w0():
 			P = []
 			if get_time() < e:
 				move(East)
+				if get_time() < e:
+					move(North)
+					if get_time() < e:
+						move(North)
+						if get_time() < e:
+							move(North)
+						else:
+							P.append((North,))
+					else:
+						P.append((North, North,))
+				else:
+					P.append((North, North, North,))
 			else:
-				P.append(East)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
+				P.append((East, North, North, North,))
 			wait_until(tl + 0.9676)
-			use_item(Items.Water)
-			for d in P:
-				move(d)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
 			while num_items(Items.Cactus) <= 0:
 				pass
 			plant(Entities.Cactus)
@@ -7281,20 +7892,27 @@ def w0():
 			P = []
 			if get_time() < e:
 				move(East)
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(East)
+					else:
+						P.append((East,))
+				else:
+					P.append((East, East,))
 			else:
-				P.append(East)
-			if get_time() < e:
-				move(East)
-			else:
-				P.append(East)
-			if get_time() < e:
-				move(East)
-			else:
-				P.append(East)
+				P.append((East, East, East,))
 			wait_until(tl + 0.9676)
-			use_item(Items.Water)
-			for d in P:
-				move(d)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
 			while num_items(Items.Cactus) <= 0:
 				pass
 			plant(Entities.Cactus)
@@ -7308,8 +7926,15 @@ def w0():
 			pk_East_North_West_0_1()
 			pk_East_North_None_0_0()
 			move(West)
-			plant(Entities.Cactus)
+			if use_item(Items.Water, 4):
+				plant(Entities.Cactus)
+				tw = get_time() - 0.0988
+			else:
+				plant(Entities.Cactus)
+				tw = 0
 			tl = get_time()
+			if tw:
+				tl = tw
 			move(East)
 			h = spawn_drone(hlp, 31, 0, 6, 7)
 			if h != None:
@@ -7465,9 +8090,17 @@ def w0():
 		move(North)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(West)
 				elif cur == 2:
@@ -7490,11 +8123,14 @@ def w0():
 							ja = measure(East)
 						if ja < v:
 							swap(East)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(East)
 				elif cur == 2:
@@ -7509,8 +8145,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -7521,19 +8159,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								swap(North)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 						elif jb < v:
 							swap(East)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(East)
 					move(East)
@@ -7550,8 +8195,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -7560,7 +8207,8 @@ def w0():
 							swap(North)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -7577,8 +8225,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -7601,55 +8251,62 @@ def w0():
 		if c == 0:
 			if get_time() < e:
 				move(East)
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(East)
+						if get_time() < e:
+							move(North)
+						else:
+							P.append((North,))
+					else:
+						P.append((East, North,))
+				else:
+					P.append((East, East, North,))
 			else:
-				P.append(East)
-			if get_time() < e:
-				move(East)
-			else:
-				P.append(East)
-			if get_time() < e:
-				move(East)
-			else:
-				P.append(East)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
+				P.append((East, East, East, North,))
 		elif c == 1:
 			if get_time() < e:
 				move(East)
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(North)
+					else:
+						P.append((North,))
+				else:
+					P.append((East, North,))
 			else:
-				P.append(East)
-			if get_time() < e:
-				move(East)
-			else:
-				P.append(East)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
+				P.append((East, East, North,))
 		elif c == 2:
 			if get_time() < e:
 				move(East)
+				if get_time() < e:
+					move(North)
+				else:
+					P.append((North,))
 			else:
-				P.append(East)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
+				P.append((East, North,))
 		elif c == 3:
 			if get_time() < e:
 				move(East)
+				if get_time() < e:
+					move(East)
+				else:
+					P.append((East,))
 			else:
-				P.append(East)
-			if get_time() < e:
-				move(East)
-			else:
-				P.append(East)
+				P.append((East, East,))
 		wait_until(tl + 0.9676)
-		use_item(Items.Water)
-		for d in P:
-			move(d)
+		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+			if get_entity_type() == Entities.Cactus:
+				harvest()
+			else:
+				use_item(Items.Water)
+		else:
+			use_item(Items.Water)
+		for q in P:
+			for d in q:
+				move(d)
 		while num_items(Items.Cactus) <= 0:
 			pass
 		plant(Entities.Cactus)
@@ -7703,9 +8360,17 @@ def w0():
 		move(West)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(South)
 				elif cur == 2:
@@ -7728,11 +8393,14 @@ def w0():
 							ja = measure(North)
 						if ja < v:
 							swap(North)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(North)
 				elif cur == 2:
@@ -7747,8 +8415,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -7759,19 +8429,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								swap(North)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 						elif jb < v:
 							swap(East)
-							if not (3 in wk):
+							if not q3:
 								wk.append(3)
+								qn += 1
+								q3 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(North)
 					move(North)
@@ -7788,8 +8465,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -7806,7 +8485,8 @@ def w0():
 							swap(East)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -7823,8 +8503,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -7856,9 +8538,17 @@ def w0():
 		move(South)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(West)
 				elif cur == 2:
@@ -7881,11 +8571,14 @@ def w0():
 							ja = measure(East)
 						if ja < v:
 							swap(East)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(East)
 				elif cur == 2:
@@ -7900,8 +8593,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -7912,19 +8607,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								swap(North)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 						elif jb < v:
 							swap(East)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(East)
 					move(East)
@@ -7941,8 +8643,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -7959,7 +8663,8 @@ def w0():
 							swap(East)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -7976,8 +8681,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -8122,24 +8829,31 @@ def w0():
 				P = []
 				if get_time() < e:
 					move(East)
+					if get_time() < e:
+						move(East)
+						if get_time() < e:
+							move(South)
+							if get_time() < e:
+								move(South)
+							else:
+								P.append((South,))
+						else:
+							P.append((South, South,))
+					else:
+						P.append((East, South, South,))
 				else:
-					P.append(East)
-				if get_time() < e:
-					move(East)
-				else:
-					P.append(East)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
-				if get_time() < e:
-					move(South)
-				else:
-					P.append(South)
+					P.append((East, East, South, South,))
 				wait_until(tl + 0.9676)
-				use_item(Items.Water)
-				for d in P:
-					move(d)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
 				while num_items(Items.Cactus) <= 0:
 					pass
 				plant(Entities.Cactus)
@@ -8242,6 +8956,8 @@ def w0():
 			move(North)
 			move(North)
 			move(North)
+			till()
+			plant(Entities.Cactus)
 			move(North)
 			move(North)
 			till()
@@ -8337,20 +9053,27 @@ def w0():
 			P = []
 			if get_time() < e:
 				move(East)
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(South)
+					else:
+						P.append((South,))
+				else:
+					P.append((East, South,))
 			else:
-				P.append(East)
-			if get_time() < e:
-				move(East)
-			else:
-				P.append(East)
-			if get_time() < e:
-				move(South)
-			else:
-				P.append(South)
+				P.append((East, East, South,))
 			wait_until(tl + 0.9676)
-			use_item(Items.Water)
-			for d in P:
-				move(d)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
 			while num_items(Items.Cactus) <= 0:
 				pass
 			plant(Entities.Cactus)
@@ -8428,6 +9151,8 @@ def w0():
 		def w11():
 			move(East)
 			move(East)
+			till()
+			plant(Entities.Cactus)
 			move(East)
 			move(East)
 			move(East)
@@ -8514,9 +9239,17 @@ def w0():
 			move(North)
 			wk = [3, 2, 1, 0]
 			cur = 3
-			while len(wk) > 0:
-				cx = wk.pop(0)
+			qi = 0
+			qn = 4
+			q3 = True
+			q2 = True
+			q1 = True
+			q0 = True
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
 				if cx == 0:
+					q0 = False
 					if cur == 1:
 						move(South)
 					elif cur == 2:
@@ -8539,11 +9272,14 @@ def w0():
 								ja = measure(North)
 							if ja < v:
 								swap(North)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 							else:
 								break
 				elif cx == 1:
+					q1 = False
 					if cur == 0:
 						move(North)
 					elif cur == 2:
@@ -8558,8 +9294,10 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (0 in wk):
+							if not q0:
 								wk.append(0)
+								qn += 1
+								q0 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -8570,19 +9308,26 @@ def w0():
 							if ja < v:
 								if jb < ja:
 									swap(East)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 								else:
 									swap(North)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 							elif jb < v:
 								swap(East)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								break
 				elif cx == 2:
+					q2 = False
 					if cur == 0:
 						move(North)
 						move(North)
@@ -8599,8 +9344,10 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -8617,7 +9364,8 @@ def w0():
 								swap(East)
 							else:
 								break
-				elif cx == 3:
+				else:
+					q3 = False
 					if cur == 0:
 						move(East)
 						move(North)
@@ -8634,8 +9382,10 @@ def w0():
 							ja = measure(West)
 						if ja > v:
 							swap(West)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -8678,11 +9428,18 @@ def w0():
 			if get_time() < e:
 				move(South)
 			else:
-				P.append(South)
+				P.append((South,))
 			wait_until(tl + 0.9676)
-			use_item(Items.Water)
-			for d in P:
-				move(d)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
 			while num_items(Items.Cactus) <= 0:
 				pass
 			plant(Entities.Cactus)
@@ -8722,9 +9479,17 @@ def w0():
 			move(North)
 			wk = [3, 2, 1, 0]
 			cur = 3
-			while len(wk) > 0:
-				cx = wk.pop(0)
+			qi = 0
+			qn = 4
+			q3 = True
+			q2 = True
+			q1 = True
+			q0 = True
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
 				if cx == 0:
+					q0 = False
 					if cur == 1:
 						move(South)
 					elif cur == 2:
@@ -8747,11 +9512,14 @@ def w0():
 								ja = measure(North)
 							if ja < v:
 								swap(North)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 							else:
 								break
 				elif cx == 1:
+					q1 = False
 					if cur == 0:
 						move(North)
 					elif cur == 2:
@@ -8766,8 +9534,10 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (0 in wk):
+							if not q0:
 								wk.append(0)
+								qn += 1
+								q0 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -8778,19 +9548,26 @@ def w0():
 							if ja < v:
 								if jb < ja:
 									swap(East)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 								else:
 									swap(North)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 							elif jb < v:
 								swap(East)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								break
 				elif cx == 2:
+					q2 = False
 					if cur == 0:
 						move(North)
 						move(North)
@@ -8807,8 +9584,10 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -8825,7 +9604,8 @@ def w0():
 								swap(East)
 							else:
 								break
-				elif cx == 3:
+				else:
+					q3 = False
 					if cur == 0:
 						move(East)
 						move(North)
@@ -8842,8 +9622,10 @@ def w0():
 							ja = measure(West)
 						if ja > v:
 							swap(West)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -8896,10 +9678,6 @@ def w0():
 		till()
 		plant(Entities.Cactus)
 		move(East)
-		move(North)
-		till()
-		plant(Entities.Cactus)
-		move(South)
 		till()
 		plant(Entities.Cactus)
 		move(South)
@@ -8997,20 +9775,27 @@ def w0():
 		P = []
 		if get_time() < e:
 			move(West)
+			if get_time() < e:
+				move(North)
+				if get_time() < e:
+					move(North)
+				else:
+					P.append((North,))
+			else:
+				P.append((North, North,))
 		else:
-			P.append(West)
-		if get_time() < e:
-			move(North)
-		else:
-			P.append(North)
-		if get_time() < e:
-			move(North)
-		else:
-			P.append(North)
+			P.append((West, North, North,))
 		wait_until(tl + 0.9676)
-		use_item(Items.Water)
-		for d in P:
-			move(d)
+		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+			if get_entity_type() == Entities.Cactus:
+				harvest()
+			else:
+				use_item(Items.Water)
+		else:
+			use_item(Items.Water)
+		for q in P:
+			for d in q:
+				move(d)
 		while num_items(Items.Cactus) <= 0:
 			pass
 		plant(Entities.Cactus)
@@ -9129,10 +9914,6 @@ def w0():
 			till()
 			plant(Entities.Cactus)
 			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
 			till()
 			plant(Entities.Cactus)
 			move(South)
@@ -9202,16 +9983,23 @@ def w0():
 			P = []
 			if get_time() < e:
 				move(West)
+				if get_time() < e:
+					move(North)
+				else:
+					P.append((North,))
 			else:
-				P.append(West)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
+				P.append((West, North,))
 			wait_until(tl + 0.9676)
-			use_item(Items.Water)
-			for d in P:
-				move(d)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
 			while num_items(Items.Cactus) <= 0:
 				pass
 			plant(Entities.Cactus)
@@ -9304,6 +10092,8 @@ def w0():
 		move(West)
 		move(North)
 		move(North)
+		till()
+		plant(Entities.Cactus)
 		move(North)
 		move(North)
 		move(North)
@@ -9364,10 +10154,6 @@ def w0():
 		move(South)
 		till()
 		plant(Entities.Cactus)
-		move(East)
-		till()
-		plant(Entities.Cactus)
-		move(West)
 		move(West)
 		till()
 		plant(Entities.Cactus)
@@ -9384,9 +10170,17 @@ def w0():
 		move(North)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(West)
 				elif cur == 2:
@@ -9409,11 +10203,14 @@ def w0():
 							ja = measure(East)
 						if ja < v:
 							swap(East)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(East)
 				elif cur == 2:
@@ -9428,8 +10225,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -9440,19 +10239,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								swap(North)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 						elif jb < v:
 							swap(East)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(East)
 					move(East)
@@ -9469,8 +10275,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -9487,7 +10295,8 @@ def w0():
 							swap(East)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -9504,8 +10313,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -9548,11 +10359,18 @@ def w0():
 		if get_time() < e:
 			move(West)
 		else:
-			P.append(West)
+			P.append((West,))
 		wait_until(tl + 0.9676)
-		use_item(Items.Water)
-		for d in P:
-			move(d)
+		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+			if get_entity_type() == Entities.Cactus:
+				harvest()
+			else:
+				use_item(Items.Water)
+		else:
+			use_item(Items.Water)
+		for q in P:
+			for d in q:
+				move(d)
 		while num_items(Items.Cactus) <= 0:
 			pass
 		plant(Entities.Cactus)
@@ -9589,9 +10407,17 @@ def w0():
 		move(North)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(West)
 				elif cur == 2:
@@ -9614,11 +10440,14 @@ def w0():
 							ja = measure(East)
 						if ja < v:
 							swap(East)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(East)
 				elif cur == 2:
@@ -9633,8 +10462,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -9645,19 +10476,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								swap(North)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 						elif jb < v:
 							swap(East)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(East)
 					move(East)
@@ -9674,8 +10512,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -9692,7 +10532,8 @@ def w0():
 							swap(East)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -9709,8 +10550,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -9785,10 +10628,6 @@ def w0():
 				till()
 				plant(Entities.Cactus)
 				move(West)
-				move(South)
-				till()
-				plant(Entities.Cactus)
-				move(North)
 				till()
 				plant(Entities.Cactus)
 				move(North)
@@ -9873,11 +10712,18 @@ def w0():
 				if get_time() < e:
 					move(East)
 				else:
-					P.append(East)
+					P.append((East,))
 				wait_until(tl + 0.9676)
-				use_item(Items.Water)
-				for d in P:
-					move(d)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
+				for q in P:
+					for d in q:
+						move(d)
 				while num_items(Items.Cactus) <= 0:
 					pass
 				plant(Entities.Cactus)
@@ -10057,7 +10903,13 @@ def w0():
 				move(South)
 				fsSW_NE()
 				wait_until(tl + 0.9676)
-				use_item(Items.Water)
+				if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+					if get_entity_type() == Entities.Cactus:
+						harvest()
+					else:
+						use_item(Items.Water)
+				else:
+					use_item(Items.Water)
 				while num_items(Items.Cactus) <= 0:
 					pass
 				plant(Entities.Cactus)
@@ -10150,6 +11002,8 @@ def w0():
 			move(North)
 			move(North)
 			move(North)
+			till()
+			plant(Entities.Cactus)
 			move(North)
 			move(North)
 			till()
@@ -10231,9 +11085,17 @@ def w0():
 			move(North)
 			wk = [3, 2, 1, 0]
 			cur = 3
-			while len(wk) > 0:
-				cx = wk.pop(0)
+			qi = 0
+			qn = 4
+			q3 = True
+			q2 = True
+			q1 = True
+			q0 = True
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
 				if cx == 0:
+					q0 = False
 					if cur == 1:
 						move(South)
 					elif cur == 2:
@@ -10256,11 +11118,14 @@ def w0():
 								ja = measure(North)
 							if ja < v:
 								swap(North)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 							else:
 								break
 				elif cx == 1:
+					q1 = False
 					if cur == 0:
 						move(North)
 					elif cur == 2:
@@ -10275,8 +11140,10 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (0 in wk):
+							if not q0:
 								wk.append(0)
+								qn += 1
+								q0 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -10287,19 +11154,26 @@ def w0():
 							if ja < v:
 								if jb < ja:
 									swap(East)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 								else:
 									swap(North)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 							elif jb < v:
 								swap(East)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								break
 				elif cx == 2:
+					q2 = False
 					if cur == 0:
 						move(North)
 						move(North)
@@ -10316,8 +11190,10 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -10334,7 +11210,8 @@ def w0():
 								swap(East)
 							else:
 								break
-				elif cx == 3:
+				else:
+					q3 = False
 					if cur == 0:
 						move(East)
 						move(North)
@@ -10351,8 +11228,10 @@ def w0():
 							ja = measure(West)
 						if ja > v:
 							swap(West)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -10388,40 +11267,47 @@ def w0():
 			P = []
 			if get_time() < e:
 				move(West)
+				if get_time() < e:
+					move(West)
+					if get_time() < e:
+						move(West)
+						if get_time() < e:
+							move(West)
+							if get_time() < e:
+								move(West)
+								if get_time() < e:
+									move(West)
+									if get_time() < e:
+										move(West)
+										if get_time() < e:
+											move(North)
+										else:
+											P.append((North,))
+									else:
+										P.append((West, North,))
+								else:
+									P.append((West, West, North,))
+							else:
+								P.append((West, West, West, North,))
+						else:
+							P.append((West, West, West, West, North,))
+					else:
+						P.append((West, West, West, West, West, North,))
+				else:
+					P.append((West, West, West, West, West, West, North,))
 			else:
-				P.append(West)
-			if get_time() < e:
-				move(West)
-			else:
-				P.append(West)
-			if get_time() < e:
-				move(West)
-			else:
-				P.append(West)
-			if get_time() < e:
-				move(West)
-			else:
-				P.append(West)
-			if get_time() < e:
-				move(West)
-			else:
-				P.append(West)
-			if get_time() < e:
-				move(West)
-			else:
-				P.append(West)
-			if get_time() < e:
-				move(West)
-			else:
-				P.append(West)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
+				P.append((West, West, West, West, West, West, West, North,))
 			wait_until(tl + 0.9676)
-			use_item(Items.Water)
-			for d in P:
-				move(d)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
 			while num_items(Items.Cactus) <= 0:
 				pass
 			plant(Entities.Cactus)
@@ -10497,9 +11383,17 @@ def w0():
 			move(South)
 			wk = [0, 1, 2, 3]
 			cur = 0
-			while len(wk) > 0:
-				cx = wk.pop(0)
+			qi = 0
+			qn = 4
+			q0 = True
+			q1 = True
+			q2 = True
+			q3 = True
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
 				if cx == 0:
+					q0 = False
 					if cur == 1:
 						move(West)
 						move(North)
@@ -10530,11 +11424,14 @@ def w0():
 								ja = measure(East)
 							if ja < v:
 								swap(East)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								break
 				elif cx == 1:
+					q1 = False
 					if cur == 0:
 						move(East)
 						move(South)
@@ -10565,11 +11462,14 @@ def w0():
 								ja = measure(North)
 							if ja < v:
 								swap(North)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								break
 				elif cx == 2:
+					q2 = False
 					if cur == 0:
 						move(East)
 					elif cur == 1:
@@ -10588,27 +11488,36 @@ def w0():
 						if ja > v:
 							if jb > ja:
 								swap(West)
-								if not (0 in wk):
+								if not q0:
 									wk.append(0)
+									qn += 1
+									q0 = True
 							else:
 								swap(South)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 						elif jb > v:
 							swap(West)
-							if not (0 in wk):
+							if not q0:
 								wk.append(0)
+								qn += 1
+								q0 = True
 						else:
 							ja = measure(North)
 							while ja == None:
 								ja = measure(North)
 							if ja < v:
 								swap(North)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								break
-				elif cx == 3:
+				else:
+					q3 = False
 					if cur == 0:
 						move(East)
 						move(North)
@@ -10625,8 +11534,10 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -10664,10 +11575,6 @@ def w0():
 			till()
 			plant(Entities.Cactus)
 			move(East)
-			move(North)
-			till()
-			plant(Entities.Cactus)
-			move(South)
 			till()
 			plant(Entities.Cactus)
 			move(South)
@@ -10757,28 +11664,35 @@ def w0():
 			P = []
 			if get_time() < e:
 				move(West)
+				if get_time() < e:
+					move(North)
+					if get_time() < e:
+						move(North)
+						if get_time() < e:
+							move(North)
+							if get_time() < e:
+								move(North)
+							else:
+								P.append((North,))
+						else:
+							P.append((North, North,))
+					else:
+						P.append((North, North, North,))
+				else:
+					P.append((North, North, North, North,))
 			else:
-				P.append(West)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
-			if get_time() < e:
-				move(North)
-			else:
-				P.append(North)
+				P.append((West, North, North, North, North,))
 			wait_until(tl + 0.9676)
-			use_item(Items.Water)
-			for d in P:
-				move(d)
+			if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+				if get_entity_type() == Entities.Cactus:
+					harvest()
+				else:
+					use_item(Items.Water)
+			else:
+				use_item(Items.Water)
+			for q in P:
+				for d in q:
+					move(d)
 			while num_items(Items.Cactus) <= 0:
 				pass
 			plant(Entities.Cactus)
@@ -10833,9 +11747,17 @@ def w0():
 			move(North)
 			wk = [3, 2, 1, 0]
 			cur = 3
-			while len(wk) > 0:
-				cx = wk.pop(0)
+			qi = 0
+			qn = 4
+			q3 = True
+			q2 = True
+			q1 = True
+			q0 = True
+			while qi < qn:
+				cx = wk[qi]
+				qi += 1
 				if cx == 0:
+					q0 = False
 					if cur == 1:
 						move(South)
 					elif cur == 2:
@@ -10858,11 +11780,14 @@ def w0():
 								ja = measure(North)
 							if ja < v:
 								swap(North)
-								if not (1 in wk):
+								if not q1:
 									wk.append(1)
+									qn += 1
+									q1 = True
 							else:
 								break
 				elif cx == 1:
+					q1 = False
 					if cur == 0:
 						move(North)
 					elif cur == 2:
@@ -10877,8 +11802,10 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (0 in wk):
+							if not q0:
 								wk.append(0)
+								qn += 1
+								q0 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -10889,19 +11816,26 @@ def w0():
 							if ja < v:
 								if jb < ja:
 									swap(East)
-									if not (3 in wk):
+									if not q3:
 										wk.append(3)
+										qn += 1
+										q3 = True
 								else:
 									swap(North)
-									if not (2 in wk):
+									if not q2:
 										wk.append(2)
+										qn += 1
+										q2 = True
 							elif jb < v:
 								swap(East)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								break
 				elif cx == 2:
+					q2 = False
 					if cur == 0:
 						move(North)
 						move(North)
@@ -10918,8 +11852,10 @@ def w0():
 							ja = measure(South)
 						if ja > v:
 							swap(South)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -10936,7 +11872,8 @@ def w0():
 								swap(East)
 							else:
 								break
-				elif cx == 3:
+				else:
+					q3 = False
 					if cur == 0:
 						move(East)
 						move(North)
@@ -10953,8 +11890,10 @@ def w0():
 							ja = measure(West)
 						if ja > v:
 							swap(West)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							ja = measure(North)
 							while ja == None:
@@ -11034,10 +11973,6 @@ def w0():
 		move(South)
 		till()
 		plant(Entities.Cactus)
-		move(East)
-		till()
-		plant(Entities.Cactus)
-		move(West)
 		move(West)
 		till()
 		plant(Entities.Cactus)
@@ -11072,9 +12007,17 @@ def w0():
 		move(North)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(West)
 				elif cur == 2:
@@ -11097,11 +12040,14 @@ def w0():
 							ja = measure(East)
 						if ja < v:
 							swap(East)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(East)
 				elif cur == 2:
@@ -11116,8 +12062,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -11128,19 +12076,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								swap(North)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 						elif jb < v:
 							swap(East)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(East)
 					move(East)
@@ -11157,8 +12112,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -11175,7 +12132,8 @@ def w0():
 							swap(East)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -11192,8 +12150,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -11232,39 +12192,43 @@ def w0():
 		P = []
 		if get_time() < e:
 			move(West)
+			if get_time() < e:
+				move(West)
+				if get_time() < e:
+					move(West)
+					if get_time() < e:
+						move(West)
+						if get_time() < e:
+							move(West)
+							if get_time() < e:
+								move(North)
+								if get_time() < e:
+									move(North)
+								else:
+									P.append((North,))
+							else:
+								P.append((North, North,))
+						else:
+							P.append((West, North, North,))
+					else:
+						P.append((West, West, North, North,))
+				else:
+					P.append((West, West, West, North, North,))
+			else:
+				P.append((West, West, West, West, North, North,))
 		else:
-			P.append(West)
-		if get_time() < e:
-			move(West)
-		else:
-			P.append(West)
-		if get_time() < e:
-			move(West)
-		else:
-			P.append(West)
-		if get_time() < e:
-			move(West)
-		else:
-			P.append(West)
-		if get_time() < e:
-			move(West)
-		else:
-			P.append(West)
-		if get_time() < e:
-			move(North)
-		else:
-			P.append(North)
-		if get_time() < e:
-			move(North)
-		else:
-			P.append(North)
+			P.append((West, West, West, West, West, North, North,))
 		wait_until(tl + 0.9676)
-		use_item(Items.Water)
-		for d in P:
-			move(d)
-		while (get_time() // WDT) - num_items(Items.Water) < NSIG + 1:
-			pass
-		harvest()
+		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+			if get_entity_type() == Entities.Cactus:
+				harvest()
+			else:
+				use_item(Items.Water)
+		else:
+			use_item(Items.Water)
+		for q in P:
+			for d in q:
+				move(d)
 		while num_items(Items.Cactus) <= 0:
 			pass
 		plant(Entities.Cactus)
@@ -11332,10 +12296,17 @@ def w0():
 		move(South)
 		plant(Entities.Cactus)
 		move(East)
-		plant(Entities.Cactus)
+		if use_item(Items.Water, 4):
+			plant(Entities.Cactus)
+			tw = get_time() - 0.0988
+		else:
+			plant(Entities.Cactus)
+			tw = 0
 		if measure() < measure(West):
 			swap(West)
 		tl = get_time()
+		if tw:
+			tl = tw
 		move(West)
 		if measure() > measure(North):
 			swap(North)
@@ -11356,9 +12327,17 @@ def w0():
 		move(North)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(South)
 				elif cur == 2:
@@ -11381,11 +12360,14 @@ def w0():
 							ja = measure(North)
 						if ja < v:
 							swap(North)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(North)
 				elif cur == 2:
@@ -11400,8 +12382,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -11412,19 +12396,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								swap(North)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 						elif jb < v:
 							swap(East)
-							if not (3 in wk):
+							if not q3:
 								wk.append(3)
+								qn += 1
+								q3 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(North)
 					move(North)
@@ -11441,8 +12432,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -11459,7 +12452,8 @@ def w0():
 							swap(East)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -11476,8 +12470,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -11621,9 +12617,17 @@ def w0():
 		move(North)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(South)
 				elif cur == 2:
@@ -11646,11 +12650,14 @@ def w0():
 							ja = measure(North)
 						if ja < v:
 							swap(North)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(North)
 				elif cur == 2:
@@ -11665,8 +12672,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -11677,19 +12686,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 							else:
 								swap(North)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 						elif jb < v:
 							swap(East)
-							if not (3 in wk):
+							if not q3:
 								wk.append(3)
+								qn += 1
+								q3 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(North)
 					move(North)
@@ -11706,8 +12722,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -11724,7 +12742,8 @@ def w0():
 							swap(East)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -11741,8 +12760,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -11786,24 +12807,31 @@ def w0():
 		P = []
 		if get_time() < e:
 			move(East)
+			if get_time() < e:
+				move(North)
+				if get_time() < e:
+					move(North)
+					if get_time() < e:
+						move(North)
+					else:
+						P.append((North,))
+				else:
+					P.append((North, North,))
+			else:
+				P.append((North, North, North,))
 		else:
-			P.append(East)
-		if get_time() < e:
-			move(North)
-		else:
-			P.append(North)
-		if get_time() < e:
-			move(North)
-		else:
-			P.append(North)
-		if get_time() < e:
-			move(North)
-		else:
-			P.append(North)
+			P.append((East, North, North, North,))
 		wait_until(tl + 0.9676)
-		use_item(Items.Water)
-		for d in P:
-			move(d)
+		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+			if get_entity_type() == Entities.Cactus:
+				harvest()
+			else:
+				use_item(Items.Water)
+		else:
+			use_item(Items.Water)
+		for q in P:
+			for d in q:
+				move(d)
 		while num_items(Items.Cactus) <= 0:
 			pass
 		plant(Entities.Cactus)
@@ -11962,10 +12990,6 @@ def w0():
 		move(South)
 		till()
 		plant(Entities.Cactus)
-		move(East)
-		till()
-		plant(Entities.Cactus)
-		move(West)
 		move(West)
 		till()
 		plant(Entities.Cactus)
@@ -12012,9 +13036,17 @@ def w0():
 		move(North)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(West)
 				elif cur == 2:
@@ -12037,11 +13069,14 @@ def w0():
 							ja = measure(East)
 						if ja < v:
 							swap(East)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(East)
 				elif cur == 2:
@@ -12056,8 +13091,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -12068,19 +13105,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								swap(North)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 						elif jb < v:
 							swap(East)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(East)
 					move(East)
@@ -12097,8 +13141,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -12115,7 +13161,8 @@ def w0():
 							swap(East)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -12132,8 +13179,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -12165,28 +13214,35 @@ def w0():
 		P = []
 		if get_time() < e:
 			move(East)
+			if get_time() < e:
+				move(East)
+				if get_time() < e:
+					move(East)
+					if get_time() < e:
+						move(East)
+						if get_time() < e:
+							move(East)
+						else:
+							P.append((East,))
+					else:
+						P.append((East, East,))
+				else:
+					P.append((East, East, East,))
+			else:
+				P.append((East, East, East, East,))
 		else:
-			P.append(East)
-		if get_time() < e:
-			move(East)
-		else:
-			P.append(East)
-		if get_time() < e:
-			move(East)
-		else:
-			P.append(East)
-		if get_time() < e:
-			move(East)
-		else:
-			P.append(East)
-		if get_time() < e:
-			move(East)
-		else:
-			P.append(East)
+			P.append((East, East, East, East, East,))
 		wait_until(tl + 0.9676)
-		use_item(Items.Water)
-		for d in P:
-			move(d)
+		if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+			if get_entity_type() == Entities.Cactus:
+				harvest()
+			else:
+				use_item(Items.Water)
+		else:
+			use_item(Items.Water)
+		for q in P:
+			for d in q:
+				move(d)
 		while num_items(Items.Cactus) <= 0:
 			pass
 		plant(Entities.Cactus)
@@ -12275,9 +13331,17 @@ def w0():
 		move(North)
 		wk = [3, 2, 1, 0]
 		cur = 3
-		while len(wk) > 0:
-			cx = wk.pop(0)
+		qi = 0
+		qn = 4
+		q3 = True
+		q2 = True
+		q1 = True
+		q0 = True
+		while qi < qn:
+			cx = wk[qi]
+			qi += 1
 			if cx == 0:
+				q0 = False
 				if cur == 1:
 					move(West)
 				elif cur == 2:
@@ -12300,11 +13364,14 @@ def w0():
 							ja = measure(East)
 						if ja < v:
 							swap(East)
-							if not (1 in wk):
+							if not q1:
 								wk.append(1)
+								qn += 1
+								q1 = True
 						else:
 							break
 			elif cx == 1:
+				q1 = False
 				if cur == 0:
 					move(East)
 				elif cur == 2:
@@ -12319,8 +13386,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (0 in wk):
+						if not q0:
 							wk.append(0)
+							qn += 1
+							q0 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -12331,19 +13400,26 @@ def w0():
 						if ja < v:
 							if jb < ja:
 								swap(East)
-								if not (2 in wk):
+								if not q2:
 									wk.append(2)
+									qn += 1
+									q2 = True
 							else:
 								swap(North)
-								if not (3 in wk):
+								if not q3:
 									wk.append(3)
+									qn += 1
+									q3 = True
 						elif jb < v:
 							swap(East)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							break
 			elif cx == 2:
+				q2 = False
 				if cur == 0:
 					move(East)
 					move(East)
@@ -12360,8 +13436,10 @@ def w0():
 						ja = measure(West)
 					if ja > v:
 						swap(West)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -12378,7 +13456,8 @@ def w0():
 							swap(East)
 						else:
 							break
-			elif cx == 3:
+			else:
+				q3 = False
 				if cur == 0:
 					move(East)
 					move(North)
@@ -12395,8 +13474,10 @@ def w0():
 						ja = measure(South)
 					if ja > v:
 						swap(South)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						ja = measure(North)
 						while ja == None:
@@ -12484,10 +13565,6 @@ def w0():
 	move(South)
 	till()
 	plant(Entities.Cactus)
-	move(East)
-	till()
-	plant(Entities.Cactus)
-	move(West)
 	move(West)
 	till()
 	plant(Entities.Cactus)
@@ -12509,9 +13586,17 @@ def w0():
 	move(North)
 	wk = [3, 2, 1, 0]
 	cur = 3
-	while len(wk) > 0:
-		cx = wk.pop(0)
+	qi = 0
+	qn = 4
+	q3 = True
+	q2 = True
+	q1 = True
+	q0 = True
+	while qi < qn:
+		cx = wk[qi]
+		qi += 1
 		if cx == 0:
+			q0 = False
 			if cur == 1:
 				move(West)
 			elif cur == 2:
@@ -12534,11 +13619,14 @@ def w0():
 						ja = measure(East)
 					if ja < v:
 						swap(East)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						break
 		elif cx == 1:
+			q1 = False
 			if cur == 0:
 				move(East)
 			elif cur == 2:
@@ -12553,8 +13641,10 @@ def w0():
 					ja = measure(West)
 				if ja > v:
 					swap(West)
-					if not (0 in wk):
+					if not q0:
 						wk.append(0)
+						qn += 1
+						q0 = True
 				else:
 					ja = measure(North)
 					while ja == None:
@@ -12565,19 +13655,26 @@ def w0():
 					if ja < v:
 						if jb < ja:
 							swap(East)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							swap(North)
-							if not (3 in wk):
+							if not q3:
 								wk.append(3)
+								qn += 1
+								q3 = True
 					elif jb < v:
 						swap(East)
-						if not (2 in wk):
+						if not q2:
 							wk.append(2)
+							qn += 1
+							q2 = True
 					else:
 						break
 		elif cx == 2:
+			q2 = False
 			if cur == 0:
 				move(East)
 				move(East)
@@ -12594,8 +13691,10 @@ def w0():
 					ja = measure(West)
 				if ja > v:
 					swap(West)
-					if not (1 in wk):
+					if not q1:
 						wk.append(1)
+						qn += 1
+						q1 = True
 				else:
 					ja = measure(North)
 					while ja == None:
@@ -12612,7 +13711,8 @@ def w0():
 						swap(East)
 					else:
 						break
-		elif cx == 3:
+		else:
+			q3 = False
 			if cur == 0:
 				move(East)
 				move(North)
@@ -12629,8 +13729,10 @@ def w0():
 					ja = measure(South)
 				if ja > v:
 					swap(South)
-					if not (1 in wk):
+					if not q1:
 						wk.append(1)
+						qn += 1
+						q1 = True
 				else:
 					ja = measure(North)
 					while ja == None:
@@ -12664,9 +13766,17 @@ def w0():
 	move(North)
 	wk = [3, 2, 1, 0]
 	cur = 3
-	while len(wk) > 0:
-		cx = wk.pop(0)
+	qi = 0
+	qn = 4
+	q3 = True
+	q2 = True
+	q1 = True
+	q0 = True
+	while qi < qn:
+		cx = wk[qi]
+		qi += 1
 		if cx == 0:
+			q0 = False
 			if cur == 1:
 				move(South)
 			elif cur == 2:
@@ -12689,11 +13799,14 @@ def w0():
 						ja = measure(North)
 					if ja < v:
 						swap(North)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						break
 		elif cx == 1:
+			q1 = False
 			if cur == 0:
 				move(North)
 			elif cur == 2:
@@ -12708,8 +13821,10 @@ def w0():
 					ja = measure(South)
 				if ja > v:
 					swap(South)
-					if not (0 in wk):
+					if not q0:
 						wk.append(0)
+						qn += 1
+						q0 = True
 				else:
 					ja = measure(North)
 					while ja == None:
@@ -12720,19 +13835,26 @@ def w0():
 					if ja < v:
 						if jb < ja:
 							swap(East)
-							if not (3 in wk):
+							if not q3:
 								wk.append(3)
+								qn += 1
+								q3 = True
 						else:
 							swap(North)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 					elif jb < v:
 						swap(East)
-						if not (3 in wk):
+						if not q3:
 							wk.append(3)
+							qn += 1
+							q3 = True
 					else:
 						break
 		elif cx == 2:
+			q2 = False
 			if cur == 0:
 				move(North)
 				move(North)
@@ -12749,8 +13871,10 @@ def w0():
 					ja = measure(South)
 				if ja > v:
 					swap(South)
-					if not (1 in wk):
+					if not q1:
 						wk.append(1)
+						qn += 1
+						q1 = True
 				else:
 					ja = measure(North)
 					while ja == None:
@@ -12767,7 +13891,8 @@ def w0():
 						swap(East)
 					else:
 						break
-		elif cx == 3:
+		else:
+			q3 = False
 			if cur == 0:
 				move(East)
 				move(North)
@@ -12784,8 +13909,10 @@ def w0():
 					ja = measure(West)
 				if ja > v:
 					swap(West)
-					if not (1 in wk):
+					if not q1:
 						wk.append(1)
+						qn += 1
+						q1 = True
 				else:
 					ja = measure(North)
 					while ja == None:
@@ -12808,55 +13935,62 @@ def w0():
 	if c == 0:
 		if get_time() < e:
 			move(East)
+			if get_time() < e:
+				move(East)
+			else:
+				P.append((East,))
 		else:
-			P.append(East)
-		if get_time() < e:
-			move(East)
-		else:
-			P.append(East)
+			P.append((East, East,))
 	elif c == 1:
 		if get_time() < e:
 			move(East)
+			if get_time() < e:
+				move(East)
+				if get_time() < e:
+					move(South)
+				else:
+					P.append((South,))
+			else:
+				P.append((East, South,))
 		else:
-			P.append(East)
-		if get_time() < e:
-			move(East)
-		else:
-			P.append(East)
-		if get_time() < e:
-			move(South)
-		else:
-			P.append(South)
+			P.append((East, East, South,))
 	elif c == 2:
 		if get_time() < e:
 			move(East)
+			if get_time() < e:
+				move(East)
+				if get_time() < e:
+					move(South)
+					if get_time() < e:
+						move(South)
+					else:
+						P.append((South,))
+				else:
+					P.append((South, South,))
+			else:
+				P.append((East, South, South,))
 		else:
-			P.append(East)
-		if get_time() < e:
-			move(East)
-		else:
-			P.append(East)
-		if get_time() < e:
-			move(South)
-		else:
-			P.append(South)
-		if get_time() < e:
-			move(South)
-		else:
-			P.append(South)
+			P.append((East, East, South, South,))
 	elif c == 3:
 		if get_time() < e:
 			move(East)
+			if get_time() < e:
+				move(South)
+			else:
+				P.append((South,))
 		else:
-			P.append(East)
-		if get_time() < e:
-			move(South)
-		else:
-			P.append(South)
+			P.append((East, South,))
 	wait_until(tl + 0.9676)
-	use_item(Items.Water)
-	for d in P:
-		move(d)
+	if (get_time() // WDT) - num_items(Items.Water) >= NSIG:
+		if get_entity_type() == Entities.Cactus:
+			harvest()
+		else:
+			use_item(Items.Water)
+	else:
+		use_item(Items.Water)
+	for q in P:
+		for d in q:
+			move(d)
 	while num_items(Items.Cactus) <= 0:
 		pass
 	plant(Entities.Cactus)
@@ -12946,9 +14080,17 @@ def w0():
 	move(South)
 	wk = [3, 2, 1, 0]
 	cur = 3
-	while len(wk) > 0:
-		cx = wk.pop(0)
+	qi = 0
+	qn = 4
+	q3 = True
+	q2 = True
+	q1 = True
+	q0 = True
+	while qi < qn:
+		cx = wk[qi]
+		qi += 1
 		if cx == 0:
+			q0 = False
 			if cur == 1:
 				move(West)
 			elif cur == 2:
@@ -12971,11 +14113,14 @@ def w0():
 						ja = measure(East)
 					if ja < v:
 						swap(East)
-						if not (1 in wk):
+						if not q1:
 							wk.append(1)
+							qn += 1
+							q1 = True
 					else:
 						break
 		elif cx == 1:
+			q1 = False
 			if cur == 0:
 				move(East)
 			elif cur == 2:
@@ -12990,8 +14135,10 @@ def w0():
 					ja = measure(West)
 				if ja > v:
 					swap(West)
-					if not (0 in wk):
+					if not q0:
 						wk.append(0)
+						qn += 1
+						q0 = True
 				else:
 					ja = measure(North)
 					while ja == None:
@@ -13002,19 +14149,26 @@ def w0():
 					if ja < v:
 						if jb < ja:
 							swap(East)
-							if not (2 in wk):
+							if not q2:
 								wk.append(2)
+								qn += 1
+								q2 = True
 						else:
 							swap(North)
-							if not (3 in wk):
+							if not q3:
 								wk.append(3)
+								qn += 1
+								q3 = True
 					elif jb < v:
 						swap(East)
-						if not (2 in wk):
+						if not q2:
 							wk.append(2)
+							qn += 1
+							q2 = True
 					else:
 						break
 		elif cx == 2:
+			q2 = False
 			if cur == 0:
 				move(East)
 				move(East)
@@ -13031,8 +14185,10 @@ def w0():
 					ja = measure(West)
 				if ja > v:
 					swap(West)
-					if not (1 in wk):
+					if not q1:
 						wk.append(1)
+						qn += 1
+						q1 = True
 				else:
 					ja = measure(North)
 					while ja == None:
@@ -13049,7 +14205,8 @@ def w0():
 						swap(East)
 					else:
 						break
-		elif cx == 3:
+		else:
+			q3 = False
 			if cur == 0:
 				move(East)
 				move(North)
@@ -13066,8 +14223,10 @@ def w0():
 					ja = measure(South)
 				if ja > v:
 					swap(South)
-					if not (1 in wk):
+					if not q1:
 						wk.append(1)
+						qn += 1
+						q1 = True
 				else:
 					ja = measure(North)
 					while ja == None:
