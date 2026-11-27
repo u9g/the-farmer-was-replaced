@@ -422,7 +422,7 @@ def mixed_job(i, d, need, flags):
 					if k < n - 1 or w == 1:
 						move(North)
 				continue
-			if p == None or n != 3:
+			if p == None or (n != 3 and i % 2 == 0):
 				# a 3x3 farm keeps its crop types for the whole pass: rows of one type each
 				p = choose3()
 			ce = p[0]
@@ -450,6 +450,19 @@ def mixed_job(i, d, need, flags):
 					tend_fast(cl[get_pos_y()])
 					move(North)
 				tend_fast(cl[get_pos_y()])
+			elif n % 2 == 0:
+				# one function per crop type, called in pairs: fewer ops a cell than tend_fast
+				y0 = get_pos_y() % 2
+				fa = TF[cs[y0]]
+				fb = TF[cs[1 - y0]]
+				for k in range(n // 2 - 1):
+					fa()
+					move(North)
+					fb()
+					move(North)
+				fa()
+				move(North)
+				fb()
 			else:
 				for k in range(n - 1):
 					tend_fast(cs[get_pos_y() % 2])
@@ -590,6 +603,57 @@ def tend_fast(c):
 			# one water at planting ripens the tree within a pass on a small farm, and the
 			# soil keeps enough for the next tree as long as it is above WT_LO
 			use_item(Items.Water)
+
+
+def tg():
+	e = get_entity_type()
+	if e == Entities.Grass:
+		if can_harvest():
+			harvest()
+		return
+	if e != None:
+		if not can_harvest():
+			return
+		harvest()
+	if get_ground_type() == Grounds.Soil:
+		till()
+
+
+def tt():
+	e = get_entity_type()
+	if e != None:
+		if e != Entities.Grass and not can_harvest():
+			return
+		harvest()
+	if plant(Entities.Tree):
+		PEND[Items.Wood] += YC[Entities.Tree]
+		if get_water() < WT_LO and num_items(Items.Water) >= 1:
+			use_item(Items.Water)
+
+
+def tb():
+	e = get_entity_type()
+	if e != None:
+		if e != Entities.Grass and not can_harvest():
+			return
+		harvest()
+	if plant(Entities.Bush):
+		PEND[Items.Wood] += YC[Entities.Bush]
+
+
+def tc():
+	e = get_entity_type()
+	if e != None:
+		if e != Entities.Grass and not can_harvest():
+			return
+		harvest()
+	if get_ground_type() != Grounds.Soil:
+		till()
+	if plant(Entities.Carrot):
+		PEND[Items.Carrot] += YC[Entities.Carrot]
+
+
+TF = {Entities.Grass: tg, Entities.Tree: tt, Entities.Bush: tb, Entities.Carrot: tc}
 
 
 def tend_wait(c):
@@ -1381,6 +1445,12 @@ def pk_job(i, d, a):
 	L = len(px)
 	seed = get_cost(Entities.Pumpkin)[Items.Carrot]
 	go(px[0], py[0])
+	while get_pos_x() != px[0] or get_pos_y() != py[0]:
+		# a maze still stands (its walls stopped a move): cut it down from where this drone is
+		e = get_entity_type()
+		if e == Entities.Hedge or e == Entities.Treasure:
+			harvest()
+		go(px[0], py[0])
 	while True:
 		pk_pass(px, py, L, seed, i, n, a)
 		if a <= 1:
@@ -1408,6 +1478,7 @@ def pk_job(i, d, a):
 
 def pk_pass(px, py, L, seed, i, n, a):
 	todo = []
+	p0 = num_items(Items.Pumpkin)
 	for t in range(L):
 		e = get_entity_type()
 		if e != Entities.Pumpkin:
@@ -1452,8 +1523,9 @@ def pk_pass(px, py, L, seed, i, n, a):
 						nt.append(t)
 						break
 				else:
-					if e == None and a > 0:
-						# cut: drone 0 found the field whole
+					if e == None and a > 0 and num_items(Items.Pumpkin) > p0:
+						# cut: drone 0 found the field whole (an empty cell is otherwise a planting
+						# that failed when another drone took the last carrots first)
 						break
 					if e != Entities.Dead_Pumpkin and e != None:
 						harvest()
@@ -1686,70 +1758,163 @@ def bd_plan(n, d):
 	return plan
 
 
-def bd_settle(k, a, f, b, dfr, LO, UP, MX, path, wf):
-	# insert cell k: fix it against the cells already in place. Planting forwards (dfr False) those
-	# are the indices up to k; on the walk back (dfr True) the indices from k to b - 1 and those
-	# before f. A mixed cell's neighbours all lie in its own stretch (cuts are between pure cells).
-	# A swap moves a pure cell's value the safe way; a mixed cell can be broken on one side only
-	# (the side it moved towards), so it goes back on the work list for that side.
-	# 0: lower, 1: upper, 2: both. wf: the stretch's weird flags (index - a), or None
-	work = [(k, 2)]
-	cur = k
-	while len(work) > 0:
-		it = work.pop()
-		c = it[0]
-		sd = it[1]
-		if c != cur:
-			if abs(path[cur][0] - path[c][0]) + abs(path[cur][1] - path[c][1]) == 1:
-				move(step_dir(path[cur][0], path[cur][1], path[c][0], path[c][1]))
-			else:
-				go(path[c][0], path[c][1])
-			cur = c
-		v = measure()
-		bd = None
-		bq = -1
-		bv = 0
-		bl = False
-		if sd != 1:
-			for e in LO[c]:
-				q = e[1]
-				if (dfr and ((q >= k and q < b) or q < f)) or (not dfr and q <= k):
-					w = measure(e[0])
-					if w - v > bv:
-						bv = w - v
-						bd = e[0]
-						bq = q
-						bl = True
-		if sd != 0:
-			for e in UP[c]:
-				q = e[1]
-				if (dfr and ((q >= k and q < b) or q < f)) or (not dfr and q <= k):
-					w = measure(e[0])
-					if v - w > bv:
-						bv = v - w
-						bd = e[0]
-						bq = q
-						bl = False
-		if bd != None:
-			swap(bd)
-			if wf != None:
-				t = wf[c - a]
-				wf[c - a] = wf[bq - a]
-				wf[bq - a] = t
-			# swapped with a lower neighbour: this cell got bigger (check its uppers), the
-			# neighbour smaller (check its lowers); the other way round for an upper one
-			if bl:
-				if MX[bq]:
-					work.append((bq, 0))
-				if MX[c]:
-					work.append((c, 1))
-			else:
-				if MX[bq]:
-					work.append((bq, 1))
-				if MX[c]:
-					work.append((c, 0))
-	if cur != k:
-		go(path[k][0], path[k][1])
+def cactus3_job(i, d, a):
+	# Band layout: the antidiagonals x + y = 3 mod 4 stay empty but for one connector cell each
+	# (at a field edge), so the field is a chain of 3-wide bands. In a band the low and high
+	# diagonals only touch the middle one: fixing a middle cell (swap with its largest lower or
+	# smallest upper neighbour until it fits) only ever improves the other cells, so one pass over
+	# the middles sorts a band. Each connector, with the cells either side of it along the edge,
+	# is a short chain (one cell beside it is left empty for that), sorted by one drone.
+	# The tables come from cactus_round.
+	n = get_world_size()
+	CN = CJ_S[0]
+	DR = CJ_S[1]
+	JC = CJ_S[2]
+	px = []
+	py = []
+	for g in range(CJ_S[3][i], CJ_S[3][i + 1]):
+		x = g // n
+		y = g % n
+		if x % 2 == 1:
+			y = n - 1 - y
+		if CJ_S[4][i]:
+			px.insert(0, x)
+			py.insert(0, y)
+		else:
+			px.append(x)
+			py.append(y)
+	L = len(px)
+	go(px[0], py[0])
+	tl = get_time()
+	for k in range(L):
+		x = px[k]
+		y = py[k]
+		if ((x + y) % 4 != 3 and not (x, y) in DR) or (x, y) in CN:
+			if get_entity_type() != Entities.Cactus:
+				clear_cell()
+				soil()
+				plant(Entities.Cactus)
+				tl = get_time()
+		elif get_entity_type() != None:
+			harvest()
+		if k < L - 1:
+			move(step_dir(x, y, px[k + 1], py[k + 1]))
+	# back along the path: fix the middles
+	k = L - 1
+	while k >= 0:
+		x = px[k]
+		y = py[k]
+		if (x + y) % 4 == 1 and not (x, y) in JC and not (x, y) in DR:
+			f = (x < n - 1 and not (x + 1, y) in DR, y < n - 1 and not (x, y + 1) in DR, x > 0 and not (x - 1, y) in DR, y > 0 and not (x, y - 1) in DR)
+			while True:
+				h = measure()
+				e = h
+				if f[0]:
+					e = measure(East)
+					while e == None:
+						e = measure(East)
+				nn = h
+				if f[1]:
+					nn = measure(North)
+					while nn == None:
+						nn = measure(North)
+				w = h
+				if f[2]:
+					w = measure(West)
+					while w == None:
+						w = measure(West)
+				s = h
+				if f[3]:
+					s = measure(South)
+					while s == None:
+						s = measure(South)
+				if w > s:
+					if w > h:
+						swap(West)
+						continue
+				elif s > h:
+					swap(South)
+					continue
+				if e < nn:
+					if e < h:
+						swap(East)
+						continue
+				elif nn < h:
+					swap(North)
+					continue
+				break
+		if a and (x + 2 * y) % 5 == 0 and num_items(Items.Weird_Substance) >= 1 and get_entity_type() == Entities.Cactus:
+			# a weird round: weird substance turns this cactus and its neighbours (the centres
+			# cover the field once)
+			use_item(Items.Weird_Substance)
+		if k > 0:
+			move(step_dir(px[k], py[k], px[k - 1], py[k - 1]))
+		k -= 1
+	# junction chains: passes back and forth until one makes no swap
+	for ch in CJ_S[5][i]:
+		go(ch[0][0], ch[0][1])
+		m = len(ch)
+		j = 0
+		st = 1
+		lo = m
+		hi = -1
+		while True:
+			v4 = ch[j][2]
+			while True:
+				h = measure()
+				while h == None:
+					h = measure()
+				v = [h, h, h, h]
+				for dd in range(4):
+					if v4[dd]:
+						z = measure(DIRS[dd])
+						while z == None:
+							z = measure(DIRS[dd])
+						v[dd] = z
+				# v: north, east, south, west
+				if v[0] < v[1]:
+					mlo = v[0]
+					dl = 0
+				else:
+					mlo = v[1]
+					dl = 1
+				if v[2] > v[3]:
+					mhi = v[2]
+					dh = 2
+				else:
+					mhi = v[3]
+					dh = 3
+				dd = -1
+				if h - mlo >= mhi - h:
+					if h > mlo:
+						dd = dl
+				elif mhi > h:
+					dd = dh
+				if dd < 0:
+					break
+				swap(DIRS[dd])
+				lo = m
+				hi = -1
+				# the cell behind got the other value: follow it there
+				b = j - st
+				if b >= 0 and b < m and ch[b][0] == ch[j][0] + DX[dd] and ch[b][1] == ch[j][1] + DY[dd]:
+					move(DIRS[dd])
+					j = b
+					v4 = ch[j][2]
+			if j < lo:
+				lo = j
+			if j > hi:
+				hi = j
+			if lo == 0 and hi == m - 1:
+				break
+			if j + st < 0 or j + st >= m:
+				st = -st
+			go(ch[j + st][0], ch[j + st][1])
+			j += st
+	tl += 1.0
+	while get_time() < tl:
+		pass
+	return 0
 
 
 def bd_job(i, d, x):
@@ -1856,17 +2021,152 @@ def bd_job(i, d, x):
 
 
 def bd_cells_n():
-	# cactus in one round, for yield estimates (cells squared times the cactus multiplier)
-	return len(bd_plan(get_world_size(), drones())[0])
+	# cactus in one round of the 3-wide band layout, for yield estimates (cells squared times the
+	# cactus multiplier): the field less the empty diagonals, plus a connector in each and less
+	# the cell left empty beside each connector that is not in a corner
+	n = get_world_size()
+	c = n * n
+	q = 3
+	while q <= 2 * n - 2:
+		if q <= n - 1:
+			c -= q
+		else:
+			c -= 2 * n - 2 - q
+		if q != n - 1:
+			c -= 1
+		q += 4
+	return c
 
 
 def cactus_round(weird):
+	global CJ_N
+	global CJ_S
 	d = drones()
-	pl = bd_plan(get_world_size(), d)
-	fan(bd_job, 0, d, d, (pl, weird))
-	# drone 0 ended its walk back on a cactus of the snake
-	if get_entity_type() != Entities.Cactus:
-		go(pl[0][0][0], pl[0][0][1])
+	n = get_world_size()
+	if CJ_N != n * 100 + d:
+		# the band layout, worked out once per field size: connectors, the cells left empty beside
+		# them, the junction chains and each drone's path with what to do on every cell
+		CJ_N = n * 100 + d
+		CN = {}
+		DR = {}
+		CH = []
+		q = 3
+		while q <= 2 * n - 2:
+			if (q // 4) % 2 == 0:
+				if q < n - 1:
+					c = (0, q)
+					DR[(1, q)] = True
+					ch = [(0, q - 2), (0, q - 1), c, (0, q + 1), (1, q + 1), (0, q + 2)]
+				elif q == n - 1:
+					c = (0, q)
+					ch = [(0, q - 2), (0, q - 1), c, (1, q), (2, q)]
+				else:
+					x0 = q - n + 1
+					c = (x0, n - 1)
+					DR[(x0, n - 2)] = True
+					ch = [(x0 - 1, n - 2), (x0 - 2, n - 1), (x0 - 1, n - 1), c, (x0 + 1, n - 1), (x0 + 2, n - 1)]
+			else:
+				if q < n - 1:
+					c = (q, 0)
+					DR[(q, 1)] = True
+					ch = [(q - 2, 0), (q - 1, 0), c, (q + 1, 0), (q + 1, 1), (q + 2, 0)]
+				elif q == n - 1:
+					c = (q, 0)
+					ch = [(q - 2, 0), (q - 1, 0), c, (q, 1), (q, 2)]
+				else:
+					y0 = q - n + 1
+					c = (n - 1, y0)
+					DR[(n - 2, y0)] = True
+					ch = [(n - 2, y0 - 1), (n - 1, y0 - 2), (n - 1, y0 - 1), c, (n - 1, y0 + 1), (n - 1, y0 + 2)]
+			CN[c] = True
+			CH.append(ch)
+			q += 4
+		JC = {}
+		for ch in CH:
+			for b in ch:
+				JC[b] = True
+		# paths: the field's column-by-column snake (cell g is column g // n) cut into one stretch
+		# per drone; each drone ends where its stretch started (plant out, fix back), or walks it
+		# the other way round to end next to its junction. Junction drones get shorter stretches.
+		N = n * n
+		CUT = []
+		for t in range(d + 1):
+			CUT.append(t * N // d)
+		HAS = []
+		CO = []
+		for it in range(2):
+			RV = []
+			OWN = []
+			for t in range(d):
+				RV.append(False)
+				OWN.append([])
+			for c in range(len(CH)):
+				ch = CH[c]
+				best = None
+				for e in [0, len(ch) - 1]:
+					cx = ch[e][0]
+					cy = ch[e][1]
+					if it > 0:
+						t0 = CO[c]
+						ts = [t0]
+					else:
+						g = cx * n + cy
+						if cx % 2 == 1:
+							g = cx * n + n - 1 - cy
+						t0 = g * d // N
+						ts = range(max(0, t0 - 1), min(d, t0 + 2))
+					for t in ts:
+						for r in [False, True]:
+							if len(OWN[t]) > 0 and r != RV[t]:
+								continue
+							g = CUT[t]
+							if r:
+								g = CUT[t + 1] - 1
+							ex = g // n
+							ey = g % n
+							if ex % 2 == 1:
+								ey = n - 1 - ey
+							ax = abs(cx - ex)
+							ay = abs(cy - ey)
+							cost = min(ax, n - ax) + min(ay, n - ay) + 1000 * len(OWN[t])
+							if best == None or cost < best[0]:
+								best = (cost, t, r, e)
+				t = best[1]
+				RV[t] = best[2]
+				if it == 0:
+					CO.append(t)
+				cells = ch
+				if best[3] > 0:
+					cells = []
+					for b in ch:
+						cells.insert(0, b)
+				OWN[t].append(cells)
+			if it > 0:
+				break
+			# junction drones get CJ_D cells less per junction
+			k = len(CH)
+			acc = 0
+			for t in range(d):
+				acc += (N + CJ_D * k) / d - CJ_D * len(OWN[t])
+				CUT[t + 1] = min(N, (acc + 0.5) // 1)
+			CUT[d] = N
+		for t in range(d):
+			cl2 = []
+			for cells in OWN[t]:
+				# the neighbours each chain cell has to be kept in order with: north, east, south, west
+				cl = []
+				for b in cells:
+					v = []
+					for dd in range(4):
+						x2 = b[0] + DX[dd]
+						y2 = b[1] + DY[dd]
+						v.append(x2 >= 0 and x2 < n and y2 >= 0 and y2 < n and (((x2 + y2) % 4 != 3 and not (x2, y2) in DR) or (x2, y2) in CN))
+					cl.append((b[0], b[1], v))
+				cl2.append(cl)
+			OWN[t] = cl2
+		CJ_S = (CN, DR, JC, CUT, RV, OWN)
+	fan(cactus3_job, 0, d, d, weird)
+	go(0, 0)
 	harvest()
 
 
@@ -4168,6 +4468,9 @@ def carrots_for(n):
 
 
 WSB = 60000
+CJ_N = 0
+CJ_S = 0
+CJ_D = 12
 
 
 def farm(item, amount):
@@ -4179,7 +4482,14 @@ def farm(item, amount):
 		n = with_seeds({item: amount})
 		mixed_round((n, n))
 	elif item == Items.Pumpkin:
-		carrots_for(cells * 2 * lvl_mult(Unlocks.Pumpkins))
+		m = lvl_mult(Unlocks.Pumpkins)
+		c = cells * 2 * m
+		if num_items(Items.Carrot) < c:
+			# the seeds of every round this purchase still needs in one go: carrot passes between
+			# pumpkin rounds start on a cleared field
+			k = (amount - num_items(Items.Pumpkin)) // (cells * min(get_world_size(), 6) * m) + 1
+			c = max(c, k * cells * m * 1.1)
+		carrots_for(c)
 		pumpkin_round(amount)
 		e7 = get_cost(Unlocks.Expand)[Items.Pumpkin]
 		if num_unlocked(Unlocks.Expand) == 6 and num_items(Items.Pumpkin) >= e7 and num_items(Items.Pumpkin) < e7 + PK_RES:
@@ -4438,11 +4748,11 @@ PLAN = [
 	(Unlocks.Expand, 4),
 	(Unlocks.Sunflowers, 1),
 	(Unlocks.Speed, 4),
+	(Unlocks.Watering, 3),
 	(Unlocks.Fertilizer, 1),
 	(Unlocks.Trees, 3),
 	(Unlocks.Mazes, 1),
 	(Unlocks.Megafarm, 1),
-	(Unlocks.Watering, 3),
 	(Unlocks.Grass, 4),
 	(Unlocks.Watering, 4),
 	(Unlocks.Speed, 5),
