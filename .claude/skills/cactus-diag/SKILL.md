@@ -99,17 +99,25 @@ drone's last action. All four tools read the same traces as `cactus_diag.py`.
   waste on the drone the harvest waits for, capped by its lead over the next drone and by its
   growth wait; and the harvest saved if the pattern were removed on every drone at once.
 
+Both growth and the round-A harvester are handled in `growth.py`, which all four tools (and
+`cactus_diag.py --chunks`) use:
+- A drone's growth finish is when the last cactus it planted actually grew. The cactus is followed
+  through swaps, because growth belongs to the cactus, not the cell.
+- The round-A harvester's `harvest()` lands exactly on the harvest time, and it counts as that
+  drone's done event. An earlier version dropped it and made round A look balanced to 8 ms.
+
 On the post8 entry (7.057 s, 128 seeds):
-- **Lead of the head drone over the next:** round A 8 ms (10 ms to the 3rd), round B 28 ms.
-- **Who is head of line:** in round A, `w16` (the spawn-tree root, which spawns three drones
-  before it moves and arrives last at 1.01 s) in 81 of 128 runs. In round B, a different owner
-  drone each run, usually ending in `fsSW_NE` or `own`.
-- **Linter results:** no static findings, no equal or undone swaps, no double tills. Over all
-  drones there are 69 detour moves per run (D2), 39 moves after the last work (D8) and 28 visits
-  that could be skipped (D10, never wrong on any seed). Only 2-4 ms of harvest time comes from
-  each of these patterns even if it were removed on every drone, because nearly all of it happens
-  inside a growth wait.
-- The chain everyone waits for is floor work: moves, plants and tills along the planting walk.
+- **Lead of the head drone over the next:** round A 39 ms (60 to the 3rd), round B 37 ms. In
+  224 of 256 rounds the head drone is bound by its tail rather than its growth.
+- **Round A:** the head drone runs 182 ms past its growth wait. That tail is mostly moves and
+  `fSW_NE`/`fsSW_NE` swaps.
+- **Round B:** the head runs 226 ms past its growth wait, mostly `hlp` walking and `fsSW_NE`
+  swaps.
+- **Oracle:** with `fSW_NE` swaps costing 1 tick in a copy of the simulator, the score improves
+  by -0.084 ± 0.006 s (256 paired seeds). So tail fix work is the hot path everyone waits for.
+- **Linter:** no static findings, no equal or undone swaps, no double tills. Removing each
+  pattern on every drone would save 20 ms (detours, D2), 12 ms (known-value visits, D10) and
+  11 ms (moves after the last work, D8).
 
 ## Findings for the shipped entry (g5, 7.44 s), 48 seeds
 

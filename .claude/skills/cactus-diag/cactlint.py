@@ -18,6 +18,9 @@ Dynamic checks (cactus-diag traces, every drone's real cells and values):
 Findings are grouped by source line and reported as actions (200 ticks) saved per run.
 """
 import sys, re, collections
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import growth as GB
 
 N = 32
 DX = {0: (0, 1), 1: (1, 0), 2: (0, -1), 3: (-1, 0)}  # North East South West
@@ -114,6 +117,9 @@ def add(check, line, saved, run, t=None, d=None):
 
 
 ACT_S = 200 / 6075.0
+cur_rows = [[]]
+
+
 GROW = 0.9676
 
 
@@ -125,7 +131,7 @@ def settle_run(ev, harvests):
     for e in ev:
         if e[6] != 200 or e[2] == 'end':
             continue
-        r = 0 if e[0] < hb[0] else 1
+        r = 0 if e[0] < hb[0] or (e[0] == hb[0] and e[2] == 'harvest') else 1
         key = (e[1], r)
         # round A: a drone is done at its signal (water / the harvest); later moves are pre-travel
         if (r == 1 and e[2] != 'harvest') or (r == 0 and e[2] in ('use', 'harvest')):
@@ -133,7 +139,9 @@ def settle_run(ev, harvests):
         if e[2] == 'plant':
             last_plant[key] = max(last_plant.get(key, 0), e[0] + ACT_S)
     for r in (0, 1):
-        fin = {d: max(a, last_plant.get((d, rr), 0) + GROW) for (d, rr), a in last_act.items() if rr == r and (d, rr) in last_plant}
+        gb = GB.grown_by(cur_rows[0], hb[r - 1] if r else 0.0, hb[r])
+        gd = {d: (gb.get(d) or last_plant[(d, rr)] + GROW) for (d, rr) in last_plant if rr == r}
+        fin = {d: max(a, gd[d]) for (d, rr), a in last_act.items() if rr == r and (d, rr) in last_plant}
         if len(fin) < 2:
             continue
         order = sorted(fin, key=lambda d: -fin[d])
@@ -145,7 +153,7 @@ def settle_run(ev, harvests):
                 mine_ = [f for f in run_log if f[0] == chk and f[4] == d and (0 if f[3] < hb[0] else 1) == r]
                 b_ = sum(f[2] for f in mine_ if f[3] < lp_) * ACT_S
                 a_ = sum(f[2] for f in mine_ if f[3] >= lp_) * ACT_S
-                newfin[d] = max(last_act[(d, r)] - a_ - b_, lp_ - b_ + GROW) if (d, r) in last_act else 0
+                newfin[d] = max(last_act[(d, r)] - a_ - b_, gd[d] - b_) if (d, r) in last_act else 0
             allfix[chk] += max(fin.values()) - max(newfin.values())
         head, second = order[0], fin[order[1]]
         hol_meta[f'head{r}:{head}'] += 1
@@ -156,7 +164,7 @@ def settle_run(ev, harvests):
             continue
         before = sum(f[2] for f in mine if f[3] < lp) * ACT_S
         after = sum(f[2] for f in mine if f[3] >= lp) * ACT_S
-        cap_after = max(0.0, fin[head] - max(second, lp + GROW))
+        cap_after = max(0.0, fin[head] - max(second, gd[head]))
         got_after = min(after, cap_after)
         got_before = min(before, max(0.0, fin[head] - second - got_after))
         for f in mine:
@@ -169,6 +177,7 @@ def settle_run(ev, harvests):
 for run, fn in enumerate(traces):
     run_log.clear()
     ev = []
+    cur_rows[0] = GB.plants_grown(fn)
     for l in open(fn):
         p = l.rstrip('\n').split('\t')
         if p[0] != 'E':

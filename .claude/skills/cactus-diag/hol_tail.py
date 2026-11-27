@@ -2,6 +2,10 @@
 work the harvest waits for), by function, kind and line.
     python3 hol_tail.py ENTRY.py N TRACES..."""
 import sys, re, collections, statistics as st
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import growth as GB
+
 entry=sys.argv[1]; src=open(entry).read().split('\n')
 func_of={}; stack=[]
 for i,l in enumerate(src,1):
@@ -14,21 +18,26 @@ for i,l in enumerate(src,1):
 ACT=200/6075.0; GROW=0.9676; TOP=int(sys.argv[2]); files=sys.argv[3:]
 B=collections.defaultdict(float); L=collections.defaultdict(float); n=0
 for fn in files:
-    ev=[]
+    ev=[]; pc=[]; G=[]
     for l in open(fn):
         p=l.rstrip('\n').split('\t')
+        if p[0]=='G': G.append((float(p[1]),int(p[3]),int(p[4]))); continue
+        if p[0]=='E' and p[3]=='plant' and p[7]=='200': pc.append((float(p[1]),int(p[2]),int(p[4]),int(p[5])))
         if p[0]=='E': ev.append((float(p[1]),int(p[2]),p[3],int(p[7]),int(p[8].split(':')[1]) if ':' in p[8] else 0,p[9] if len(p)>9 else ''))
     hv=[e[0] for e in ev if e[2]=='harvest' and e[5] and float(e[5])>1e6]
+    _rows=GB.plants_grown(fn)
     for r,(lo,hi) in enumerate(((0,hv[0]),(hv[0],hv[1]))):
         la,lp={},{}
         for e in ev:
-            if not (lo<=e[0]<hi and e[3]==200): continue
+            if not (lo<=e[0]<=hi and e[3]==200): continue
+            if e[0]==hi and not (r==0 and e[2]=='harvest'): continue
             if e[2]=='plant': lp[e[1]]=max(lp.get(e[1],0),e[0]+ACT)
             if e[2]!='end' and (r==1 and e[2]!='harvest' or r==0 and e[2] in ('use','harvest')):
                 la[e[1]]=max(la.get(e[1],0),e[0]+ACT)
-        fin={d:max(la[d],lp[d]+GROW) for d in la if d in lp}
+        gb=GB.grown_by(_rows,lo,hi); gd={d:(gb.get(d) or lp[d]+GROW) for d in lp}
+        fin={d:max(la[d],gd[d]) for d in la if d in lp}
         for h in sorted(fin,key=fin.get,reverse=True)[:TOP]:
-            g=lp[h]+GROW
+            g=gd[h]
             if la[h]<=g: continue
             es=[e for e in ev if e[1]==h and lo<=e[0]<la[h]]
             for i,e in enumerate(es):

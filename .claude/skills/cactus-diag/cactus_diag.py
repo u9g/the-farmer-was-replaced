@@ -11,6 +11,9 @@ t is the game time the side effect was applied. extra: plant -> value planted, s
 the drone's cell and the neighbour before the swap, harvest -> cactus gained.
 """
 import sys, re, collections, statistics as st
+import os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import growth as GB
 
 ACTIONS = {"move", "swap", "plant", "till", "harvest", "use", "spawn"}
 # a drone's chunk routine: fa<N> / fb<N> (g3 entries) or w<N> (one function per drone, g5)
@@ -243,8 +246,10 @@ def chunks(paths, entry):
         by = collections.defaultdict(list)
         for e in ev:
             by[e[1]].append(e)
+        own_rows = GB.plants_grown(path)
         for ri in range(2):
             a, b = bounds[ri], bounds[ri + 1]
+            own_grown = GB.grown_by(own_rows, a, b)
             rows = []
             for d, es in by.items():
                 es = [e for e in es if a <= e[0] < b and e[2] in ACTIONS and e[2] != "harvest"]
@@ -259,11 +264,10 @@ def chunks(paths, entry):
                 if sig:
                     f = sig[0]
                 else:
-                    # round B: work done and the last of the drone's own plants grown (a watered
-                    # last plant grows sooner than lp + 1, and the early exit skips the wait)
-                    mine = {(e[3], e[4]) for e in plants}
-                    g = [t for t, x, y in grown if a <= t <= b and (x, y) in mine]
-                    f = max(es[-1][0] + act, max(g) if g else lp + 1.0)
+                    # round B: work done and the last cactus the drone planted grown, followed
+                    # through swaps (a watered last plant grows sooner than lp + 1)
+                    g = own_grown.get(d)
+                    f = max(es[-1][0] + act, g if g else lp + 1.0)
                 rows.append((f - a, rn))
                 fin[ri][rn].append(f - a)
                 lastp[ri][rn].append(lp - a)
