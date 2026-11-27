@@ -1,0 +1,250 @@
+
+warning: unnecessary parentheses around assigned value
+     --> tfwr_sim.rs:11949:21
+      |
+11949 |             let c = (*b.op());
+      |                     ^       ^
+      |
+help: remove these parentheses
+      |
+11949 -             let c = (*b.op());
+11949 +             let c = *b.op();
+      |
+
+warning: unnecessary parentheses around assigned value
+     --> tfwr_sim.rs:11999:25
+      |
+11999 |                 let c = (*b.op());
+      |                         ^       ^
+      |
+help: remove these parentheses
+      |
+11999 -                 let c = (*b.op());
+11999 +                 let c = *b.op();
+      |
+
+warning: unnecessary parentheses around assigned value
+     --> tfwr_sim.rs:12421:29
+      |
+12421 |                     let c = (*b.op());
+      |                             ^       ^
+      |
+help: remove these parentheses
+      |
+12421 -                     let c = (*b.op());
+12421 +                     let c = *b.op();
+      |
+
+note: save.json not found, starting with nothing unlocked
+run_reset.py with 8 runs from seed 1: 24:45 25:43 25:04 25:02 25:43 25:08 25:08 25:05
+
+Profile of run_reset.py: mean of 8 runs, 25:12 each
+
+The main drone's time is the run's time (the run ends when it does). Where it went:
+  move 10:23 (41%), harvest 4:58 (20%), plant 3:15 (13%), polling 2:48 (11%), compute 1:57 (8%), wait_for 28.9s (2%), use_item 23.0s (2%), reads 17.2s (1%), till 17.1s (1%), swap 13.8s (1%), other actions 6.2s (0%), spawn_drone 4.7s (0%)
+  its wait_for time, by the function the awaited drone runs: pk_job 9.8s, cactus3_job 5.6s, mixed_job 4.0s, fan 3.1s, bd_job 2.0s, fly 1.5s, spawn_node 0.7s, sun_plant2 0.6s
+  (wait_for is the main drone finishing its own share first: uneven shares or one slow worker)
+
+All drones: 2.35 drone-hours of capacity (drone limit x time), 71% of it used. Where it went:
+  no drone (limit not used) 41:34 (29%), move 34:53 (25%), polling 31:08 (22%), plant 10:29 (7%), harvest 8:00 (6%), compute 7:39 (5%), swap 2:15 (2%), use_item 1:47 (1%), reads 1:29 (1%), wait_for 1:03 (1%), till 39.2s (0%), spawn_drone 14.3s (0%), other actions 6.2s (0%)
+
+Unlocks. took = time since the previous unlock; last item = the cost item that was last to be on hand;
+slack = how long the whole cost was on hand before the script bought it; drones = drones running on average
+(of the limit); no power = time with sunflowers unlocked but no power in stock, every drone at half speed;
+main = the main drone's split; phase = the deepest function the main drone spent half the stretch in.
+        at    took  unlock             last item         slack       drones no power  main: act / compute / poll / wait    phase  [workers]
+     26.2s   26.2s  Plant              hay                0.0s   1.0 of 1          -   96% /   4% /   0% /   0%            opening
+     41.8s   15.7s  Expand 1           hay                0.0s   1.0 of 1          -   99% /   1% /   0% /   0%            opening
+     52.9s   11.1s  Speed 1            hay                0.4s   1.0 of 1          -   96% /   4% /   0% /   0%            <run_reset.py>
+      1:23   29.9s  Expand 2           wood               0.4s   1.0 of 1          -   81% /   9% /  10% /   0%            opening
+      1:49   26.0s  Speed 2            wood               1.3s   1.0 of 1          -   97% /   3% /   0% /   0%            <run_reset.py>
+      2:19   30.1s  Carrots 1          wood               1.1s   1.0 of 1          -   97% /   3% /   0% /   0%            <run_reset.py>
+      3:40    1:22  Speed 3            carrot             0.6s   1.0 of 1          -   89% /  11% /   0% /   0%            tend_fast
+      4:14   33.6s  Expand 3           wood               0.5s   1.0 of 1          -   88% /  12% /   0% /   0%            spawn_node
+      4:31   16.5s  Grass 2            hay                0.6s   1.0 of 1          -   93% /   7% /   0% /   0%            mixed_job
+      5:29   58.5s  Trees 1            carrot             0.7s   1.0 of 1          -   93% /   7% /   0% /   0%            spawn_node
+      5:43   14.0s  Watering 1         wood               0.6s   1.0 of 1          -   92% /   8% /   0% /   0%            mixed_job
+      5:45    2.0s  Trees 2            hay                0.4s   1.0 of 1          -   89% /  10% /   0% /   0%            mixed_job
+      6:00   14.7s  Watering 2         wood               0.4s   1.0 of 1          -   92% /   8% /   0% /   0%            mixed_job
+      6:15   15.1s  Carrots 2          wood               0.3s   1.0 of 1          -   92% /   7% /   0% /   0%            spawn_node
+      7:27    1:12  Carrots 3          wood               0.5s   1.0 of 1          -   94% /   6% /   0% /   0%            mixed_job
+      7:58   31.3s  Grass 3            wood               0.5s   1.0 of 1          -   94% /   6% /   0% /   0%            spawn_node
+      8:07    8.5s  Sunflowers         carrot             0.5s   1.0 of 1          -   92% /   7% /   0% /   0%            spawn_node
+      8:30   23.0s  Expand 4           wood               0.2s   1.0 of 1      10.5s   86% /   6% /   8% /   0%            power_mini
+      9:17   47.6s  Speed 4            carrot             0.6s   1.0 of 1       2.9s   95% /   5% /   0% /   0%            mixed_job
+      9:28   11.0s  Fertilizer 1       wood               0.5s   1.0 of 1       1.4s   91% /   6% /   3% /   0%            mixed_job
+      9:39   10.4s  Trees 3            hay                0.3s   1.0 of 1          -   94% /   6% /   0% /   0%            spawn_node
+     10:07   28.1s  Mazes 1            weird_substance    5.6s   1.0 of 1          -   94% /   4% /   2% /   0%            spawn_node
+     10:07    0.1s  Watering 3         -                  0.1s   1.0 of 1          -   79% /  21% /   0% /   0%            buy
+     10:55   48.1s  Megafarm 1         gold               0.5s   1.0 of 1          -   87% /   7% /   6% /   0%            mz_serve
+     11:11   16.2s  Watering 4         wood               0.4s   2.0 of 2          -   89% /  10% /   0% /   1%            tend_plain  [mixed_job 100%]
+     11:29   17.7s  Grass 4            wood               0.5s   2.0 of 2          -   88% /  11% /   0% /   1%            mixed_ham  [mixed_job 100%]
+     11:30    1.1s  Speed 5            carrot             0.2s   1.9 of 2          -   78% /  13% /   1% /   9%            mixed_ham  [mixed_job 100%]
+     11:35    4.3s  Pumpkins 1         carrot             0.2s   2.0 of 2          -   86% /  13% /   0% /   1%            mixed_ham  [mixed_job 100%]
+     12:03   28.9s  Expand 5           pumpkin            0.0s   1.9 of 2          -   84% /  10% /   3% /   3%            pk_pass  [pk_job 69%, mixed_job 28%]
+     12:19   15.4s  Trees 4            hay                2.5s   2.0 of 2          -   83% /   9% /   7% /   2%            mixed_ham  [mixed_job 86%]
+     12:39   19.9s  Carrots 4          wood               6.8s   2.0 of 2       2.4s   68% /   9% /  21% /   2%            power_round2  [mixed_job 47%, sun_cut2 34%]
+     12:49   10.5s  Pumpkins 2         carrot             0.4s   2.0 of 2          -   79% /   9% /  10% /   2%            mixed_ham  [mixed_job 80%, sun_cut2 15%]
+     13:21   32.1s  Polyculture 1      pumpkin            0.0s   2.0 of 2          -   83% /  10% /   0% /   7%            pk_pass  [pk_job 84%, mixed_job 16%]
+     13:36   14.2s  Grass 5            wood               0.5s   2.0 of 2          -   87% /  12% /   0% /   1%            tend_fm  [mixed_job 100%]
+     13:47   11.8s  Watering 5         wood               0.5s   2.0 of 2          -   87% /  11% /   0% /   2%            tend_fm  [mixed_job 100%]
+     13:48    0.8s  Pumpkins 3         carrot             0.1s   1.9 of 2          -   80% /  13% /   0% /   6%            tend_fm  [mixed_job 100%]
+     14:01   12.6s  Trees 5            hay                0.5s   2.0 of 2          -   82% /  10% /   4% /   3%            tend_fm  [mixed_job 87%]
+     14:15   14.7s  Carrots 5          wood               0.5s   2.0 of 2          -   88% /  11% /   0% /   1%            tend_fm  [mixed_job 100%]
+     14:38   22.9s  Watering 6         wood               0.6s   2.0 of 2          -   88% /  10% /   0% /   1%            tend_fm  [mixed_job 100%]
+     14:39    0.2s  Pumpkins 4         carrot             0.1s   1.7 of 2          -   71% /  23% /   1% /   5%            mixed_ham  [mixed_job 100%]
+     15:24   45.6s  Megafarm 2         gold               0.2s   2.0 of 2          -   58% /  11% /  31% /   0%            mz_serve  [mz_life 96%]
+     15:38   13.9s  Cactus 1           pumpkin            0.0s   3.8 of 4          -   70% /   9% /  14% /   6%            fan  [pk_job 48%, sun_cut2 27%]
+     15:52   14.2s  Expand 6           pumpkin            0.0s   3.7 of 4          -   75% /  10% /   6% /   8%            pk_pass  [pk_job 77%, mixed_job 22%]
+     16:28   35.9s  Pumpkins 5         carrot             0.9s   4.0 of 4          -   87% /   9% /   2% /   1%            tend_fm  [mixed_job 94%]
+     16:49   21.0s  Cactus 2           pumpkin            0.0s   3.8 of 4          -   79% /  10% /   4% /   6%            pk_pass  [pk_job 70%, mixed_job 20%]
+     16:58    9.1s  Mazes 2            cactus             0.0s   3.5 of 4          -   61% /  13% /  22% /   4%            cactus_round  [bd_job 48%, sun_cut2 37%]
+     17:26   27.5s  Mazes 3            cactus             0.0s   3.5 of 4          -   69% /  10% /  14% /   7%            bd_job  [bd_job 83%, sun_cut2 12%]
+     17:54   28.3s  Megafarm 3         gold               0.0s   4.0 of 4          -   53% /  13% /  34% /   0%            mz_serve3  [mz_life 100%]
+     18:35   40.9s  Megafarm 4         gold               0.2s   7.9 of 8          -   23% /  11% /  65% /   0%            mz_serve3  [mz_kidq 57%, mz_life 43%]
+     19:07   31.5s  Expand 7           pumpkin            0.0s  13.7 of 16         -   56% /  10% /  21% /  14%            pumpkin_round  [pk_job 56%, mixed_seg 19%]
+     19:07    0.0s  Dinosaurs 1        -                  0.0s   1.0 of 16         -   78% /  22% /   0% /   0%            buy
+     19:11    4.7s  Dinosaurs 2        cactus             0.0s  13.5 of 16         -   59% /  12% /   4% /  25%            cactus3_job  [cactus3_job 97%]
+     19:49   37.2s  Cactus 3           pumpkin            0.0s  15.1 of 16         -   62% /   7% /  22% /   8%            pk_job  [pk_job 73%, mixed_job 25%]
+     19:52    3.3s  Dinosaurs 3        cactus             0.0s  13.4 of 16         -   63% /  15% /   1% /  21%            cactus3_job  [cactus3_job 97%]
+     20:13   20.9s  Dinosaurs 4        cactus            10.7s  14.9 of 16         -   63% /  14% /  13% /  11%            cactus3_job  [cactus3_job 99%]
+     20:13    0.0s  Mazes 4            -                  0.0s   1.0 of 16         -   76% /  24% /   0% /   0%            buy
+     21:01   48.5s  Dinosaurs 5        cactus             0.0s  15.1 of 16         -   67% /  14% /  12% /   7%            cactus3_job  [cactus3_job 91%]
+     25:12    4:11  Leaderboard        gold               0.1s   7.0 of 16         -   63% /  10% /  26% /   1%            play  [sun_cut2 93%]
+     25:12    0.0s  (script ends)      -                  0.0s   0.2 of 16         -    0% /  94% /   6% /   0%            buy
+  total slack 42.6s (3% of the run); total time without power 17.3s (1% of the run)
+
+Functions on the main drone's path, by its time in them (callees included); self = time in the function's own code.
+  function                     incl           self   self is
+  <run_reset.py>              25:13  100%     0.9s   compute 100%
+  run_plan                    22:53   91%     3.0s   wait_for 84%, compute 13%, reads 2%
+  farm                        11:46   47%     0.2s   compute 78%, reads 22%
+  spawn_node                  11:13   45%     4.9s   wait_for 44%, spawn_drone 30%, compute 26%
+  all_drones                  10:52   43%     0.0s   
+  mixed_round                 10:24   41%     0.0s   
+  mixed_job                   10:21   41%     2:53   move 92%, compute 7%
+  fan                          5:47   23%    21.3s   wait_for 80%, spawn_drone 13%, compute 7%
+  mz_life                      4:00   16%     0.0s   compute 88%, reads 12%
+  mz_life2                     4:00   16%     2.3s   polling 78%, plant 7%, use_item 7%, harvest 5%
+  mixed_ham                    3:14   13%     1:16   move 94%, compute 6%
+  dino_round                   2:34   10%     0.0s   other actions 71%, compute 25%, reads 4%
+  play                         2:34   10%     2:34   move 88%, compute 11%
+  maze_round                   2:30   10%     0.5s   wait_for 34%, spawn_drone 27%, other actions 24%, compute 15%
+  power_round                  2:30   10%     0.0s   reads 51%, compute 49%
+  mz_serve3                    2:26   10%     2:21   polling 71%, move 20%, compute 5%, reads 2%
+  power_round2                 2:20    9%     1.9s   compute 77%, wait_for 23%
+  opening                      2:19    9%     2:17   harvest 59%, move 20%, plant 14%, polling 2%
+  pumpkin_round                2:11    9%     4.5s   wait_for 86%, harvest 13%
+  sun_cut2                     2:00    8%    21.4s   polling 84%, harvest 15%
+  pk_job                       1:57    8%    12.3s   polling 94%, compute 3%, harvest 3%
+  pk_pass                      1:41    7%    49.0s   plant 43%, move 32%, harvest 9%, compute 7%
+  cactus_round                 1:40    7%     0.4s   harvest 98%
+  go_n                         1:30    6%     1:30   move 89%, compute 10%
+  tend_fm                      1:17    5%     1:17   plant 45%, harvest 42%, compute 9%, use_item 3%
+  mz_serve                     1:12    5%     1:09   move 67%, polling 20%, use_item 7%, compute 6%
+  cactus3_job                  1:05    4%    34.2s   move 43%, polling 25%, plant 22%, compute 4%
+  power_check                  1:04    4%     0.3s   compute 80%, reads 18%
+  tc                           1:01    4%     1:01   plant 45%, harvest 45%, till 7%, compute 3%
+  tt                          59.6s    4%    59.6s   plant 46%, harvest 45%, use_item 6%, compute 3%
+
+Functions by drone time in their own code, all drones (drone-seconds; capacity 2:21:15).
+  function                       all         on main   is
+  mz_serve3                    28:57   20%      2:21   polling 80%, move 13%, compute 3%
+  cactus3_job                  13:28   10%     34.2s   move 49%, plant 21%, polling 13%, swap 7%
+  go_n                         10:52    8%      1:30   move 89%, compute 10%
+  pk_pass                       5:44    4%     49.0s   plant 39%, move 29%, polling 12%, harvest 7%
+  tend_fm                       4:47    3%      1:17   plant 44%, harvest 40%, compute 8%, use_item 5%
+  mixed_job                     3:34    3%      2:53   move 93%, compute 7%
+  mixed_ham                     2:57    2%      1:16   move 94%, compute 6%
+  pk_job                        2:46    2%     12.3s   polling 99%
+  play                          2:34    2%      2:34   move 88%, compute 11%
+  opening                       2:17    2%      2:17   harvest 59%, move 20%, plant 14%, polling 2%
+  sun_cut2                      2:03    1%     21.4s   polling 84%, harvest 15%
+  mz_serve                      1:46    1%      1:09   move 63%, polling 23%, use_item 6%, compute 6%
+  cj_fix                        1:40    1%     14.7s   swap 70%, compute 24%, polling 5%, reads 2%
+  mz_explore3                   1:31    1%     11.2s   move 78%, compute 21%
+  tend_plain                    1:22    1%     41.2s   harvest 49%, plant 32%, compute 8%, till 6%
+  bd_job                        1:01    1%     15.9s   move 39%, plant 31%, polling 13%, use_item 6%
+  tc                            1:01    1%      1:01   plant 45%, harvest 45%, till 7%, compute 3%
+  tt                           59.6s    1%     59.6s   plant 46%, harvest 45%, use_item 6%, compute 3%
+  tend_fast                    58.4s    1%     58.4s   harvest 60%, plant 34%, compute 3%, till 2%
+  fan                          53.2s    1%     21.3s   wait_for 82%, spawn_drone 14%, compute 3%
+  tg                           44.2s    1%     44.2s   harvest 90%, till 5%, compute 3%
+  tend_mixed                   41.7s    0%      2.7s   plant 47%, harvest 36%, compute 15%
+  sun_plant2                   38.0s    0%      5.3s   plant 53%, use_item 35%, compute 10%
+  wsub_job                     29.6s    0%     27.8s   move 35%, harvest 31%, plant 15%, use_item 13%
+  mz_walk                      28.7s    0%      6.6s   move 91%, compute 9%
+
+Lines by the main drone's time (a gap of compute or waiting is booked to the line of the side effect that ends it).
+   run_reset:974     1:18    5%  t = measure()                                                polling 99%
+   run_reset:540    42.5s    3%  move(East)                                                   move 97%, compute 3%
+   run_reset:692    39.7s    3%  move(ds[q])                                                  move 93%, compute 7%
+  run_reset:1125    37.2s    2%  harvest()                                                    harvest 100%
+    run_reset:66    35.8s    2%  move(North)                                                  move 97%, compute 3%
+   run_reset:696    35.5s    2%  move(ds[q])                                                  move 97%, compute 3%
+   run_reset:374    31.9s    2%  harvest()                                                    harvest 97%, compute 3%
+   run_reset:600    31.3s    2%  move(North)                                                  move 98%, compute 2%
+    run_reset:69    30.9s    2%  move(South)                                                  move 97%, compute 3%
+   run_reset:611    30.2s    2%  move(North)                                                  move 99%
+   run_reset:609    30.2s    2%  move(North)                                                  move 99%
+  run_reset:5728    29.9s    2%  move(NEXT[ch])                                               move 91%, compute 9%
+  run_reset:5900    29.6s    2%  move(q)                                                      move 87%, compute 13%
+  run_reset:5525    28.7s    2%  if not move(ds[j]):                                          move 93%, compute 4%, wait_for 3%
+  run_reset:1165    27.9s    2%  if plant(Entities.Carrot):                                   plant 99%
+  run_reset:1162    27.8s    2%  harvest()                                                    harvest 99%
+  run_reset:1141    27.2s    2%  if plant(Entities.Tree):                                     plant 100%
+  run_reset:1140    27.1s    2%  harvest()                                                    harvest 99%
+   run_reset:390    26.8s    2%  if not plant(c):                                             plant 96%, compute 4%
+   run_reset:613    26.2s    2%  move(North)                                                  move 99%
+  run_reset:6114    25.1s    2%  harvest()                                                    harvest 99%
+  run_reset:5857    24.7s    2%  move(q)                                                      move 93%, compute 7%
+  run_reset:1113    20.0s    1%  if plant(c):                                                 plant 99%
+  run_reset:3817    20.0s    1%  move(RDIRS[p[i]])                                            move 94%, compute 6%
+  run_reset:1105    19.8s    1%  harvest()                                                    harvest 100%
+
+Lines by drone time, all drones.
+   run_reset:974    19:28   14%  t = measure()                                                polling 99%
+    run_reset:69     4:00    3%  move(South)                                                  move 97%, compute 3%
+    run_reset:66     3:52    3%  move(North)                                                  move 98%, compute 2%
+  run_reset:2813     3:32    3%  move(bdir[k])                                                move 93%, compute 7%
+  run_reset:2750     3:22    2%  move(fdir[k])                                                move 98%, compute 2%
+  run_reset:2744     2:40    2%  plant(Entities.Cactus)                                       plant 99%
+  run_reset:2358     2:32    2%  while get_entity_type() == Entities.Pumpkin:                 polling 100%
+   run_reset:962     1:56    1%  while c == last and get_time() < deadline:                   polling 99%
+  run_reset:2388     1:50    1%  plant(Entities.Pumpkin)                                      plant 99%
+  run_reset:1049     1:46    1%  move(RDIRS[k])                                               move 95%, compute 5%
+  run_reset:2394     1:45    1%  move(pdir[t])                                                move 96%, compute 4%
+   run_reset:692     1:45    1%  move(ds[q])                                                  move 93%, compute 7%
+   run_reset:374     1:44    1%  harvest()                                                    harvest 97%, compute 3%
+  run_reset:1947     1:43    1%  while get_time() < until:                                    polling 100%
+   run_reset:982     1:40    1%  move(DIRS[k])                                                move 98%
+   run_reset:390     1:34    1%  if not plant(c):                                             plant 97%, compute 3%
+  run_reset:2726     1:27    1%  while get_entity_type() == Entities.Cactus:                  polling 100%
+  run_reset:3006     1:19    1%  swap(DIRS[el[0]])                                            swap 88%, compute 12%
+   run_reset:696     1:11    1%  move(ds[q])                                                  move 97%, compute 3%
+    run_reset:58     1:10    1%  move(East)                                                   move 98%, compute 2%
+    run_reset:61    54.3s    1%  move(West)                                                   move 97%, compute 3%
+   run_reset:963    48.8s    1%  t = measure()                                                polling 66%, reads 33%
+    run_reset:54    47.7s    1%  dx = (tx - get_pos_x()) % n                                  compute 94%, reads 4%, polling 2%
+  run_reset:4441    46.1s    1%  move(DIRS[k])                                                move 89%, compute 11%
+  run_reset:2251    43.8s    1%  wait_for(h)                                                  wait_for 100%
+
+What-ifs: the same 8 seeds with one thing 20% better (time saved per run, paired by seed; ± is the standard error)
+                                            saves                   new time
+  as it is                                                          25:12
+  unlocks need 20% less wood                47.1s     3%  ± 8.0s    24:25
+  unlocks need 20% less carrot              38.0s     3%  ± 9.7s    24:34
+  unlocks need 20% less gold                36.4s     2%  ± 6.7s    24:36
+  plants grow 20% faster                    31.3s     2%  ± 7.1s    24:41
+  compute 20% faster (all but actions)      26.3s     2%  ± 8.5s    24:46
+  unlocks need 20% less hay                 19.0s     1%  ± 6.7s    24:53
+  unlocks need 20% less cactus              16.4s     1%  ± 0.7s    24:56
+  unlocks need 20% less pumpkin             11.5s     1%  ± 4.7s    25:01
+  power lasts 20% longer                     7.6s     1%  ± 3.8s    25:05
+  unlocks need 20% less bone                 4.0s     0%  ± 0.1s    25:08
+  unlocks need 20% less weird_substance      1.0s     0%  ± 3.5s    25:11
+  every tick 20% faster                     -0.0s    -0%  ± ?       25:12  [some runs failed: seed 1: the script had not ended after 7200s of game time; a leaderboard run only ends when every drone has returned; where the drones are:
+      drone 0 at (0,0): run_reset.py line 6114 `harvest()` in opening]
+  ("need less" divides every unlock's cost in that item: what making that item 20% faster is worth,
+  counting only what goes into unlocks, not an item spent to make another, such as cactus for bones)
+  (a saving near 0 can also mean the cut is smaller than one round of farming, such as one snake's bones)

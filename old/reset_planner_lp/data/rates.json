@@ -1,0 +1,770 @@
+[
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 0,
+"pumpkins": 1
+},
+31.64,
+{
+"hay": 136.0,
+"carrot": -264.0,
+"pumpkin": 1284.0,
+"weird": 12.0,
+"power": -41.56,
+"water": -110.0,
+"fert": -1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 0,
+"pumpkins": 2
+},
+31.0,
+{
+"hay": 136.0,
+"carrot": -536.0,
+"pumpkin": 2562.0,
+"weird": 30.0,
+"power": -41.29,
+"water": -114.0,
+"fert": -4.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 0,
+"pumpkins": 3
+},
+32.09,
+{
+"hay": 136.0,
+"carrot": -1100.0,
+"pumpkin": 5112.0,
+"weird": 72.0,
+"power": -41.41,
+"water": -110.0,
+"fert": -5.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 1,
+"pumpkins": 1
+},
+29.91,
+{
+"hay": 136.0,
+"carrot": -253.0,
+"pumpkin": 1281.0,
+"weird": 15.0,
+"power": -39.29,
+"water": -103.0,
+"fert": -3.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 1,
+"pumpkins": 2
+},
+30.57,
+{
+"hay": 136.0,
+"carrot": -508.0,
+"pumpkin": 2556.0,
+"weird": 36.0,
+"power": -39.57,
+"water": -111.0,
+"fert": -3.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 1,
+"pumpkins": 3
+},
+31.74,
+{
+"hay": 136.0,
+"carrot": -1092.0,
+"pumpkin": 5052.0,
+"weird": 132.0,
+"power": -41.14,
+"water": -108.0,
+"fert": -9.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 2,
+"pumpkins": 1
+},
+20.82,
+{
+"hay": 128.0,
+"carrot": -267.0,
+"pumpkin": 1221.0,
+"weird": 75.0,
+"power": -55.37,
+"water": -106.0,
+"fert": -29.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 2,
+"pumpkins": 2
+},
+21.41,
+{
+"hay": 128.0,
+"carrot": -522.0,
+"pumpkin": 2484.0,
+"weird": 108.0,
+"power": -55.14,
+"water": -105.0,
+"fert": -19.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 4,
+"megafarm": 2,
+"pumpkins": 3
+},
+21.84,
+{
+"hay": 128.0,
+"carrot": -1048.0,
+"pumpkin": 4968.0,
+"weird": 216.0,
+"power": -57.57,
+"water": -100.0,
+"fert": -23.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 0,
+"pumpkins": 1
+},
+53.25,
+{
+"hay": 252.0,
+"carrot": -477.0,
+"pumpkin": 2292.0,
+"weird": 12.0,
+"power": -70.25,
+"water": -197.0,
+"fert": -1.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 0,
+"pumpkins": 2
+},
+54.86,
+{
+"hay": 252.0,
+"carrot": -946.0,
+"pumpkin": 4590.0,
+"weird": 18.0,
+"power": -71.2,
+"water": -198.0,
+"fert": 2.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 0,
+"pumpkins": 3
+},
+55.47,
+{
+"hay": 252.0,
+"carrot": -1952.0,
+"pumpkin": 9168.0,
+"weird": 48.0,
+"power": -72.37,
+"water": -204.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 1,
+"pumpkins": 1
+},
+55.63,
+{
+"hay": 252.0,
+"carrot": -491.0,
+"pumpkin": 2289.0,
+"weird": 15.0,
+"power": -73.05,
+"water": -201.0,
+"fert": -4.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 1,
+"pumpkins": 2
+},
+56.73,
+{
+"hay": 252.0,
+"carrot": -990.0,
+"pumpkin": 4566.0,
+"weird": 42.0,
+"power": -75.55,
+"water": -206.0,
+"fert": -3.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 1,
+"pumpkins": 3
+},
+55.92,
+{
+"hay": 252.0,
+"carrot": -1972.0,
+"pumpkin": 9132.0,
+"weird": 84.0,
+"power": -73.89,
+"water": -202.0,
+"fert": -7.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 2,
+"pumpkins": 1
+},
+29.54,
+{
+"hay": 244.0,
+"carrot": -472.0,
+"pumpkin": 2262.0,
+"weird": 42.0,
+"power": -78.29,
+"water": -190.0,
+"fert": -15.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 2,
+"pumpkins": 2
+},
+27.37,
+{
+"hay": 244.0,
+"carrot": -946.0,
+"pumpkin": 4530.0,
+"weird": 78.0,
+"power": -72.0,
+"water": -193.0,
+"fert": -11.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 5,
+"megafarm": 2,
+"pumpkins": 3
+},
+29.46,
+{
+"hay": 244.0,
+"carrot": -1920.0,
+"pumpkin": 9084.0,
+"weird": 132.0,
+"power": -76.43,
+"water": -205.0,
+"fert": -12.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 0,
+"pumpkins": 1
+},
+123.29,
+{
+"hay": 576.0,
+"carrot": -1076.0,
+"pumpkin": 5172.0,
+"weird": 12.0,
+"power": -165.87,
+"water": -511.0,
+"fert": 8.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 0,
+"pumpkins": 2
+},
+129.89,
+{
+"hay": 576.0,
+"carrot": -2220.0,
+"pumpkin": 10362.0,
+"weird": 6.0,
+"power": -174.88,
+"water": -547.0,
+"fert": 11.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 0,
+"pumpkins": 3
+},
+125.39,
+{
+"hay": 576.0,
+"carrot": -4256.0,
+"pumpkin": 20652.0,
+"weird": 84.0,
+"power": -166.24,
+"water": -496.0,
+"fert": 4.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 1,
+"pumpkins": 1
+},
+108.06,
+{
+"hay": 576.0,
+"carrot": -901.0,
+"pumpkin": 4320.0,
+"power": -145.53,
+"water": -476.0,
+"fert": 10.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 1,
+"pumpkins": 2
+},
+127.74,
+{
+"hay": 576.0,
+"carrot": -2190.0,
+"pumpkin": 10344.0,
+"weird": 24.0,
+"power": -167.41,
+"water": -538.0,
+"fert": 6.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 1,
+"pumpkins": 3
+},
+126.99,
+{
+"hay": 576.0,
+"carrot": -4412.0,
+"pumpkin": 20700.0,
+"weird": 36.0,
+"power": -170.33,
+"water": -554.0,
+"fert": 9.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 2,
+"pumpkins": 1
+},
+65.23,
+{
+"hay": 576.0,
+"carrot": -1107.0,
+"pumpkin": 5151.0,
+"weird": 33.0,
+"power": -173.53,
+"water": -484.0,
+"fert": -7.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 2,
+"pumpkins": 2
+},
+64.34,
+{
+"hay": 576.0,
+"carrot": -2174.0,
+"pumpkin": 10332.0,
+"weird": 36.0,
+"power": -171.24,
+"water": -476.0,
+"fert": -3.0
+}
+],
+[
+"pumpkin",
+{
+"expand": 6,
+"megafarm": 2,
+"pumpkins": 3
+},
+63.46,
+{
+"hay": 576.0,
+"carrot": -4292.0,
+"pumpkin": 20604.0,
+"weird": 132.0,
+"power": -169.78,
+"water": -461.0,
+"fert": -7.0
+}
+],
+[
+"weird_substance",
+{
+"expand": 4,
+"megafarm": 0
+},
+19.23,
+{
+"hay": 76.0,
+"wood": 1600.0,
+"weird": 1521.0,
+"power": -25.86,
+"water": -29.0
+}
+],
+[
+"gold",
+{
+"expand": 4,
+"megafarm": 0,
+"mazes": 1
+},
+26.41,
+{
+"weird": -246.0,
+"gold": 1476.0,
+"power": -35.18,
+"water": 10.0,
+"fert": 2.0
+}
+],
+[
+"weird_substance",
+{
+"expand": 4,
+"megafarm": 1
+},
+19.6,
+{
+"hay": 76.0,
+"wood": 1600.0,
+"weird": 1517.0,
+"power": -26.39,
+"water": -29.0
+}
+],
+[
+"gold",
+{
+"expand": 4,
+"megafarm": 1,
+"mazes": 1
+},
+28.47,
+{
+"weird": -246.0,
+"gold": 1476.0,
+"power": -38.06,
+"water": 11.0,
+"fert": 2.0
+}
+],
+[
+"weird_substance",
+{
+"expand": 4,
+"megafarm": 2
+},
+18.46,
+{
+"hay": 52.0,
+"wood": 1630.0,
+"weird": 1540.0,
+"power": -49.37,
+"water": -29.0
+}
+],
+[
+"gold",
+{
+"expand": 4,
+"megafarm": 2,
+"mazes": 1
+},
+11.28,
+{
+"weird": -246.0,
+"gold": 1476.0,
+"power": -29.58,
+"water": 4.0,
+"fert": 1.0
+}
+],
+[
+"weird_substance",
+{
+"expand": 5,
+"megafarm": 0
+},
+17.65,
+{
+"hay": 148.0,
+"wood": 1700.0,
+"weird": 1607.0,
+"power": -23.88,
+"water": -57.0
+}
+],
+[
+"gold",
+{
+"expand": 5,
+"megafarm": 0,
+"mazes": 1
+},
+29.29,
+{
+"weird": -328.0,
+"gold": 2624.0,
+"power": -39.52,
+"water": 11.0,
+"fert": 2.0
+}
+],
+[
+"weird_substance",
+{
+"expand": 5,
+"megafarm": 1
+},
+15.74,
+{
+"hay": 164.0,
+"wood": 1600.0,
+"weird": 1521.0,
+"power": -21.13,
+"water": -58.0
+}
+],
+[
+"gold",
+{
+"expand": 5,
+"megafarm": 1,
+"mazes": 1
+},
+24.54,
+{
+"weird": -328.0,
+"gold": 2624.0,
+"power": -32.48,
+"water": 9.0,
+"fert": 2.0
+}
+],
+[
+"weird_substance",
+{
+"expand": 5,
+"megafarm": 2
+},
+11.96,
+{
+"hay": 108.0,
+"wood": 1640.0,
+"weird": 1561.0,
+"power": -31.31,
+"water": -60.0
+}
+],
+[
+"gold",
+{
+"expand": 5,
+"megafarm": 2,
+"mazes": 1
+},
+15.96,
+{
+"weird": -328.0,
+"gold": 2624.0,
+"power": -42.42,
+"water": 6.0,
+"fert": 1.0
+}
+],
+[
+"weird_substance",
+{
+"expand": 6,
+"megafarm": 0
+},
+25.64,
+{
+"hay": 356.0,
+"wood": 1680.0,
+"weird": 1573.0,
+"power": -34.67,
+"water": -134.0,
+"fert": 1.0
+}
+],
+[
+"gold",
+{
+"expand": 6,
+"megafarm": 0,
+"mazes": 1
+},
+70.73,
+{
+"hay": 4.0,
+"weird": -492.0,
+"gold": 5904.0,
+"power": -95.3,
+"water": 28.0,
+"fert": 7.0
+}
+],
+[
+"weird_substance",
+{
+"expand": 6,
+"megafarm": 1
+},
+22.56,
+{
+"hay": 340.0,
+"wood": 1720.0,
+"weird": 1637.0,
+"power": -30.26,
+"water": -135.0,
+"fert": 1.0
+}
+],
+[
+"gold",
+{
+"expand": 6,
+"megafarm": 1,
+"mazes": 1
+},
+54.02,
+{
+"hay": 4.0,
+"weird": -492.0,
+"gold": 5904.0,
+"power": -72.96,
+"water": 21.0,
+"fert": 5.0
+}
+],
+[
+"weird_substance",
+{
+"expand": 6,
+"megafarm": 2
+},
+13.41,
+{
+"hay": 288.0,
+"wood": 1940.0,
+"weird": 1831.0,
+"power": -36.12,
+"water": -136.0
+}
+],
+[
+"gold",
+{
+"expand": 6,
+"megafarm": 2,
+"mazes": 1
+},
+28.87,
+{
+"hay": 4.0,
+"weird": -492.0,
+"gold": 5904.0,
+"power": -76.52,
+"water": 11.0,
+"fert": 2.0
+}
+]
+]
